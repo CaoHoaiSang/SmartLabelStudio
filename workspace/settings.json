@@ -1,0 +1,5 @@
+{
+  "sam_checkpoint": "D:\\DeltaX\\SmartLabelStudio\\workspace\\models\\sam2_hiera_small.pt",
+  "sam_config": "sam2_hiera_s.yaml",
+  "annotation_geometry": "RECT"
+}

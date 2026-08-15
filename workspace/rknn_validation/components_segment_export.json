@@ -1,0 +1,112 @@
+{
+  "schema": 1,
+  "format": "rknn",
+  "target": "rk3588",
+  "compiler": "rknn-toolkit2==2.2.0",
+  "ultralytics": "8.4.6",
+  "source_model": "radxa_components.pt",
+  "output_model": "components_segment_export.rknn",
+  "task": "segment",
+  "imgsz": [
+    640,
+    640
+  ],
+  "names": {
+    "0": "Good",
+    "1": "Bad"
+  },
+  "normalization": {
+    "mean": [
+      0,
+      0,
+      0
+    ],
+    "std": [
+      255,
+      255,
+      255
+    ],
+    "rgb2bgr": false
+  },
+  "output_layout": "deltax_yolorknn_segment_13_heads",
+  "output_shapes": [
+    [
+      1,
+      64,
+      80,
+      80
+    ],
+    [
+      1,
+      2,
+      80,
+      80
+    ],
+    [
+      1,
+      1,
+      80,
+      80
+    ],
+    [
+      1,
+      32,
+      80,
+      80
+    ],
+    [
+      1,
+      64,
+      40,
+      40
+    ],
+    [
+      1,
+      2,
+      40,
+      40
+    ],
+    [
+      1,
+      1,
+      40,
+      40
+    ],
+    [
+      1,
+      32,
+      40,
+      40
+    ],
+    [
+      1,
+      64,
+      20,
+      20
+    ],
+    [
+      1,
+      2,
+      20,
+      20
+    ],
+    [
+      1,
+      1,
+      20,
+      20
+    ],
+    [
+      1,
+      32,
+      20,
+      20
+    ],
+    [
+      1,
+      32,
+      160,
+      160
+    ]
+  ]
+}

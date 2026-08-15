@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "locked": true,
+  "seed": 42,
+  "created_at": "2026-08-08T12:58:42",
+  "updated_at": "2026-08-11T22:46:06",
+  "source": "initial_balance",
+  "new_group_policy": "train",
+  "groups": {
+    "images_2026-08-08T06-45": "train",
+    "images_2026-08-08T06-44": "train",
+    "images_2026-08-08T06-40": "train",
+    "images_2026-08-08T06-46": "train",
+    "images_cropped_image_1786171133479": "train",
+    "images_2026-08-08T06-41": "val",
+    "images_2026-08-08T06-39": "val",
+    "images_2026-08-08T06-42": "test",
+    "images_2026-08-08T06-43": "test"
+  }
+}

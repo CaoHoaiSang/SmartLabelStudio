@@ -1,0 +1,8 @@
+path: D:/DeltaX/SmartLabelStudio/workspace/projects/project_215835e70a62/exports/yolo_detect_20260808_110640
+train: images/train
+val: images/val
+test: images/test
+names:
+  0: Chai_trong
+  1: Chai_lo
+  2: Chai_xanh_la

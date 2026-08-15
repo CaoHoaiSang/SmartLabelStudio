@@ -1,0 +1,4 @@
+-r requirements.txt
+# Cài PyTorch CUDA đúng phiên bản driver từ https://pytorch.org/get-started/locally/
+# Không khóa torch tại đây vì wheel CUDA phụ thuộc phiên bản driver của máy RTX 4060 Ti.
+

@@ -1,0 +1,19 @@
+{
+  "project_id": "project_215835e70a62",
+  "reviewed_only": true,
+  "segmentation": false,
+  "task": "detect",
+  "exported_annotations": 366,
+  "skipped_annotations": 0,
+  "seed": 42,
+  "split_strategy": "locked",
+  "split_locked": true,
+  "validation_enabled": true,
+  "independent_test": true,
+  "split_assignment": "D:\\DeltaX\\SmartLabelStudio\\workspace\\projects\\project_215835e70a62\\split_assignment.json",
+  "counts": {
+    "train": 178,
+    "val": 30,
+    "test": 29
+  }
+}

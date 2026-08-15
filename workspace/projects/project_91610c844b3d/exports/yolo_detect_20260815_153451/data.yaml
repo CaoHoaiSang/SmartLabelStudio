@@ -1,0 +1,7 @@
+path: D:/DeltaX/SmartLabelStudio/workspace/projects/project_91610c844b3d/exports/yolo_detect_20260815_153451
+train: images/train
+val: images/train
+test: 
+names:
+  0: Cao_thao_duoc
+  1: Cao_thao_duoc_NG

@@ -1,0 +1,14 @@
+{
+  "project_id": "project_215835e70a62",
+  "reviewed_only": true,
+  "segmentation": false,
+  "task": "detect",
+  "exported_annotations": 278,
+  "skipped_annotations": 0,
+  "seed": 42,
+  "counts": {
+    "train": 90,
+    "val": 20,
+    "test": 87
+  }
+}

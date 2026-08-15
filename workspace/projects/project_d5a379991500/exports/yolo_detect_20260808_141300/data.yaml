@@ -1,0 +1,8 @@
+path: D:/DeltaX/SmartLabelStudio/workspace/projects/project_d5a379991500/exports/yolo_detect_20260808_141300
+train: images/train
+val: images/val
+test: images/test
+names:
+  0: Nap_aqua
+  1: Nap_saka
+  2: Nap_7up

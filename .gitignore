@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.venv/
+workspace/projects/*/images/
+workspace/projects/*/cache/
+workspace/projects/*/runs/
+workspace/models/
+dist/
+build/
+

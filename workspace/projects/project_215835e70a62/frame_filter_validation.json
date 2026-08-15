@@ -1,0 +1,10 @@
+{
+  "frames": 965,
+  "categories": {
+    "duplicate": 56,
+    "positive": 904,
+    "uncertain": 5
+  },
+  "suggested_delete": 56,
+  "elapsed_seconds": 79.28
+}
