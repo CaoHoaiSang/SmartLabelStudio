@@ -45,7 +45,7 @@ class ProjectStore:
         for index, class_name in enumerate(classes or []):
             project.classes.append(LabelClass(index, class_name, palette[index % len(palette)]))
         target = self.project_dir(project)
-        for folder in ("images", "versions", "exports", "runs", "cache"):
+        for folder in ("images", "assets", "versions", "exports", "runs", "cache"):
             (target / folder).mkdir(parents=True, exist_ok=True)
         self.save(project)
         return project

@@ -112,18 +112,29 @@ Xem hướng dẫn chi tiết tại [docs/HUONG_DAN_SU_DUNG.md](docs/HUONG_DAN_S
 
 ## Hydroponic Slot Condition
 
-SmartLabelStudio now supports the Hydro AI Camera workflow without coupling the two applications.
-Create the `Hydroponic Slot Condition` template or import a Hydro `CaptureManifestV1`. The importer
-checks checksums, lineage, ROI/slot geometry, duplicate IDs, and the required ten fixed slots before
-copying only slot images into the project. Full-frame and ROI relationships remain in metadata;
-exports do not contain absolute paths from the labeling workstation.
+Luồng Hydro được bổ sung bằng template trên chính hộp thoại **Dự án mới**, không tạo một loại project
+hay một engine train thứ hai. Chọn `Hydroponic Slot Condition · cải ngọt`; project chai/robot cũ vẫn
+giữ nguyên Classification theo crop annotation và RKNN/RK3588 như trước.
 
-Hydro projects use image-level attributes for `plant_presence`, `yellow_leaf`, and `wilt`, with
-`uncertain` and `not_applicable` excluded from training. If presence is not `present`, both condition
-labels must be `not_applicable`. Dataset QA also checks broken/duplicate files, contradictions,
-label distribution, sensitive paths, and split leakage by `plant_instance_id`/crop cycle.
+Trong project Hydro, trang **Dự án** mới hiện hai thao tác chuyên biệt:
 
-The project schema is now version 2. Existing schema-v1 projects are migrated in memory when opened
-and written safely only when saved. Jetson export produces static batch-1 ONNX artifacts plus a
-`HydroModelBundleV1`; TensorRT engines must be built on the target Nano and are never exported from
-Windows.
+- **Nhập CaptureManifestV1**: kiểm tra checksum, lineage, hình học ROI/slot, ID trùng và đủ đúng 10
+  slot trước khi nhập. Ảnh slot, full frame và hai ROI đều được sao chép vào project để provenance
+  không còn phụ thuộc máy capture; export không chứa đường dẫn tuyệt đối.
+- **Kiểm tra Dataset Hydro**: báo ảnh hỏng/trùng/thiếu, nhãn mâu thuẫn, phân bố nhãn, leakage theo
+  `plant_instance_id`, crop-cycle holdout và cho mở thẳng ảnh có lỗi để sửa.
+
+Hydro luôn dùng Classification toàn ảnh slot với ba nhóm độc lập `plant_presence`, `yellow_leaf` và
+`wilt`; công tắc Classification bị khóa ON để không vô tình quay về Detection/SEG. `uncertain` và
+`not_applicable` không vào train. Khi cây không hiện diện, hai condition tự chuyển thành
+`not_applicable`. `other_abnormal` chỉ là ghi chú phục vụ đánh nhãn, chưa được train.
+
+Trang **Triển khai** của project Hydro chỉ hiện luồng Jetson: xuất ba ONNX static batch 1 rồi tạo
+`HydroModelBundleV1` với camera/geometry IDs, checksum và từng cặp ngưỡng low/high đã hiệu chỉnh.
+Khoảng giữa hai ngưỡng được runtime trả về `uncertain`; TensorRT engine chỉ build/smoke-test trên
+Jetson. Các nút RKNN/Radxa cũ vẫn hiện nguyên trạng đối với project thường và không hiện trong
+project Hydro.
+
+Schema project là v2. Project v1 cũ được migrate trong bộ nhớ khi mở và chỉ ghi an toàn khi người
+dùng lưu. Có thể đặt biến `SMARTLABEL_WORKSPACE` để chạy thử trên workspace tách biệt; nếu không đặt,
+ứng dụng vẫn dùng thư mục `workspace` cũ nên toàn bộ dự án hiện có được giữ nguyên.

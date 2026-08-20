@@ -110,6 +110,9 @@ class HydroponicMvpTests(unittest.TestCase):
         self.assertTrue(all(record.asset_role == "slot" for record in self.project.images))
         self.assertTrue(all(record.source_path == "" for record in self.project.images))
         self.assertEqual(len({record.metadata["plant_instance_id"] for record in self.project.images}), 10)
+        for record in self.project.images:
+            self.assertTrue((self.store.project_dir(self.project) / record.lineage["fullFrameRelativePath"]).is_file())
+            self.assertTrue((self.store.project_dir(self.project) / record.lineage["roiRelativePath"]).is_file())
         with self.assertRaisesRegex(CaptureManifestError, "already imported"):
             import_capture_manifest(self.store, self.project, manifest_path)
 
@@ -118,6 +121,16 @@ class HydroponicMvpTests(unittest.TestCase):
         manifest_path.write_text(json.dumps(broken), encoding="utf-8")
         with self.assertRaisesRegex(CaptureManifestError, "checksum"):
             validate_capture_manifest(manifest_path)
+
+    def test_import_rejects_project_crop_or_site_mismatch(self) -> None:
+        manifest_path = self.create_manifest()
+        self.project.metadata["siteId"] = "different-site"
+        with self.assertRaisesRegex(CaptureManifestError, "siteId"):
+            import_capture_manifest(self.store, self.project, manifest_path)
+        self.project.metadata.pop("siteId")
+        self.project.metadata["cropCode"] = "xa_lach"
+        with self.assertRaisesRegex(CaptureManifestError, "cropCode"):
+            import_capture_manifest(self.store, self.project, manifest_path)
 
     def test_image_level_export_excludes_uncertain_and_na_and_marks_single_cycle_pilot(self) -> None:
         import_capture_manifest(self.store, self.project, self.create_manifest())
@@ -152,6 +165,11 @@ class HydroponicMvpTests(unittest.TestCase):
         report = hydro_dataset_qa(self.project, self.store, assignment)
         self.assertEqual(report["validationStatus"], "pilot_unvalidated")
         self.assertFalse(any(issue["code"] == "absolute_source_path" for issue in report["issues"]))
+
+        removed = self.project.images.pop()
+        self.store.image_path(self.project, removed).unlink()
+        incomplete = hydro_dataset_qa(self.project, self.store, assignment)
+        self.assertTrue(any(issue["code"] == "incomplete_capture_slots" for issue in incomplete["issues"]))
 
         models = {}
         for key in ("plant_presence", "yellow_leaf", "wilt"):

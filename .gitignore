@@ -2,11 +2,13 @@ __pycache__/
 *.py[cod]
 .venv/
 workspace/projects/*/images/
+workspace/projects/*/assets/
 workspace/projects/*/project.json
 workspace/projects/*/versions/
 workspace/projects/*/exports/
 workspace/projects/*/cache/
 workspace/projects/*/runs/
+workspace/projects/*/bundles/
 workspace/models/
 workspace/bundles/
 *.onnx

@@ -7,6 +7,7 @@ from datetime import datetime
 import json
 import os
 import shutil
+import subprocess
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 
@@ -18,7 +19,15 @@ from .dataset_manager import DatasetManager
 from .deployment import build_vision_bundle_manifest, classifier_manifest_entry, write_classifier_pt_bundle
 from .evaluation import evaluate_yolo_model
 from .hardware import inspect_hardware
-from .hydroponic import apply_hydroponic_slot_template, hydro_dataset_qa, import_capture_manifest
+from .hydroponic import (
+    MODEL_KEYS as HYDRO_MODEL_KEYS,
+    apply_hydroponic_slot_template,
+    export_jetson_onnx,
+    hydro_dataset_qa,
+    import_capture_manifest,
+    is_hydroponic_project,
+    write_hydro_model_bundle,
+)
 from .frame_filter_dialog import SmartFrameFilterDialog
 from .model_export import RknnExportConfig, RknnExportJob, diagnose_rknn_environment
 from .models import Annotation, Project
@@ -26,12 +35,19 @@ from .project_store import ProjectStore
 from .quality import inspect_project
 from .split_dialog import SplitManagerDialog
 from .training import TrainingConfig, TrainingJob
-from .ui_components import ProjectSettingsDialog, ThumbnailList, ToolTip
+from .ui_components import (
+    HydroQaDialog,
+    ProjectSettingsDialog,
+    ThumbnailList,
+    ToolTip,
+    ask_hydro_bundle_config,
+    ask_new_project,
+)
 from .version_dialog import ask_dataset_version_name
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
-WORKSPACE = APP_ROOT / "workspace"
+WORKSPACE = Path(os.environ.get("SMARTLABEL_WORKSPACE", APP_ROOT / "workspace")).resolve()
 DEMO_IMAGES = Path(r"D:\DeltaX\Tai Lieu Demo\Phan Loai Chai Nhua\Data\images")
 DEMO_MODEL = Path(r"D:\DeltaX\Tai Lieu Demo\Phan Loai Chai Nhua\Model\best.pt")
 SAM2_SMALL_URL = "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_small.pt"
@@ -58,6 +74,15 @@ ATTRIBUTE_DISPLAY = {
     },
     "occlusion": {"none": "Không che", "partial": "Che một phần", "heavy": "Che nhiều"},
     "cap": {"co_nap": "Có nắp", "mat_nap": "Mất nắp", "khong_xac_dinh": "Chưa rõ"},
+    "plant_presence": {"present": "Có cây", "absent": "Không có cây", "uncertain": "Chưa chắc chắn"},
+    "yellow_leaf": {
+        "present": "Có lá vàng", "absent": "Không có lá vàng", "uncertain": "Chưa chắc chắn",
+        "not_applicable": "Không áp dụng",
+    },
+    "wilt": {
+        "present": "Có héo", "absent": "Không héo", "uncertain": "Chưa chắc chắn",
+        "not_applicable": "Không áp dụng",
+    },
 }
 
 SPLIT_STRATEGY_LABELS = {
@@ -119,6 +144,7 @@ class SmartLabelApp(ctk.CTk):
         self.evaluation_running = False
         self.train_split_strategy = tk.StringVar(value=next(iter(SPLIT_STRATEGY_LABELS)))
         self.classification_group_var = tk.StringVar(value="")
+        self.other_abnormal_var = tk.StringVar(value="")
         self.sam_adapter: Sam2Adapter | None = None
         self.sam_lock = Lock()
         self.sam_request_versions: dict[str, int] = {}
@@ -287,10 +313,12 @@ class SmartLabelApp(ctk.CTk):
         left.pack(side="left", fill="y", padx=(8, 5), pady=8)
         self._button(left, "Nhập thư mục ảnh", self._import_folder, width=220).pack(padx=14, pady=6)
         self._button(left, "Nhập các ảnh", self._import_files, width=220).pack(padx=14, pady=6)
-        self._button(left, "Tạo project Hydroponic Slot", self._new_hydro_project, width=220, color="#2b906d").pack(padx=14, pady=6)
-        self._button(left, "Nhập CaptureManifestV1", self._import_capture_manifest, width=220, color="#2b906d").pack(padx=14, pady=6)
-        self._button(left, "QA Hydro Dataset", self._run_hydro_qa, width=220, color="#6d56a4").pack(padx=14, pady=6)
-        self._button(left, "Tách frame từ video", self._import_video, width=220).pack(padx=14, pady=6)
+        self.hydro_import_button = self._button(left, "Nhập CaptureManifestV1", self._import_capture_manifest, width=220, color="#2b906d")
+        self.hydro_import_button.pack(padx=14, pady=6)
+        self.hydro_qa_button = self._button(left, "Kiểm tra Dataset Hydro", self._run_hydro_qa, width=220, color="#6d56a4")
+        self.hydro_qa_button.pack(padx=14, pady=6)
+        self.video_import_button = self._button(left, "Tách frame từ video", self._import_video, width=220)
+        self.video_import_button.pack(padx=14, pady=6)
         self._button(
             left,
             "Lọc ảnh thông minh",
@@ -300,7 +328,8 @@ class SmartLabelApp(ctk.CTk):
             tooltip="Lọc gần trùng, ảnh nền và ảnh chất lượng kém cho cả frame video lẫn ảnh nhập/thư mục.",
         ).pack(padx=14, pady=6)
         self._button(left, "Nạp demo 126 ảnh chai", self._import_demo, width=220, color="#2b906d").pack(padx=14, pady=6)
-        self._button(left, "Quản lý Class & thuộc tính", self._edit_classes, width=220).pack(padx=14, pady=6)
+        self.project_settings_button = self._button(left, "Quản lý Class & thuộc tính", self._edit_classes, width=220)
+        self.project_settings_button.pack(padx=14, pady=6)
         ctk.CTkLabel(left, text="Ảnh được sao chép vào workspace\nđể dự án không phụ thuộc thư mục nguồn.", text_color=COLORS["muted"], justify="left").pack(padx=14, pady=14)
 
         center = self._card(tab, "TỔNG QUAN")
@@ -317,39 +346,44 @@ class SmartLabelApp(ctk.CTk):
             "4. Class là loại chai; biến dạng lưu bằng thuộc tính.\n\n"
             "5. Mỗi lần train dùng một phiên bản dataset bất biến."
         )
-        ctk.CTkLabel(right, text=guidance, width=280, wraplength=260, justify="left", anchor="nw", text_color=COLORS["text"]).pack(padx=14, pady=10)
+        self.project_guidance_label = ctk.CTkLabel(
+            right, text=guidance, width=280, wraplength=260, justify="left", anchor="nw", text_color=COLORS["text"]
+        )
+        self.project_guidance_label.pack(padx=14, pady=10)
 
-    def _new_project(self) -> None:
-        name = simpledialog.askstring("Dự án mới", "Tên dự án:", parent=self)
-        if not name:
+    def _new_project(self, default_template: str = "deltax_bottle") -> None:
+        selection = ask_new_project(self, default_template)
+        if not selection:
             return
-        project = self.store.create_project(name, classes=["Chai_trong", "Chai_lo", "Chai_xanh_la"])
-        project.attribute_schema = {
-            "condition": ["nguyen_ven", "bep_nhe", "can_dep", "vo_nat"],
-            "occlusion": ["none", "partial", "heavy"],
-            "cap": ["co_nap", "mat_nap", "khong_xac_dinh"],
-        }
-        project.attribute_settings = {
-            "condition": {"title": "Tình trạng", "default": "", "required": False, "role": "classification"},
-            "occlusion": {"title": "Che khuất", "default": "none", "required": False, "role": "metadata"},
-            "cap": {"title": "Nắp chai", "default": "khong_xac_dinh", "required": False, "role": "metadata"},
-        }
+        name, template = selection
+        if template == "hydroponic_slot":
+            project = self.store.create_project(name, task="classify", classes=[])
+            apply_hydroponic_slot_template(project)
+        elif template == "blank":
+            project = self.store.create_project(name, task="instance_segmentation", classes=[])
+            project.metadata["template"] = "Blank"
+        else:
+            project = self.store.create_project(name, classes=["Chai_trong", "Chai_lo", "Chai_xanh_la"])
+            project.metadata["template"] = "DeltaX Bottle"
+            project.attribute_schema = {
+                "condition": ["nguyen_ven", "bep_nhe", "can_dep", "vo_nat"],
+                "occlusion": ["none", "partial", "heavy"],
+                "cap": ["co_nap", "mat_nap", "khong_xac_dinh"],
+            }
+            project.attribute_settings = {
+                "condition": {"title": "Tình trạng", "default": "", "required": False, "role": "classification", "scope": "annotation_crop"},
+                "occlusion": {"title": "Che khuất", "default": "none", "required": False, "role": "metadata", "scope": "annotation_crop"},
+                "cap": {"title": "Nắp chai", "default": "khong_xac_dinh", "required": False, "role": "metadata", "scope": "annotation_crop"},
+            }
         self.store.save(project)
         self.project = project
         self.current_index = -1
+        self.show_attribute_panel.set(is_hydroponic_project(project))
         self._refresh_everything()
 
     def _new_hydro_project(self) -> None:
-        name = simpledialog.askstring("Hydroponic Slot", "Tên dự án:", parent=self)
-        if not name:
-            return
-        project = self.store.create_project(name, task="classify", classes=[])
-        apply_hydroponic_slot_template(project)
-        self.store.save(project)
-        self.project = project
-        self.current_index = -1
-        self.show_attribute_panel.set(True)
-        self._refresh_everything()
+        """Compatibility entry point for old shortcuts; creation now uses one template dialog."""
+        self._new_project("hydroponic_slot")
 
     def _import_capture_manifest(self) -> None:
         if not self.project or self.project.metadata.get("template") != "Hydroponic Slot Condition":
@@ -374,13 +408,18 @@ class SmartLabelApp(ctk.CTk):
         report = hydro_dataset_qa(self.project, self.store, assignment)
         self.project.metadata["validationStatus"] = report["validationStatus"]
         self.store.save(self.project)
-        error_count = sum(issue["severity"] == "error" for issue in report["issues"])
-        messagebox.showinfo(
-            "Hydro Dataset QA",
-            f"Ảnh: {report['images']}\nLỗi: {error_count}\n"
-            f"Validation: {report['validationStatus']}\n\n"
-            + json.dumps(report["distributions"], ensure_ascii=False, indent=2),
-        )
+        HydroQaDialog(self, report, self._open_qa_image)
+
+    def _open_qa_image(self, image_id: str) -> None:
+        if not self.project:
+            return
+        index = next((i for i, record in enumerate(self.project.images) if record.id == image_id), None)
+        if index is None:
+            return
+        self.current_index = index
+        self.tabs.set("GÁN NHÃN")
+        self._load_current_image()
+        self._sync_image_list_to_current()
 
     def _load_initial_project(self) -> None:
         projects = self.store.list_projects()
@@ -555,8 +594,23 @@ class SmartLabelApp(ctk.CTk):
 
     def _edit_classes(self) -> None:
         if not self.project:
+            messagebox.showinfo("Chưa có dự án", "Hãy tạo hoặc mở một dự án trước khi quản lý Class và thuộc tính.", parent=self)
             return
         ProjectSettingsDialog(self, self.project, self._save_project_settings)
+
+    def _apply_project_context_visibility(self) -> None:
+        hydro = is_hydroponic_project(self.project)
+        for button in (getattr(self, "hydro_import_button", None), getattr(self, "hydro_qa_button", None)):
+            if button is None:
+                continue
+            if hydro and not button.winfo_manager():
+                button.pack(padx=14, pady=6, before=self.video_import_button)
+            elif not hydro:
+                button.pack_forget()
+        if hasattr(self, "project_settings_button"):
+            self.project_settings_button.configure(
+                text="Quản lý nhãn & thuộc tính" if hydro else "Quản lý Class & thuộc tính"
+            )
 
     def _save_project_settings(self) -> None:
         self.save_project()
@@ -740,6 +794,25 @@ class SmartLabelApp(ctk.CTk):
         self.attribute_display_to_value: dict[str, dict[str, str]] = {}
         self._rebuild_attribute_panel()
         self._apply_attribute_panel_visibility()
+
+        self.hydro_metadata_frame = ctk.CTkFrame(right, fg_color="#0f1c28", corner_radius=10)
+        ctk.CTkLabel(
+            self.hydro_metadata_frame,
+            text="GHI CHÚ BẤT THƯỜNG KHÁC · KHÔNG TRAIN",
+            text_color=COLORS["muted"],
+            font=("Segoe UI Semibold", 10),
+        ).pack(anchor="w", padx=10, pady=(8, 2))
+        self.other_abnormal_entry = ctk.CTkEntry(
+            self.hydro_metadata_frame,
+            width=220,
+            textvariable=self.other_abnormal_var,
+            placeholder_text="Ví dụ: sâu, rách lá…",
+        )
+        self.other_abnormal_entry.pack(fill="x", padx=10, pady=3)
+        hydro_actions = ctk.CTkFrame(self.hydro_metadata_frame, fg_color="transparent")
+        hydro_actions.pack(fill="x", padx=10, pady=(3, 8))
+        self._button(hydro_actions, "Lưu ghi chú", self._save_other_abnormal, width=104, color="#48657a").pack(side="left")
+        self._button(hydro_actions, "Mở full frame", self._open_hydro_parent_asset, width=108, color="#415466").pack(side="right")
 
         self.annotation_info = ctk.CTkTextbox(right, width=260, height=125, fg_color="#0a131c", corner_radius=9)
         self.annotation_info.pack(padx=12, pady=8)
@@ -1144,7 +1217,24 @@ class SmartLabelApp(ctk.CTk):
         else:
             self.attribute_panel.pack_forget()
 
+    def _apply_hydro_metadata_visibility(self) -> None:
+        frame = getattr(self, "hydro_metadata_frame", None)
+        if frame is None:
+            return
+        if is_hydroponic_project(self.project):
+            if not frame.winfo_manager():
+                options = {"fill": "x", "padx": 12, "pady": (0, 8)}
+                if hasattr(self, "annotation_info"):
+                    options["before"] = self.annotation_info
+                frame.pack(**options)
+        else:
+            frame.pack_forget()
+
     def _toggle_attribute_panel(self) -> None:
+        if is_hydroponic_project(self.project) and not self.show_attribute_panel.get():
+            self.show_attribute_panel.set(True)
+            self._set_status("Hydroponic Slot luôn dùng Classification toàn ảnh slot", COLORS["warn"])
+            return
         if self.project:
             self.project.attribute_classification_enabled = bool(self.show_attribute_panel.get())
             self.store.save(self.project)
@@ -1188,6 +1278,12 @@ class SmartLabelApp(ctk.CTk):
                 widget.configure(values=labels)
         self._rebuild_batch_group_choices()
         enabled = bool(self.project and self.project.attribute_classification_enabled)
+        hydro = is_hydroponic_project(self.project)
+        if hasattr(self, "show_attribute_checkbox"):
+            self.show_attribute_checkbox.configure(
+                text="Classification toàn ảnh slot (bắt buộc)" if hydro else "Bật Classification thuộc tính",
+                state="disabled" if hydro else "normal",
+            )
         if hasattr(self, "train_task_menu"):
             if enabled:
                 self.train_task_menu.configure(values=["classify"])
@@ -1240,19 +1336,22 @@ class SmartLabelApp(ctk.CTk):
 
         help_label = getattr(self, "deploy_help_label", None)
         if help_label is not None:
-            help_label.configure(
-                text=(
-                    "Xuất lần lượt các classifier đã tick sang RKNN, sau đó tạo gói triển khai cùng model định vị."
-                    if enabled
-                    else "Xuất model Detection/SEG định vị để nạp vào Vision AI Setting hiện tại."
-                )
-            )
+            if is_hydroponic_project(self.project):
+                help_text = "Xuất ba classifier toàn ảnh slot sang ONNX tĩnh; TensorRT engine được build và smoke-test trực tiếp trên Jetson."
+            elif enabled:
+                help_text = "Xuất lần lượt các classifier đã tick sang RKNN, sau đó tạo gói triển khai cùng model định vị."
+            else:
+                help_text = "Xuất model Detection/SEG định vị để nạp vào Vision AI Setting hiện tại."
+            help_label.configure(text=help_text)
 
         source_row = getattr(self, "deploy_source_row", None)
         single_export = getattr(self, "deploy_export_button", None)
         batch_export = getattr(self, "batch_rknn_export_button", None)
         bundle_export = getattr(self, "bundle_export_button", None)
+        hydro_onnx = getattr(self, "hydro_onnx_export_button", None)
+        hydro_bundle = getattr(self, "hydro_bundle_export_button", None)
         stop_button = getattr(self, "deploy_stop_button", None)
+        hydro = is_hydroponic_project(self.project)
         if source_row is not None:
             if enabled:
                 source_row.pack_forget()
@@ -1266,9 +1365,16 @@ class SmartLabelApp(ctk.CTk):
         for button in (batch_export, bundle_export):
             if button is None:
                 continue
-            if enabled and not button.winfo_manager():
+            if enabled and not hydro and not button.winfo_manager():
                 button.pack(side="left", padx=3, before=stop_button)
-            elif not enabled:
+            elif not enabled or hydro:
+                button.pack_forget()
+        for button in (hydro_onnx, hydro_bundle):
+            if button is None:
+                continue
+            if enabled and hydro and not button.winfo_manager():
+                button.pack(side="left", padx=3, before=stop_button)
+            elif not enabled or not hydro:
                 button.pack_forget()
 
     def _rebuild_batch_group_choices(self) -> None:
@@ -1354,6 +1460,7 @@ class SmartLabelApp(ctk.CTk):
             self.last_selected_by_image[self.project.images[self.current_index].id] = annotation_id
         ann = self._selected_annotation()
         record = self.project.images[self.current_index] if self.project and 0 <= self.current_index < len(self.project.images) else None
+        self.other_abnormal_var.set(str(record.metadata.get("other_abnormal", "")) if record and is_hydroponic_project(self.project) else "")
         self.annotation_info.configure(state="normal")
         self.annotation_info.delete("1.0", tk.END)
         if ann and self.project:
@@ -1510,6 +1617,36 @@ class SmartLabelApp(ctk.CTk):
             ann.approved = False
             self._annotation_changed()
 
+    def _save_other_abnormal(self) -> None:
+        if not is_hydroponic_project(self.project) or not (0 <= self.current_index < len(self.project.images)):
+            return
+        record = self.project.images[self.current_index]
+        record.metadata["other_abnormal"] = self.other_abnormal_var.get().strip()
+        if record.review_status == "reviewed":
+            record.review_status = "draft"
+        record.updated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+        self.save_project()
+        self._update_record_thumbnail(record)
+        self._set_status("Đã lưu ghi chú bất thường khác", COLORS["good"])
+
+    def _open_hydro_parent_asset(self) -> None:
+        if not is_hydroponic_project(self.project) or not (0 <= self.current_index < len(self.project.images)):
+            return
+        record = self.project.images[self.current_index]
+        relative = record.lineage.get("fullFrameRelativePath")
+        if not isinstance(relative, str) or not relative or Path(relative).is_absolute() or ".." in Path(relative).parts:
+            messagebox.showerror("Không có ảnh nguồn", "Lineage full frame không hợp lệ.", parent=self)
+            return
+        target = (self.store.project_dir(self.project) / relative).resolve()
+        project_root = self.store.project_dir(self.project).resolve()
+        if project_root not in target.parents or not target.is_file():
+            messagebox.showerror("Không có ảnh nguồn", "Full frame nguồn không còn trong project.", parent=self)
+            return
+        try:
+            os.startfile(str(target))
+        except (AttributeError, OSError) as exc:
+            messagebox.showerror("Không mở được ảnh nguồn", str(exc), parent=self)
+
     def _toggle_annotation_approved(self) -> None:
         ann = self._selected_annotation()
         if ann:
@@ -1577,7 +1714,11 @@ class SmartLabelApp(ctk.CTk):
         if not self.project or not (0 <= self.current_index < len(self.project.images)):
             return
         record = self.project.images[self.current_index]
-        record.review_status = "reviewed" if record.annotations and all(ann.approved for ann in record.annotations) else ("draft" if record.annotations else "unlabeled")
+        record.review_status = (
+            "reviewed"
+            if record.annotations and all(ann.approved for ann in record.annotations)
+            else ("draft" if record.annotations or record.attributes else "unlabeled")
+        )
         self.save_project()
         self._update_record_thumbnail(record)
         self._sync_image_list_to_current()
@@ -2548,6 +2689,24 @@ class SmartLabelApp(ctk.CTk):
             tooltip="Sao chép detector và các classifier RKNN đã xuất vào một thư mục cùng manifest cho Radxa.",
         )
         self.bundle_export_button.pack(side="left", padx=3)
+        self.hydro_onnx_export_button = self._button(
+            self.deploy_action_row,
+            "XUẤT ONNX JETSON",
+            self._export_hydro_onnx_models,
+            width=205,
+            color=COLORS["good"],
+            tooltip="Xuất tĩnh batch-1 ba classifier Hydro sang ONNX; TensorRT engine chỉ build trên Jetson.",
+        )
+        self.hydro_onnx_export_button.pack(side="left", padx=3)
+        self.hydro_bundle_export_button = self._button(
+            self.deploy_action_row,
+            "TẠO HYDRO MODEL BUNDLE",
+            self._export_hydro_bundle,
+            width=235,
+            color="#48657a",
+            tooltip="Đóng gói ONNX, preprocessing, ngưỡng hiệu chỉnh, checksum và profile tương thích cho Jetson.",
+        )
+        self.hydro_bundle_export_button.pack(side="left", padx=3)
         self.deploy_stop_button = self._button(
             self.deploy_action_row,
             "Dừng xuất RKNN",
@@ -2955,6 +3114,118 @@ class SmartLabelApp(ctk.CTk):
             return json.loads(sidecar.read_text(encoding="utf-8")) if sidecar.is_file() else {}
         except (OSError, json.JSONDecodeError):
             return {}
+
+    def _hydro_classifier_paths(self, *, suffix: str) -> dict[str, Path]:
+        if not is_hydroponic_project(self.project):
+            raise ValueError("Chức năng này chỉ dùng cho Hydroponic Slot Condition.")
+        source = self.project.attribute_models if suffix == ".pt" else self.project.metadata.get("hydroOnnxModels", {})
+        paths = {key: Path(str(source.get(key, ""))) for key in HYDRO_MODEL_KEYS}
+        missing = [key for key, path in paths.items() if not path.is_file() or path.suffix.lower() != suffix]
+        if missing:
+            raise FileNotFoundError("Thiếu model " + suffix + " cho: " + ", ".join(missing))
+        return paths
+
+    def _export_hydro_onnx_models(self) -> None:
+        if not self.project:
+            return
+        try:
+            models = self._hydro_classifier_paths(suffix=".pt")
+        except Exception as exc:
+            messagebox.showerror("Chưa đủ classifier Hydro", str(exc), parent=self)
+            return
+        parent = filedialog.askdirectory(title="Chọn thư mục lưu ONNX Jetson")
+        if not parent:
+            return
+        output = Path(parent) / f"hydro_jetson_onnx_{datetime.now():%Y%m%d_%H%M%S}"
+        if output.exists():
+            messagebox.showerror("Thư mục đã tồn tại", str(output), parent=self)
+            return
+        output.mkdir(parents=True)
+        exported: dict[str, str] = {}
+        try:
+            for key in HYDRO_MODEL_KEYS:
+                target = export_jetson_onnx(models[key], output / f"{key}.onnx", input_size=224, opset=12)
+                exported[key] = str(target.resolve())
+            self.project.metadata["hydroOnnxModels"] = exported
+            self.project.metadata["hydroOnnxInputSize"] = 224
+            self.store.save(self.project)
+        except Exception as exc:
+            shutil.rmtree(output, ignore_errors=True)
+            messagebox.showerror("Xuất ONNX Jetson lỗi", str(exc), parent=self)
+            return
+        messagebox.showinfo(
+            "Đã xuất ONNX Jetson",
+            "Đã xuất ba classifier batch-1 tĩnh. Không có TensorRT engine nào được build trên Windows.\n\n" + str(output),
+            parent=self,
+        )
+
+    def _source_commit(self) -> str:
+        try:
+            return subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=APP_ROOT, check=True,
+                capture_output=True, text=True,
+            ).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return ""
+
+    def _export_hydro_bundle(self) -> None:
+        if not self.project:
+            return
+        try:
+            models = self._hydro_classifier_paths(suffix=".onnx")
+        except Exception as exc:
+            messagebox.showerror("Chưa có ONNX Hydro", str(exc) + "\n\nHãy chạy XUẤT ONNX JETSON trước.", parent=self)
+            return
+        assignment = self.datasets.ensure_split_assignment(self.project)
+        report = hydro_dataset_qa(self.project, self.store, assignment)
+        errors = [issue for issue in report["issues"] if issue["severity"] == "error"]
+        if errors:
+            messagebox.showerror(
+                "Dataset Hydro còn lỗi",
+                f"Có {len(errors)} lỗi QA. Hãy chạy Kiểm tra Dataset Hydro và sửa trước khi tạo bundle.",
+                parent=self,
+            )
+            return
+        defaults = {
+            "datasetVersion": self.project.metadata.get("datasetVersion", f"dataset_{datetime.now():%Y%m%d}"),
+            "sourceCommit": self.project.metadata.get("sourceCommit", self._source_commit()),
+            "cameraProfileIds": self.project.metadata.get("cameraProfileIds", []),
+            "geometryProfileIds": self.project.metadata.get("geometryProfileIds", []),
+            "thresholds": self.project.metadata.get("hydroThresholds", {}),
+        }
+        config = ask_hydro_bundle_config(self, defaults)
+        if not config:
+            return
+        parent = filedialog.askdirectory(title="Chọn nơi lưu HydroModelBundleV1")
+        if not parent:
+            return
+        output = Path(parent) / f"hydro_model_bundle_{datetime.now():%Y%m%d_%H%M%S}"
+        try:
+            self.project.metadata["validationStatus"] = report["validationStatus"]
+            bundle = write_hydro_model_bundle(
+                self.project,
+                output,
+                models,
+                config["thresholds"],
+                dataset_version=config["datasetVersion"],
+                source_commit=config["sourceCommit"],
+                camera_profile_ids=config["cameraProfileIds"],
+                geometry_profile_ids=config["geometryProfileIds"],
+                input_size=224,
+            )
+            self.project.metadata["datasetVersion"] = config["datasetVersion"]
+            self.project.metadata["sourceCommit"] = config["sourceCommit"]
+            self.project.metadata["hydroThresholds"] = config["thresholds"]
+            self.project.metadata["lastHydroBundle"] = str(bundle.resolve())
+            self.store.save(self.project)
+        except Exception as exc:
+            messagebox.showerror("Tạo HydroModelBundleV1 lỗi", str(exc), parent=self)
+            return
+        messagebox.showinfo(
+            "HydroModelBundleV1 hoàn tất",
+            f"Validation: {report['validationStatus']}\nBundle: {bundle}\n\nTensorRT engine phải được build trên Jetson.",
+            parent=self,
+        )
 
     def _export_deployment_bundle(self) -> None:
         if not self.project:
@@ -3666,14 +3937,18 @@ class SmartLabelApp(ctk.CTk):
     # ---------- shared refresh/events ----------
     def _refresh_everything(self, keep_image: bool = False) -> None:
         self._refresh_project_menu()
+        self._apply_project_context_visibility()
         self._refresh_image_list()
         if self.project:
+            if is_hydroponic_project(self.project):
+                self.project.attribute_classification_enabled = True
             self.show_attribute_panel.set(bool(self.project.attribute_classification_enabled))
             class_ids = [item.id for item in sorted(self.project.classes, key=lambda item: item.id)]
             if class_ids and self.canvas.active_class_id not in class_ids:
                 self.canvas.active_class_id = class_ids[0]
             self._rebuild_attribute_panel()
             self._apply_attribute_panel_visibility()
+            self._apply_hydro_metadata_visibility()
             self._refresh_classification_controls()
             self._refresh_label_choices()
             self._refresh_active_model_status()
@@ -3686,6 +3961,7 @@ class SmartLabelApp(ctk.CTk):
             self._refresh_project_statistics()
             self._refresh_split_status()
         else:
+            self._apply_hydro_metadata_visibility()
             self._replace_text(self.project_summary, "Chưa có dự án. Nhấn Dự án mới để bắt đầu.")
             self._replace_text(self.dataset_info, "Chưa có dữ liệu.")
         self._refresh_hardware()
@@ -3694,10 +3970,12 @@ class SmartLabelApp(ctk.CTk):
         if not self.project or not hasattr(self, "project_summary") or not hasattr(self, "dataset_info"):
             return
         summary = self.datasets.summary(self.project)
+        hydro = is_hydroponic_project(self.project)
+        task_text = "Classification toàn ảnh · 10 slot cố định" if hydro else "đa hình học · RECT / SEG / OBB / ORI"
         text = [
             f"Dự án       : {self.project.name}",
             f"ID           : {self.project.id}",
-            "Bài toán     : đa hình học · RECT / SEG / OBB / ORI",
+            f"Bài toán     : {task_text}",
             f"Số ảnh       : {summary['images']}",
             f"Số nhãn      : {summary['annotations']}",
             "",
@@ -3710,6 +3988,23 @@ class SmartLabelApp(ctk.CTk):
         text.extend(f"  {key:20}: {value}" for key, value in summary["sources"].items())
         self._replace_text(self.project_summary, "\n".join(text))
         self._replace_text(self.dataset_info, "\n".join(text[3:]))
+        if hasattr(self, "project_guidance_label"):
+            if hydro:
+                guidance = (
+                    "1. Mỗi ảnh là một slot cây cố định.\n\n"
+                    "2. Gán hiện diện, lá vàng và héo trực tiếp trên ảnh slot.\n\n"
+                    "3. uncertain/not_applicable không vào tập train.\n\n"
+                    "4. Chỉ ảnh ĐÃ DUYỆT mới được export.\n\n"
+                    "5. AI chỉ quan sát; không có đường điều khiển bơm."
+                )
+            else:
+                guidance = (
+                    "1. AI chỉ tạo nhãn đề xuất.\n\n2. Nhãn phải được người dùng kiểm tra.\n\n"
+                    "3. Chỉ ảnh ĐÃ DUYỆT mới được đưa vào dataset mặc định.\n\n"
+                    "4. Class là loại vật; biến dạng lưu bằng thuộc tính.\n\n"
+                    "5. Mỗi lần train dùng một phiên bản dataset bất biến."
+                )
+            self.project_guidance_label.configure(text=guidance)
 
     @staticmethod
     def _replace_text(widget, value: str) -> None:

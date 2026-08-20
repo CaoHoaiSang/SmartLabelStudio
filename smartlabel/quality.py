@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
-
 from .models import Project
 
 
@@ -17,6 +15,7 @@ class QualityIssue:
 def inspect_project(project: Project) -> list[QualityIssue]:
     issues: list[QualityIssue] = []
     valid_classes = {item.id for item in project.classes}
+    is_hydro = project.metadata.get("template") == "Hydroponic Slot Condition"
     for image in project.images:
         image_level = any(
             project.attribute_settings.get(key, {}).get("scope") == "image"
@@ -24,13 +23,11 @@ def inspect_project(project: Project) -> list[QualityIssue]:
         )
         if image.review_status == "reviewed" and not image.annotations and not image_level:
             issues.append(QualityIssue(image.id, "", "warning", "Ảnh đã duyệt nhưng không có nhãn"))
-        if image.source_path and Path(image.source_path).is_absolute():
-            issues.append(QualityIssue(image.id, "", "error", "Project chứa đường dẫn nguồn tuyệt đối"))
         for key, values in project.attribute_schema.items():
             settings = project.attribute_settings.get(key, {})
             if settings.get("scope") == "image" and settings.get("required") and image.attributes.get(key) not in values:
                 issues.append(QualityIssue(image.id, "", "error", f"Thiếu thuộc tính ảnh bắt buộc: {key}"))
-        if image.attributes.get("plant_presence") != "present" and any(
+        if is_hydro and image.attributes.get("plant_presence") != "present" and any(
             image.attributes.get(key) != "not_applicable" for key in ("yellow_leaf", "wilt")
         ):
             issues.append(QualityIssue(image.id, "", "error", "Nhãn condition mâu thuẫn với plant_presence"))

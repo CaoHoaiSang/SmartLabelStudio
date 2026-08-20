@@ -451,6 +451,14 @@ class SmartLabelCoreTests(unittest.TestCase):
         issues = inspect_project(self.project)
         self.assertTrue(any("ngoài ảnh" in issue.message for issue in issues))
 
+    def test_generic_quality_is_not_polluted_by_hydro_rules(self):
+        self.store.import_images(self.project, [self.source])
+        record = self.project.images[0]
+        issues = inspect_project(self.project)
+        messages = [issue.message for issue in issues]
+        self.assertNotIn("Project chứa đường dẫn nguồn tuyệt đối", messages)
+        self.assertNotIn("Nhãn condition mâu thuẫn với plant_presence", messages)
+
     def test_seg_annotation_can_still_export_as_detection_box(self):
         ann = Annotation.create_box(1, [10, 20, 30, 40])
         ann.kind = "polygon"

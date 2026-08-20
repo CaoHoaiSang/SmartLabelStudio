@@ -23,10 +23,15 @@ SLOT_IDS = tuple(
 TRAIN_EXCLUDED_LABELS = {"uncertain", "not_applicable"}
 MODEL_KEYS = ("plant_presence", "yellow_leaf", "wilt")
 SENSITIVE_SUFFIXES = {".env", ".pt", ".pth", ".onnx", ".engine", ".rknn", ".ckpt"}
+HYDROPONIC_TEMPLATE = "Hydroponic Slot Condition"
 
 
 class CaptureManifestError(ValueError):
     pass
+
+
+def is_hydroponic_project(project: Project | None) -> bool:
+    return bool(project and project.metadata.get("template") == HYDROPONIC_TEMPLATE)
 
 
 def _sha256(path: Path) -> str:
@@ -42,7 +47,7 @@ def apply_hydroponic_slot_template(project: Project) -> Project:
     project.task = "classify"
     project.description = "Hydroponic fixed-slot condition classification"
     project.metadata.update({
-        "template": "Hydroponic Slot Condition",
+        "template": HYDROPONIC_TEMPLATE,
         "cropCode": "cai_ngot",
         "pipeline": "fixed_slot_multilabel_v1",
         "validationStatus": "pilot_unvalidated",
@@ -80,6 +85,19 @@ def apply_hydroponic_slot_template(project: Project) -> Project:
     }
     project.attribute_classification_enabled = True
     return project
+
+
+def _validate_captured_at(value: Any) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise CaptureManifestError("manifest capturedAt is required")
+    normalized = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise CaptureManifestError("manifest capturedAt must be ISO-8601") from exc
+    if parsed.tzinfo is None:
+        raise CaptureManifestError("manifest capturedAt must include a timezone")
+    return value.strip()
 
 
 def _safe_relative_path(value: Any) -> Path:
@@ -129,6 +147,9 @@ def validate_capture_manifest(manifest_path: str | Path) -> tuple[dict[str, Any]
             raise CaptureManifestError(f"manifest {key} is required")
     if manifest.get("qualityStatus") != "accepted":
         raise CaptureManifestError("only accepted captures can enter the labeling dataset")
+    _validate_captured_at(manifest.get("capturedAt"))
+    if manifest.get("trigger") not in {"manual", "scheduled"}:
+        raise CaptureManifestError("manifest trigger must be manual or scheduled")
     assets = manifest.get("assets")
     if not isinstance(assets, list):
         raise CaptureManifestError("manifest assets must be an array")
@@ -188,8 +209,19 @@ def validate_capture_manifest(manifest_path: str | Path) -> tuple[dict[str, Any]
 
 def import_capture_manifest(store: ProjectStore, project: Project, manifest_path: str | Path) -> tuple[int, int]:
     manifest, resolved = validate_capture_manifest(manifest_path)
-    if project.metadata.get("template") != "Hydroponic Slot Condition":
+    if not is_hydroponic_project(project):
         raise CaptureManifestError("project must use the Hydroponic Slot Condition template")
+    expected_crop = str(project.metadata.get("cropCode", ""))
+    if expected_crop and manifest["cropCode"] != expected_crop:
+        raise CaptureManifestError(
+            f"manifest cropCode {manifest['cropCode']} does not match project cropCode {expected_crop}"
+        )
+    for field in ("siteId", "deviceId"):
+        configured = str(project.metadata.get(field, ""))
+        if configured and manifest[field] != configured:
+            raise CaptureManifestError(
+                f"manifest {field} {manifest[field]} does not match project {field} {configured}"
+            )
     known_asset_ids = {record.metadata.get("assetId") for record in project.images}
     slot_assets = [asset for asset in manifest["assets"] if asset.get("role") == "slot"]
     duplicate_ids = [asset["assetId"] for asset in slot_assets if asset["assetId"] in known_asset_ids]
@@ -197,12 +229,32 @@ def import_capture_manifest(store: ProjectStore, project: Project, manifest_path
         raise CaptureManifestError(f"capture asset was already imported: {duplicate_ids[0]}")
     images_dir = store.project_dir(project) / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
+    provenance_dir = store.project_dir(project) / "assets" / manifest["captureId"]
+    if provenance_dir.exists():
+        raise CaptureManifestError(f"capture provenance already exists: {manifest['captureId']}")
     created_files = []
     created_records = []
+    metadata_before = json.loads(json.dumps(project.metadata))
+    last_import_batch_before = project.last_import_batch
     full_asset = next(asset for asset in manifest["assets"] if asset.get("role") == "full_frame")
     roi_assets = {asset["rackId"]: asset for asset in manifest["assets"] if asset.get("role") == "roi"}
     import_batch = f"capture_{manifest['captureId']}"
     try:
+        provenance_dir.mkdir(parents=True, exist_ok=False)
+        parent_assets: dict[str, dict[str, str]] = {}
+        for parent in (full_asset, roi_assets["upper"], roi_assets["lower"]):
+            source = resolved[parent["assetId"]]
+            suffix = source.suffix.lower() if source.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"} else ".jpg"
+            role_name = "full" if parent["role"] == "full_frame" else f"{parent['rackId']}_roi"
+            destination = provenance_dir / f"{role_name}{suffix}"
+            shutil.copy2(source, destination)
+            created_files.append(destination)
+            parent_assets[parent["assetId"]] = {
+                "assetId": parent["assetId"],
+                "role": parent["role"],
+                "sha256": parent["sha256"],
+                "projectRelativePath": destination.relative_to(store.project_dir(project)).as_posix(),
+            }
         for asset in sorted(slot_assets, key=lambda item: SLOT_IDS.index(item["slotId"])):
             source = resolved[asset["assetId"]]
             suffix = source.suffix.lower() if source.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"} else ".jpg"
@@ -250,14 +302,28 @@ def import_capture_manifest(store: ProjectStore, project: Project, manifest_path
                     "fullFrameAssetId": full_asset["assetId"],
                     "roiAssetId": roi_assets[rack_id]["assetId"],
                     "rectInFullFrame": asset["rectInFullFrame"],
-                    "fullFrameRelativePath": _safe_relative_path(full_asset["relativePath"]).as_posix(),
-                    "roiRelativePath": _safe_relative_path(roi_assets[rack_id]["relativePath"]).as_posix(),
+                    "fullFrameRelativePath": parent_assets[full_asset["assetId"]]["projectRelativePath"],
+                    "roiRelativePath": parent_assets[roi_assets[rack_id]["assetId"]]["projectRelativePath"],
+                    "parentAssets": {
+                        "fullFrame": parent_assets[full_asset["assetId"]],
+                        "roi": parent_assets[roi_assets[rack_id]["assetId"]],
+                    },
                 },
                 sha256=asset["sha256"],
             )
             created_records.append(record)
         project.images.extend(created_records)
         project.last_import_batch = import_batch
+        project.metadata.setdefault("siteId", manifest["siteId"])
+        project.metadata.setdefault("deviceId", manifest["deviceId"])
+        def append_unique_string(field: str, value: str) -> None:
+            existing = project.metadata.get(field, [])
+            safe_existing = [item for item in existing if isinstance(item, str)] if isinstance(existing, list) else []
+            project.metadata[field] = sorted(set(safe_existing + [value]))
+
+        append_unique_string("cropCycleIds", manifest["cropCycleId"])
+        append_unique_string("cameraProfileIds", manifest["cameraProfileId"])
+        append_unique_string("geometryProfileIds", manifest["geometryProfileId"])
         store.save(project)
     except Exception:
         for target in created_files:
@@ -268,6 +334,10 @@ def import_capture_manifest(store: ProjectStore, project: Project, manifest_path
         for record in created_records:
             if record in project.images:
                 project.images.remove(record)
+        project.metadata = metadata_before
+        project.last_import_batch = last_import_batch_before
+        if provenance_dir.exists():
+            shutil.rmtree(provenance_dir, ignore_errors=True)
         raise
     return len(created_records), 0
 
@@ -278,6 +348,7 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
     digests = defaultdict(list)
     plant_splits = defaultdict(set)
     cycle_splits = defaultdict(set)
+    capture_slots = defaultdict(list)
     assignments = dict((split_assignment or {}).get("groups", {}))
     for record in project.images:
         path = store.image_path(project, record)
@@ -295,6 +366,27 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
                 issues.append({"severity": "error", "imageId": record.id, "code": "checksum_mismatch"})
         for key in MODEL_KEYS:
             distributions[key][record.attributes.get(key, "missing")] += 1
+        capture_id = str(record.metadata.get("captureId", ""))
+        slot_id = str(record.metadata.get("slotId", ""))
+        if not capture_id:
+            issues.append({"severity": "error", "imageId": record.id, "code": "missing_capture_id"})
+        else:
+            capture_slots[capture_id].append(slot_id)
+        if record.asset_role != "slot":
+            issues.append({"severity": "error", "imageId": record.id, "code": "invalid_asset_role"})
+        expected_plant = f"{record.metadata.get('cropCycleId', '')}:{slot_id}"
+        if record.metadata.get("plant_instance_id") != expected_plant:
+            issues.append({"severity": "error", "imageId": record.id, "code": "plant_instance_mismatch"})
+        for lineage_key in ("fullFrameRelativePath", "roiRelativePath"):
+            raw_lineage_path = record.lineage.get(lineage_key)
+            if not isinstance(raw_lineage_path, str) or not raw_lineage_path:
+                issues.append({"severity": "error", "imageId": record.id, "code": f"missing_{lineage_key}"})
+                continue
+            lineage_path = Path(raw_lineage_path)
+            if lineage_path.is_absolute() or ".." in lineage_path.parts:
+                issues.append({"severity": "error", "imageId": record.id, "code": "unsafe_lineage_path"})
+            elif not (store.project_dir(project) / lineage_path).is_file():
+                issues.append({"severity": "error", "imageId": record.id, "code": "missing_parent_asset"})
         presence = record.attributes.get("plant_presence")
         if presence != "present" and any(record.attributes.get(key) != "not_applicable" for key in ("yellow_leaf", "wilt")):
             issues.append({"severity": "error", "imageId": record.id, "code": "contradictory_condition_label"})
@@ -318,12 +410,24 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
     for digest, image_ids in digests.items():
         if len(image_ids) > 1:
             issues.append({"severity": "error", "imageId": image_ids[0], "code": "duplicate_sha256", "related": image_ids[1:]})
+    for capture_id, slot_ids in capture_slots.items():
+        if len(slot_ids) != len(SLOT_IDS) or set(slot_ids) != set(SLOT_IDS):
+            issues.append({
+                "severity": "error",
+                "imageId": "",
+                "code": "incomplete_capture_slots",
+                "captureId": capture_id,
+                "missing": sorted(set(SLOT_IDS) - set(slot_ids)),
+                "duplicates": sorted(slot for slot, count in Counter(slot_ids).items() if count > 1),
+            })
     for plant_id, splits in plant_splits.items():
         if len(splits) > 1:
             issues.append({"severity": "error", "imageId": "", "code": "plant_instance_leakage", "plantInstanceId": plant_id})
     train_cycles = {cycle for cycle, splits in cycle_splits.items() if "train" in splits or "val" in splits}
     test_cycles = {cycle for cycle, splits in cycle_splits.items() if "test" in splits}
     independent_holdout = bool(test_cycles and test_cycles.isdisjoint(train_cycles) and "unknown" not in test_cycles)
+    if project.images and not independent_holdout:
+        issues.append({"severity": "warning", "imageId": "", "code": "crop_cycle_holdout_missing"})
     validation_status = (
         "validated_holdout"
         if independent_holdout and not any(issue["severity"] == "error" for issue in issues)
@@ -420,7 +524,7 @@ def write_hydro_model_bundle(
         manifest = {
             "schemaVersion": 1,
             "bundleId": bundle_id,
-            "cropCode": "cai_ngot",
+            "cropCode": str(project.metadata.get("cropCode") or "cai_ngot"),
             "pipeline": "fixed_slot_multilabel_v1",
             "compatibleCameraProfileIds": camera_profile_ids,
             "compatibleGeometryProfileIds": geometry_profile_ids,
