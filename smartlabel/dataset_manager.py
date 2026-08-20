@@ -49,8 +49,21 @@ class DatasetManager:
     def _record_groups(records: list) -> dict[str, list]:
         groups: dict[str, list] = defaultdict(list)
         for record in records:
-            groups[record.capture_group or record.id].append(record)
+            plant_instance_id = str(getattr(record, "metadata", {}).get("plant_instance_id", ""))
+            groups[plant_instance_id or record.capture_group or record.id].append(record)
         return groups
+
+    @staticmethod
+    def _independent_crop_cycle_holdout(groups: dict[str, list], split_keys: dict[str, list[str]]) -> bool:
+        cycles = {split: set() for split in ("train", "val", "test")}
+        for split, keys in split_keys.items():
+            for key in keys:
+                for record in groups[key]:
+                    cycle = str(getattr(record, "metadata", {}).get("cropCycleId", ""))
+                    if cycle:
+                        cycles[split].add(cycle)
+        development = cycles["train"] | cycles["val"]
+        return bool(cycles["test"] and cycles["test"].isdisjoint(development))
 
     def _bootstrap_from_latest_export(self, project: Project, groups: dict[str, list]) -> dict[str, str]:
         """Preserve the most recent historical split when introducing locking."""
@@ -143,7 +156,7 @@ class DatasetManager:
         return {
             "counts": counts,
             "group_counts": group_counts,
-            "path": str(self.split_assignment_path(project)),
+            "path": "split_assignment.json",
             "source": assignment.get("source", "locked"),
             "new_group_policy": assignment.get("new_group_policy", "train"),
         }
@@ -320,7 +333,7 @@ class DatasetManager:
             "images/train"
         )
         yaml_text = [
-            f"path: {export_dir.as_posix()}",
+            "path: .",
             "train: images/train",
             f"val: {val_path}",
             f"test: {'images/test' if test_enabled else ''}",
@@ -344,7 +357,7 @@ class DatasetManager:
             "split_locked": True,
             "validation_enabled": validation_enabled,
             "independent_test": test_enabled,
-            "split_assignment": str(self.split_assignment_path(project)),
+            "split_assignment": "split_assignment.json",
             "counts": {split: sum(len(groups[k]) for k in selected) for split, selected in split_keys.items()},
         }
         (export_dir / "export.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
@@ -368,7 +381,17 @@ class DatasetManager:
         values = project.attribute_schema.get(attribute_key, [])
         if not values:
             raise ValueError("Nhóm thuộc tính Classification không tồn tại hoặc chưa có lựa chọn.")
-        title = project.attribute_settings.get(attribute_key, {}).get("title", attribute_key)
+        settings = project.attribute_settings.get(attribute_key, {})
+        title = settings.get("title", attribute_key)
+        scope = settings.get("scope", "annotation_crop")
+        if scope not in {"annotation_crop", "image"}:
+            raise ValueError(f"Classification scope không hỗ trợ: {scope}")
+        if scope == "image" and not reviewed_only:
+            raise ValueError("Image-level Classification chỉ được export từ ảnh đã Duyệt.")
+        excluded_values = set(settings.get("train_exclude", [])) | {"uncertain", "not_applicable"}
+        train_values = [value for value in values if value not in excluded_values]
+        if not train_values:
+            raise ValueError("Nhóm Classification không còn nhãn train sau khi loại uncertain/not_applicable.")
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         export_dir = self._unique_directory(
             self.store.project_dir(project) / "exports",
@@ -377,7 +400,7 @@ class DatasetManager:
 
         class_folders: dict[str, str] = {}
         used_folders: set[str] = set()
-        for index, value in enumerate(values):
+        for index, value in enumerate(train_values):
             safe = re.sub(r'[<>:"/\\|?*]+', "_", value).strip(" .") or f"class_{index}"
             if safe.lower() in used_folders:
                 safe = f"{safe}_{index}"
@@ -407,6 +430,17 @@ class DatasetManager:
                     source = self.store.image_path(project, record)
                     with Image.open(source) as opened:
                         image = opened.convert("RGB")
+                        if scope == "image":
+                            value = record.attributes.get(attribute_key, "")
+                            if value not in class_folders:
+                                skipped_missing += 1
+                                continue
+                            target = export_dir / split / class_folders[value] / record.file_name
+                            image.save(target, quality=95)
+                            physical_crops += 1
+                            if not (synthetic_validation and split == "val"):
+                                counts[value] += 1
+                            continue
                         for ann in record.annotations:
                             value = ann.attributes.get(attribute_key, "")
                             if value not in class_folders:
@@ -442,6 +476,8 @@ class DatasetManager:
             "task": "classify",
             "attribute_key": attribute_key,
             "attribute_title": title,
+            "classification_scope": scope,
+            "excluded_labels": sorted(excluded_values),
             "reviewed_only": reviewed_only,
             "padding_ratio": padding_ratio,
             "classes": class_folders,
@@ -459,7 +495,12 @@ class DatasetManager:
             "split_locked": True,
             "validation_enabled": split_strategy == self.STRATEGY_LOCKED and bool(split_keys["val"]),
             "independent_test": split_strategy != self.STRATEGY_TRAIN_ALL and bool(split_keys["test"]),
-            "split_assignment": str(self.split_assignment_path(project)),
+            "split_assignment": "split_assignment.json",
+            "validation_status": (
+                "validated_holdout"
+                if self._independent_crop_cycle_holdout(groups, split_keys)
+                else "pilot_unvalidated"
+            ),
         }
         (export_dir / "export.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
         return export_dir

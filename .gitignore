@@ -2,9 +2,22 @@ __pycache__/
 *.py[cod]
 .venv/
 workspace/projects/*/images/
+workspace/projects/*/project.json
+workspace/projects/*/versions/
+workspace/projects/*/exports/
 workspace/projects/*/cache/
 workspace/projects/*/runs/
 workspace/models/
+workspace/bundles/
+*.onnx
+*.engine
+*.rknn
+*.pt
+*.pth
+*.ckpt
+data/
+runs/
+exports/
 dist/
 build/
 

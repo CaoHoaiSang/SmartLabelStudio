@@ -109,3 +109,21 @@ File `project.json` được ghi qua file tạm rồi thay thế để giảm ng
 Chi tiết contract cần bổ sung trên Radxa nằm tại [docs/RADXA_CLASSIFICATION_INTEGRATION.md](docs/RADXA_CLASSIFICATION_INTEGRATION.md).
 
 Xem hướng dẫn chi tiết tại [docs/HUONG_DAN_SU_DUNG.md](docs/HUONG_DAN_SU_DUNG.md).
+
+## Hydroponic Slot Condition
+
+SmartLabelStudio now supports the Hydro AI Camera workflow without coupling the two applications.
+Create the `Hydroponic Slot Condition` template or import a Hydro `CaptureManifestV1`. The importer
+checks checksums, lineage, ROI/slot geometry, duplicate IDs, and the required ten fixed slots before
+copying only slot images into the project. Full-frame and ROI relationships remain in metadata;
+exports do not contain absolute paths from the labeling workstation.
+
+Hydro projects use image-level attributes for `plant_presence`, `yellow_leaf`, and `wilt`, with
+`uncertain` and `not_applicable` excluded from training. If presence is not `present`, both condition
+labels must be `not_applicable`. Dataset QA also checks broken/duplicate files, contradictions,
+label distribution, sensitive paths, and split leakage by `plant_instance_id`/crop cycle.
+
+The project schema is now version 2. Existing schema-v1 projects are migrated in memory when opened
+and written safely only when saved. Jetson export produces static batch-1 ONNX artifacts plus a
+`HydroModelBundleV1`; TensorRT engines must be built on the target Nano and are never exported from
+Windows.

@@ -518,6 +518,11 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
             "role": role_var,
             "options": options,
             "rows": [],
+            "extra_settings": {
+                setting_key: setting_value
+                for setting_key, setting_value in config.items()
+                if setting_key not in {"title", "default", "required", "role"}
+            },
         }
         for value in values:
             self._append_attribute_row(key, options, value)
@@ -556,6 +561,7 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
     def _delete_attribute_row(self, key: str, row):
         value = row["value"].get().strip()
         used = sum(1 for image in self.project.images for ann in image.annotations if ann.attributes.get(key) == value)
+        used += sum(1 for image in self.project.images if image.attributes.get(key) == value)
         if used:
             messagebox.showwarning("Không thể xóa", f"Giá trị “{value}” đang được {used} nhãn sử dụng.", parent=self)
             return
@@ -565,6 +571,7 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
 
     def _delete_attribute_group(self, key: str):
         used = sum(1 for image in self.project.images for ann in image.annotations if key in ann.attributes)
+        used += sum(1 for image in self.project.images if key in image.attributes)
         if used:
             messagebox.showwarning(
                 "Không thể xóa",
@@ -609,6 +616,7 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
             role = next((code for code, label in self.ROLE_LABELS.items() if label == role_label), "metadata")
             schema[key] = values
             attribute_settings[key] = {
+                **group.get("extra_settings", {}),
                 "title": title,
                 "default": default,
                 "required": bool(group["required"].get()),

@@ -18,6 +18,7 @@ from .dataset_manager import DatasetManager
 from .deployment import build_vision_bundle_manifest, classifier_manifest_entry, write_classifier_pt_bundle
 from .evaluation import evaluate_yolo_model
 from .hardware import inspect_hardware
+from .hydroponic import apply_hydroponic_slot_template, hydro_dataset_qa, import_capture_manifest
 from .frame_filter_dialog import SmartFrameFilterDialog
 from .model_export import RknnExportConfig, RknnExportJob, diagnose_rknn_environment
 from .models import Annotation, Project
@@ -286,6 +287,9 @@ class SmartLabelApp(ctk.CTk):
         left.pack(side="left", fill="y", padx=(8, 5), pady=8)
         self._button(left, "Nhập thư mục ảnh", self._import_folder, width=220).pack(padx=14, pady=6)
         self._button(left, "Nhập các ảnh", self._import_files, width=220).pack(padx=14, pady=6)
+        self._button(left, "Tạo project Hydroponic Slot", self._new_hydro_project, width=220, color="#2b906d").pack(padx=14, pady=6)
+        self._button(left, "Nhập CaptureManifestV1", self._import_capture_manifest, width=220, color="#2b906d").pack(padx=14, pady=6)
+        self._button(left, "QA Hydro Dataset", self._run_hydro_qa, width=220, color="#6d56a4").pack(padx=14, pady=6)
         self._button(left, "Tách frame từ video", self._import_video, width=220).pack(padx=14, pady=6)
         self._button(
             left,
@@ -334,6 +338,49 @@ class SmartLabelApp(ctk.CTk):
         self.project = project
         self.current_index = -1
         self._refresh_everything()
+
+    def _new_hydro_project(self) -> None:
+        name = simpledialog.askstring("Hydroponic Slot", "Tên dự án:", parent=self)
+        if not name:
+            return
+        project = self.store.create_project(name, task="classify", classes=[])
+        apply_hydroponic_slot_template(project)
+        self.store.save(project)
+        self.project = project
+        self.current_index = -1
+        self.show_attribute_panel.set(True)
+        self._refresh_everything()
+
+    def _import_capture_manifest(self) -> None:
+        if not self.project or self.project.metadata.get("template") != "Hydroponic Slot Condition":
+            messagebox.showerror("Sai loại dự án", "Hãy tạo hoặc mở project Hydroponic Slot Condition trước.")
+            return
+        path = filedialog.askopenfilename(title="Chọn manifest.json", filetypes=[("CaptureManifestV1", "*.json")])
+        if not path:
+            return
+        try:
+            added, skipped = import_capture_manifest(self.store, self.project, path)
+            self.current_index = 0 if self.project.images else -1
+            self._refresh_everything()
+            messagebox.showinfo("Import hoàn tất", f"Đã nhập {added} slot; bỏ qua {skipped}.")
+        except Exception as exc:
+            messagebox.showerror("Import CaptureManifestV1 lỗi", str(exc))
+
+    def _run_hydro_qa(self) -> None:
+        if not self.project or self.project.metadata.get("template") != "Hydroponic Slot Condition":
+            messagebox.showerror("Sai loại dự án", "QA này chỉ dùng cho project Hydroponic Slot Condition.")
+            return
+        assignment = self.datasets.ensure_split_assignment(self.project)
+        report = hydro_dataset_qa(self.project, self.store, assignment)
+        self.project.metadata["validationStatus"] = report["validationStatus"]
+        self.store.save(self.project)
+        error_count = sum(issue["severity"] == "error" for issue in report["issues"])
+        messagebox.showinfo(
+            "Hydro Dataset QA",
+            f"Ảnh: {report['images']}\nLỗi: {error_count}\n"
+            f"Validation: {report['validationStatus']}\n\n"
+            + json.dumps(report["distributions"], ensure_ascii=False, indent=2),
+        )
 
     def _load_initial_project(self) -> None:
         projects = self.store.list_projects()
@@ -1012,7 +1059,7 @@ class SmartLabelApp(ctk.CTk):
 
     def _attribute_config(self, key: str) -> dict:
         if not self.project:
-            return {"title": self._legacy_attribute_title(key), "default": "", "required": False, "role": "metadata"}
+            return {"title": self._legacy_attribute_title(key), "default": "", "required": False, "role": "metadata", "scope": "annotation_crop"}
         saved = self.project.attribute_settings.get(key, {})
         values = self.project.attribute_schema.get(key, [])
         default = str(saved.get("default", ""))
@@ -1021,6 +1068,7 @@ class SmartLabelApp(ctk.CTk):
             "default": default if default in values else "",
             "required": bool(saved.get("required", False)),
             "role": str(saved.get("role", "metadata")),
+            "scope": str(saved.get("scope", "annotation_crop")),
         }
 
     def _attribute_defaults(self) -> dict[str, str]:
@@ -1060,7 +1108,7 @@ class SmartLabelApp(ctk.CTk):
             ctk.CTkLabel(self.attribute_panel, text=heading, text_color=COLORS["muted"]).pack(anchor="w", padx=10, pady=(8, 0))
             ctk.CTkLabel(
                 self.attribute_panel,
-                text=role_names.get(config["role"], config["role"]),
+                text=("Ảnh slot · " if config["scope"] == "image" else "") + role_names.get(config["role"], config["role"]),
                 text_color="#61798d",
                 font=("Segoe UI", 9),
             ).pack(anchor="w", padx=10, pady=(0, 2))
@@ -1289,10 +1337,14 @@ class SmartLabelApp(ctk.CTk):
         if not self.project:
             return []
         missing = []
+        for key, values in self.project.attribute_schema.items():
+            config = self._attribute_config(key)
+            if config["scope"] == "image" and config["required"] and record.attributes.get(key) not in values:
+                missing.append(f"Ảnh: {config['title']}")
         for index, ann in enumerate(record.annotations, start=1):
             for key, values in self.project.attribute_schema.items():
                 config = self._attribute_config(key)
-                if config["required"] and ann.attributes.get(key) not in values:
+                if config["scope"] != "image" and config["required"] and ann.attributes.get(key) not in values:
                     missing.append(f"Nhãn {index}: {config['title']}")
         return missing
 
@@ -1301,6 +1353,7 @@ class SmartLabelApp(ctk.CTk):
         if annotation_id and self.project and 0 <= self.current_index < len(self.project.images):
             self.last_selected_by_image[self.project.images[self.current_index].id] = annotation_id
         ann = self._selected_annotation()
+        record = self.project.images[self.current_index] if self.project and 0 <= self.current_index < len(self.project.images) else None
         self.annotation_info.configure(state="normal")
         self.annotation_info.delete("1.0", tk.END)
         if ann and self.project:
@@ -1308,7 +1361,7 @@ class SmartLabelApp(ctk.CTk):
             self._highlight_class(ann.class_id)
             for key, widget in self.attribute_widgets.items():
                 values = self.project.attribute_schema.get(key, [])
-                value = ann.attributes.get(key, "")
+                value = record.attributes.get(key, "") if record and self._attribute_config(key)["scope"] == "image" else ann.attributes.get(key, "")
                 if value in values:
                     widget.set(ATTRIBUTE_DISPLAY.get(key, {}).get(value, value))
                 else:
@@ -1330,8 +1383,9 @@ class SmartLabelApp(ctk.CTk):
             self._set_button_enabled(self.to_obb_button, True)
             self._set_button_enabled(self.orientation_button, True)
         else:
-            for widget in getattr(self, "attribute_widgets", {}).values():
-                widget.set("— Chưa gán —")
+            for key, widget in getattr(self, "attribute_widgets", {}).items():
+                value = record.attributes.get(key, "") if record and self._attribute_config(key)["scope"] == "image" else ""
+                widget.set(ATTRIBUTE_DISPLAY.get(key, {}).get(value, value) if value else "— Chưa gán —")
             self.approve_switch.deselect()
             self.approve_switch.configure(state="disabled")
             self._highlight_class(self.canvas.active_class_id if hasattr(self, "canvas") else -1)
@@ -1427,6 +1481,23 @@ class SmartLabelApp(ctk.CTk):
 
     def _attribute_changed(self, key: str, value: str) -> None:
         value = getattr(self, "attribute_display_to_value", {}).get(key, {}).get(value, value)
+        if self.project and 0 <= self.current_index < len(self.project.images) and self._attribute_config(key)["scope"] == "image":
+            record = self.project.images[self.current_index]
+            if value:
+                record.attributes[key] = value
+            else:
+                record.attributes.pop(key, None)
+            if key == "plant_presence" and value != "present":
+                record.attributes["yellow_leaf"] = "not_applicable"
+                record.attributes["wilt"] = "not_applicable"
+            if record.review_status == "reviewed":
+                record.review_status = "draft"
+            record.updated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+            self.save_project()
+            self._annotation_selected(self.selected_annotation_id)
+            self._sync_image_list_to_current()
+            self._update_image_status_controls()
+            return
         ann = self._selected_annotation()
         if ann:
             self.canvas.checkpoint()
@@ -1446,7 +1517,7 @@ class SmartLabelApp(ctk.CTk):
                 missing = []
                 for key, values in self.project.attribute_schema.items():
                     config = self._attribute_config(key)
-                    if config["required"] and ann.attributes.get(key) not in values:
+                    if config["scope"] != "image" and config["required"] and ann.attributes.get(key) not in values:
                         missing.append(config["title"])
                 if missing:
                     self.approve_switch.deselect()
@@ -1486,7 +1557,7 @@ class SmartLabelApp(ctk.CTk):
         record = self.project.images[self.current_index]
         for ann in record.annotations:
             ann.approved = False
-        record.review_status = "draft" if record.annotations else "unlabeled"
+        record.review_status = "draft" if record.annotations or record.attributes else "unlabeled"
         self.save_project()
         self._update_record_thumbnail(record)
         self._sync_image_list_to_current()
