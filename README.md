@@ -121,7 +121,9 @@ Trong project Hydro, hai thao tác chuyên biệt được đặt theo đúng gi
 
 - Trang **Dự án** có **Nhập CaptureManifestV1**: kiểm tra checksum, lineage, hình học ROI/slot, ID trùng và đủ đúng 10
   slot trước khi nhập. Ảnh slot, full frame và hai ROI đều được sao chép vào project để provenance
-  không còn phụ thuộc máy capture; export không chứa đường dẫn tuyệt đối.
+  không còn phụ thuộc máy capture; export không chứa đường dẫn tuyệt đối. Importer từ chối capture đã
+  được HydroFlow đánh dấu `excluded`, đồng thời giữ snapshot tuổi cây (`daysAfterSowing`, `daysAfterNft`),
+  ngày chụp địa phương, trigger, crop cycle, Camera/geometry/binding và quality trong metadata từng slot.
 - Trang **Kiểm duyệt** có **Kiểm tra Dataset Hydro**: báo ảnh hỏng/trùng/thiếu, nhãn mâu thuẫn, phân bố nhãn, leakage theo
   `plant_instance_id`, crop-cycle holdout ngay trong vùng kết quả bên dưới; chọn dòng lỗi rồi mở thẳng ảnh để sửa,
   không bật thêm cửa sổ QA.

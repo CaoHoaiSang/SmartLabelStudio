@@ -92,6 +92,12 @@ class HydroponicMvpTests(unittest.TestCase):
             "cropCycleId": "cai_ngot_2026-08-03", "cropCode": "cai_ngot", "capturedAt": "2026-08-20T00:00:00Z",
             "trigger": "scheduled", "cameraProfileId": "camera-1", "geometryProfileId": "geometry-1",
             "qualityStatus": "accepted", "assets": assets,
+            "cropContext": {
+                "cropDisplayName": "Cải ngọt cọng xanh", "sowingDate": "2026-08-03",
+                "nftStartDate": "2026-08-19", "timezone": "Asia/Bangkok",
+                "localDate": "2026-08-20", "daysAfterSowing": 17, "daysAfterNft": 1,
+            },
+            "datasetReview": {"status": "approved", "reason": None, "note": ""},
         }
         manifest_path = capture_dir / "manifest.json"
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -123,6 +129,9 @@ class HydroponicMvpTests(unittest.TestCase):
         self.assertTrue(all(record.asset_role == "slot" for record in self.project.images))
         self.assertTrue(all(record.source_path == "" for record in self.project.images))
         self.assertEqual(len({record.metadata["plant_instance_id"] for record in self.project.images}), 10)
+        self.assertTrue(all(record.metadata["daysAfterSowing"] == 17 for record in self.project.images))
+        self.assertTrue(all(record.metadata["daysAfterNft"] == 1 for record in self.project.images))
+        self.assertTrue(all(record.metadata["datasetReviewStatus"] == "approved" for record in self.project.images))
         for record in self.project.images:
             self.assertTrue((self.store.project_dir(self.project) / record.lineage["fullFrameRelativePath"]).is_file())
             self.assertTrue((self.store.project_dir(self.project) / record.lineage["roiRelativePath"]).is_file())
@@ -134,6 +143,21 @@ class HydroponicMvpTests(unittest.TestCase):
         manifest_path.write_text(json.dumps(broken), encoding="utf-8")
         with self.assertRaisesRegex(CaptureManifestError, "checksum"):
             validate_capture_manifest(manifest_path)
+
+    def test_manifest_import_rejects_excluded_capture_or_inconsistent_crop_age(self) -> None:
+        excluded_path = self.create_manifest("cap_excluded")
+        excluded = json.loads(excluded_path.read_text(encoding="utf-8"))
+        excluded["datasetReview"] = {"status": "excluded", "reason": "blur", "note": ""}
+        excluded_path.write_text(json.dumps(excluded), encoding="utf-8")
+        with self.assertRaisesRegex(CaptureManifestError, "excluded"):
+            validate_capture_manifest(excluded_path)
+
+        age_path = self.create_manifest("cap_bad_age")
+        bad_age = json.loads(age_path.read_text(encoding="utf-8"))
+        bad_age["cropContext"]["daysAfterSowing"] = 99
+        age_path.write_text(json.dumps(bad_age), encoding="utf-8")
+        with self.assertRaisesRegex(CaptureManifestError, "daysAfterSowing"):
+            validate_capture_manifest(age_path)
 
     def test_import_rejects_project_crop_or_site_mismatch(self) -> None:
         manifest_path = self.create_manifest()

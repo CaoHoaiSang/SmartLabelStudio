@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 import hashlib
@@ -167,6 +167,31 @@ def _validate_captured_at(value: Any) -> str:
     return value.strip()
 
 
+def _validate_crop_context(value: Any, captured_at: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise CaptureManifestError("manifest cropContext must be an object")
+    if value.get("timezone") != "Asia/Bangkok":
+        raise CaptureManifestError("manifest cropContext timezone must be Asia/Bangkok")
+    if not isinstance(value.get("cropDisplayName"), str) or not value["cropDisplayName"].strip():
+        raise CaptureManifestError("manifest cropContext cropDisplayName is required")
+    try:
+        sowing_date = date.fromisoformat(value["sowingDate"])
+        nft_start_date = date.fromisoformat(value["nftStartDate"])
+        local_date = date.fromisoformat(value["localDate"])
+        captured_local_date = datetime.fromisoformat(captured_at.replace("Z", "+00:00")).astimezone(timezone(timedelta(hours=7))).date()
+    except (KeyError, TypeError, ValueError) as exc:
+        raise CaptureManifestError("manifest cropContext dates must use valid YYYY-MM-DD values") from exc
+    if local_date != captured_local_date:
+        raise CaptureManifestError("manifest cropContext localDate does not match capturedAt")
+    if value.get("daysAfterSowing") != (local_date - sowing_date).days or value.get("daysAfterSowing", -1) < 0:
+        raise CaptureManifestError("manifest cropContext daysAfterSowing is inconsistent")
+    if value.get("daysAfterNft") != (local_date - nft_start_date).days:
+        raise CaptureManifestError("manifest cropContext daysAfterNft is inconsistent")
+    return value
+
+
 def _safe_relative_path(value: Any) -> Path:
     if not isinstance(value, str) or not value.strip():
         raise CaptureManifestError("asset relativePath is required")
@@ -214,7 +239,14 @@ def validate_capture_manifest(manifest_path: str | Path) -> tuple[dict[str, Any]
             raise CaptureManifestError(f"manifest {key} is required")
     if manifest.get("qualityStatus") != "accepted":
         raise CaptureManifestError("only accepted captures can enter the labeling dataset")
-    _validate_captured_at(manifest.get("capturedAt"))
+    dataset_review = manifest.get("datasetReview")
+    if dataset_review is not None:
+        if not isinstance(dataset_review, dict) or dataset_review.get("status") not in {"pending", "approved", "excluded"}:
+            raise CaptureManifestError("manifest datasetReview status is invalid")
+        if dataset_review.get("status") == "excluded":
+            raise CaptureManifestError("capture was excluded from the training dataset")
+    captured_at = _validate_captured_at(manifest.get("capturedAt"))
+    _validate_crop_context(manifest.get("cropContext"), captured_at)
     if manifest.get("trigger") not in {"manual", "scheduled"}:
         raise CaptureManifestError("manifest trigger must be manual or scheduled")
     assets = manifest.get("assets")
@@ -245,6 +277,20 @@ def validate_capture_manifest(manifest_path: str | Path) -> tuple[dict[str, Any]
             raise CaptureManifestError("ROI parent must be the full frame")
         _rect(roi)
         roi_by_rack[rack_id] = roi
+    binding_views: dict[str, str] = {}
+    if manifest.get("bindingId"):
+        raw_views = manifest.get("views")
+        if not isinstance(raw_views, list) or len(raw_views) != 2:
+            raise CaptureManifestError("bound manifest requires two view mappings")
+        binding_views = {
+            str(view.get("viewId")): str(view.get("rackId"))
+            for view in raw_views if isinstance(view, dict)
+        }
+        if set(binding_views) != {"upper", "lower"} or len(set(binding_views.values())) != 2:
+            raise CaptureManifestError("bound manifest view mapping is invalid")
+        for asset in roi_assets + slot_assets:
+            if asset.get("viewId") != asset.get("rackId") or asset.get("actualRackId") != binding_views.get(asset.get("viewId")):
+                raise CaptureManifestError(f"bound asset lineage mismatch: {asset.get('assetId')}")
     resolved = {}
     for asset in assets:
         relative = _safe_relative_path(asset.get("relativePath"))
@@ -332,13 +378,21 @@ def import_capture_manifest(store: ProjectStore, project: Project, manifest_path
             shutil.copy2(source, destination)
             created_files.append(destination)
             rack_id = asset["rackId"]
+            actual_rack_id = str(asset.get("actualRackId") or rack_id)
+            position = int(asset["slotId"].split("_")[1])
+            plant_instance_id = (
+                f"{manifest['cropCycleId']}:{actual_rack_id}:{position}"
+                if manifest.get("bindingId")
+                else f"{manifest['cropCycleId']}:{asset['slotId']}"
+            )
+            crop_context = manifest.get("cropContext") if isinstance(manifest.get("cropContext"), dict) else {}
             record = ImageRecord(
                 id=new_id("img"),
                 file_name=file_name,
                 width=int(asset["width"]),
                 height=int(asset["height"]),
                 source_path="",
-                capture_group=f"{manifest['cropCycleId']}:{asset['slotId']}",
+                capture_group=plant_instance_id,
                 import_batch=import_batch,
                 review_status="unlabeled",
                 quality=dict(asset.get("quality", {})),
@@ -353,14 +407,28 @@ def import_capture_manifest(store: ProjectStore, project: Project, manifest_path
                     "siteId": manifest["siteId"],
                     "deviceId": manifest["deviceId"],
                     "cropCode": manifest["cropCode"],
+                    "cropDisplayName": crop_context.get("cropDisplayName", ""),
                     "cropCycleId": manifest["cropCycleId"],
                     "slotId": asset["slotId"],
-                    "rackId": rack_id,
-                    "plant_instance_id": f"{manifest['cropCycleId']}:{asset['slotId']}",
+                    "viewId": asset.get("viewId", rack_id),
+                    "rackId": actual_rack_id,
+                    "position": position,
+                    "plant_instance_id": plant_instance_id,
                     "capturedAt": manifest.get("capturedAt"),
                     "trigger": manifest.get("trigger"),
+                    "scheduledFor": manifest.get("scheduledFor"),
                     "cameraProfileId": manifest["cameraProfileId"],
                     "geometryProfileId": manifest["geometryProfileId"],
+                    "bindingId": manifest.get("bindingId"),
+                    "bindingRevision": manifest.get("bindingRevision"),
+                    "captureQualityStatus": manifest.get("qualityStatus"),
+                    "datasetReviewStatus": (manifest.get("datasetReview") or {}).get("status", "legacy_unreviewed"),
+                    "captureLocalDate": crop_context.get("localDate"),
+                    "sowingDate": crop_context.get("sowingDate"),
+                    "nftStartDate": crop_context.get("nftStartDate"),
+                    "daysAfterSowing": crop_context.get("daysAfterSowing"),
+                    "daysAfterNft": crop_context.get("daysAfterNft"),
+                    "timezone": crop_context.get("timezone"),
                     "other_abnormal": "",
                 },
                 parent_asset_id=asset["parentAssetId"],
@@ -448,7 +516,13 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
             capture_slots[capture_id].append(slot_id)
         if record.asset_role != "slot":
             issues.append({"severity": "error", "imageId": record.id, "code": "invalid_asset_role"})
-        expected_plant = f"{record.metadata.get('cropCycleId', '')}:{slot_id}"
+        rack_id = str(record.metadata.get("rackId", ""))
+        position = record.metadata.get("position")
+        expected_plant = (
+            f"{record.metadata.get('cropCycleId', '')}:{rack_id}:{position}"
+            if record.metadata.get("bindingId") and rack_id and isinstance(position, int)
+            else f"{record.metadata.get('cropCycleId', '')}:{slot_id}"
+        )
         if record.metadata.get("plant_instance_id") != expected_plant:
             issues.append({"severity": "error", "imageId": record.id, "code": "plant_instance_mismatch"})
         for lineage_key in ("fullFrameRelativePath", "roiRelativePath"):
