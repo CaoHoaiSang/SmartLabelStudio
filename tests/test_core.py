@@ -29,6 +29,8 @@ from smartlabel.frame_filter import (
 from smartlabel.frame_filter_dialog import PREVIEW_BACKGROUND, PREVIEW_SIZE, build_contained_preview
 from smartlabel.frame_filter_dialog import SmartFrameFilterDialog
 from smartlabel.ui_components import PROJECT_TEMPLATE_HELP, PROJECT_TEMPLATE_LABELS
+from smartlabel.ui_components import ToolTip
+from smartlabel.app import PROJECT_ACTION_GROUPS, PROJECT_ACTION_TOOLTIPS
 
 
 class SmartLabelCoreTests(unittest.TestCase):
@@ -219,6 +221,50 @@ class SmartLabelCoreTests(unittest.TestCase):
         )
         self.assertEqual(set(PROJECT_TEMPLATE_HELP), set(PROJECT_TEMPLATE_LABELS.values()))
         self.assertTrue(all("project_" not in code for code in PROJECT_TEMPLATE_LABELS.values()))
+
+    def test_project_page_actions_have_groups_and_detailed_hydro_help(self):
+        self.assertEqual(set(PROJECT_ACTION_GROUPS), {"import", "quality", "settings"})
+        self.assertEqual(
+            set(PROJECT_ACTION_TOOLTIPS),
+            {
+                "import_folder",
+                "import_files",
+                "capture_manifest",
+                "import_video",
+                "hydro_qa",
+                "smart_filter",
+                "delete_latest",
+                "project_settings",
+            },
+        )
+        for variants in PROJECT_ACTION_TOOLTIPS.values():
+            self.assertEqual(set(variants), {"standard", "hydro"})
+            self.assertGreater(len(variants["standard"]), 50)
+            self.assertGreater(len(variants["hydro"]), 80)
+        self.assertIn("đủ đúng 10 slot", PROJECT_ACTION_TOOLTIPS["capture_manifest"]["hydro"])
+        self.assertIn("không tự sửa hay xóa", PROJECT_ACTION_TOOLTIPS["hydro_qa"]["hydro"])
+        self.assertIn("không thể hoàn tác", PROJECT_ACTION_TOOLTIPS["delete_latest"]["hydro"])
+        self.assertIn("Cài đặt AI Camera", PROJECT_ACTION_TOOLTIPS["project_settings"]["hydro"])
+
+    def test_tooltip_text_can_change_with_project_context(self):
+        tooltip = object.__new__(ToolTip)
+        tooltip.text = "standard"
+        tooltip.after_id = None
+        tooltip.window = None
+
+        tooltip.set_text("hydro")
+
+        self.assertEqual(tooltip.text, "hydro")
+
+    def test_detailed_tooltip_prefers_side_without_covering_its_button(self):
+        self.assertEqual(
+            ToolTip._placement(60, 200, 220, 36, 360, 100, 1500, 900),
+            (288, 200),
+        )
+        self.assertEqual(
+            ToolTip._placement(1250, 820, 220, 36, 360, 100, 1500, 900),
+            (882, 792),
+        )
 
     def test_bulk_delete_and_video_frame_filter_keep_original_images(self):
         self.store.import_images(self.project, [self.source])

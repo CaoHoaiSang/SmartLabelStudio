@@ -510,6 +510,8 @@ class ToolTip:
         self.window: tk.Toplevel | None = None
         widget.bind("<Enter>", self._schedule, add="+")
         widget.bind("<Leave>", self._hide, add="+")
+        widget.bind("<FocusIn>", self._schedule, add="+")
+        widget.bind("<FocusOut>", self._hide, add="+")
         widget.bind("<ButtonPress>", self._hide, add="+")
 
     def _schedule(self, _event=None):
@@ -524,11 +526,8 @@ class ToolTip:
     def _show(self):
         if self.window or not self.text:
             return
-        x = self.widget.winfo_rootx() + 10
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
         self.window = tk.Toplevel(self.widget)
         self.window.wm_overrideredirect(True)
-        self.window.wm_geometry(f"+{x}+{y}")
         label = tk.Label(
             self.window,
             text=self.text,
@@ -543,12 +542,56 @@ class ToolTip:
             wraplength=360,
         )
         label.pack()
+        self.window.update_idletasks()
+        x, y = self._placement(
+            self.widget.winfo_rootx(),
+            self.widget.winfo_rooty(),
+            self.widget.winfo_width(),
+            self.widget.winfo_height(),
+            self.window.winfo_reqwidth(),
+            self.window.winfo_reqheight(),
+            self.widget.winfo_screenwidth(),
+            self.widget.winfo_screenheight(),
+        )
+        self.window.wm_geometry(f"+{x}+{y}")
+
+    @staticmethod
+    def _placement(
+        widget_x: int,
+        widget_y: int,
+        widget_width: int,
+        widget_height: int,
+        tooltip_width: int,
+        tooltip_height: int,
+        screen_width: int,
+        screen_height: int,
+    ) -> tuple[int, int]:
+        margin = 8
+        right_x = widget_x + widget_width + margin
+        left_x = widget_x - tooltip_width - margin
+        if right_x + tooltip_width <= screen_width - margin:
+            x = right_x
+            y = widget_y
+        elif left_x >= margin:
+            x = left_x
+            y = widget_y
+        else:
+            x = max(margin, min(widget_x, screen_width - tooltip_width - margin))
+            y = widget_y + widget_height + 6
+        y = max(margin, min(y, screen_height - tooltip_height - margin))
+        return x, y
 
     def _hide(self, _event=None):
         self._cancel()
         if self.window:
             self.window.destroy()
             self.window = None
+
+    def set_text(self, text: str) -> None:
+        """Update context-sensitive help without rebinding the widget."""
+
+        self._hide()
+        self.text = text
 
 
 class ProjectSettingsDialog(ctk.CTkToplevel):

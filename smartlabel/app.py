@@ -91,6 +91,98 @@ SPLIT_STRATEGY_LABELS = {
     "Final · Train 100% dữ liệu": DatasetManager.STRATEGY_TRAIN_ALL,
 }
 
+PROJECT_ACTION_GROUPS = {
+    "import": ("1 · NHẬP DỮ LIỆU", "Đưa ảnh, capture hoặc frame video vào project"),
+    "quality": ("2 · KIỂM TRA & DỌN", "Kiểm tra chất lượng trước khi gán nhãn hoặc train"),
+    "settings": ("3 · CẤU HÌNH NHÃN", "Quản lý Class và thuộc tính của project"),
+}
+
+PROJECT_ACTION_TOOLTIPS = {
+    "import_folder": {
+        "standard": (
+            "Chọn một thư mục; ứng dụng quét cả thư mục con, sao chép ảnh vào workspace và bỏ file "
+            "trùng bằng SHA-256. Mọi ảnh mới của lần này được gom vào cùng một lượt nhập để có thể lọc "
+            "hoặc xóa hàng loạt về sau."
+        ),
+        "hydro": (
+            "Nhập các ảnh slot đã crop thủ công từ một thư mục. Ảnh được dùng như Classification toàn ảnh, "
+            "nhưng không có kiểm chứng đủ 10 slot và không giữ lineage tới full frame/ROI. Với dữ liệu do Camera "
+            "Service tạo, nên dùng Nhập CaptureManifestV1."
+        ),
+    },
+    "import_files": {
+        "standard": (
+            "Chọn một hoặc nhiều file ảnh rời. Ứng dụng sao chép ảnh vào workspace, bỏ ảnh trùng SHA-256 và "
+            "đánh dấu chúng là một lượt nhập mới; file nguồn ban đầu không bị thay đổi."
+        ),
+        "hydro": (
+            "Nhập một số ảnh slot rời để thử nghiệm hoặc bổ sung thủ công. Cách này không xác nhận cấu trúc "
+            "2 ROI/10 slot và không giữ liên kết full frame. Dataset camera Hydro chính thức nên nhập bằng "
+            "CaptureManifestV1."
+        ),
+    },
+    "capture_manifest": {
+        "standard": "Chức năng này chỉ hiện trong project dùng mẫu Hydroponic Slot Condition.",
+        "hydro": (
+            "Cách nhập khuyến nghị cho dữ liệu từ AI Camera. Ứng dụng kiểm tra schema, checksum, ID trùng, "
+            "lineage, hình học ROI/slot và đủ đúng 10 slot trước khi nhập; ảnh slot được dùng để gán nhãn và "
+            "vẫn giữ liên kết tới full frame/ROI. Nút này không chụp ảnh và không chạy inference."
+        ),
+    },
+    "import_video": {
+        "standard": (
+            "Chọn video rồi đặt khoảng N; ứng dụng lưu mỗi N frame thành ảnh trong project và cảnh báo nếu số "
+            "frame dự kiến quá lớn. Video gốc không bị xóa hoặc chỉnh sửa."
+        ),
+        "hydro": (
+            "Tách frame video thành ảnh thường để thử nghiệm. Frame không tự chia thành 2 ROI/10 slot, không có "
+            "slot ID và timestamp capture chuẩn. Với camera cố định Hydro, nên dùng lịch chụp và CaptureManifestV1."
+        ),
+    },
+    "hydro_qa": {
+        "standard": "Chức năng này chỉ hiện trong project dùng mẫu Hydroponic Slot Condition.",
+        "hydro": (
+            "Chạy báo cáo QA chỉ đọc: phát hiện ảnh thiếu/hỏng/trùng, nhãn mâu thuẫn, phân bố nhãn, nguy cơ "
+            "leakage theo plant/crop cycle và đường dẫn không portable. QA không tự sửa hay xóa dữ liệu; bạn xem "
+            "báo cáo rồi quyết định."
+        ),
+    },
+    "smart_filter": {
+        "standard": (
+            "Mặc định phân tích lượt nhập mới nhất để tìm ảnh gần trùng, ảnh trống và ảnh chất lượng kém. "
+            "Ứng dụng chỉ đề xuất; ảnh có nhãn/đã duyệt được bảo vệ và không ảnh nào bị xóa trước khi bạn xác nhận."
+        ),
+        "hydro": (
+            "Phân tích chất lượng hình ảnh của lượt nhập mới nhất: gần trùng, trống, mờ hoặc ánh sáng kém. "
+            "Chức năng này bổ sung cho Dataset QA, không kiểm tra lineage/10 slot. Ứng dụng chỉ đề xuất và luôn "
+            "yêu cầu xác nhận trước khi xóa."
+        ),
+    },
+    "delete_latest": {
+        "standard": (
+            "Xóa đúng toàn bộ bản sao ảnh thuộc lượt nhập thành công gần nhất, cùng nhãn và trạng thái duyệt của "
+            "chúng. Hộp xác nhận sẽ cho xem số ảnh/nhãn trước; ảnh hoặc video nguồn và Dataset đã export vẫn được "
+            "giữ nguyên. Thao tác không thể hoàn tác trong project."
+        ),
+        "hydro": (
+            "Xóa đúng batch ảnh/slot được nhập thành công gần nhất, cùng nhãn Classification và trạng thái duyệt. "
+            "Hộp xác nhận hiển thị số ảnh, nhãn và nguồn; full frame/ảnh nguồn bên ngoài project cùng Dataset đã "
+            "export không bị xóa. Thao tác không thể hoàn tác trong project."
+        ),
+    },
+    "project_settings": {
+        "standard": (
+            "Mở cấu hình Class, màu hiển thị và các nhóm thuộc tính của project. Thay đổi ở đây ảnh hưởng cách "
+            "gán nhãn và export/train, nhưng không sửa ảnh nguồn hoặc các dataset đã export trước đó."
+        ),
+        "hydro": (
+            "Quản lý các nhãn Classification toàn ảnh slot: plant_presence, yellow_leaf, wilt và quy tắc giá trị. "
+            "Đây không phải nơi cấu hình lịch camera, exposure/WB hay hình học ROI/slot; các phần đó nằm trong "
+            "Cài đặt AI Camera của website Hydro."
+        ),
+    },
+}
+
 
 class SmartLabelApp(ctk.CTk):
     def __init__(self):
@@ -237,8 +329,19 @@ class SmartLabelApp(ctk.CTk):
         )
         button._smartlabel_enabled_fg = enabled_color
         button._smartlabel_enabled_hover = hover_color
-        ToolTip(button, tooltip or self._tooltip_text(text))
+        button._smartlabel_tooltip = ToolTip(button, tooltip or self._tooltip_text(text))
         return button
+
+    @staticmethod
+    def _set_button_tooltip(button, text: str) -> None:
+        tooltip = getattr(button, "_smartlabel_tooltip", None)
+        if tooltip is not None:
+            tooltip.set_text(text)
+
+    @staticmethod
+    def _project_action_tooltip(action: str, hydro: bool) -> str:
+        variants = PROJECT_ACTION_TOOLTIPS[action]
+        return variants["hydro" if hydro else "standard"]
 
     @staticmethod
     def _set_button_enabled(button, enabled: bool) -> None:
@@ -307,42 +410,121 @@ class SmartLabelApp(ctk.CTk):
         ctk.CTkLabel(card, text=title, font=("Segoe UI Semibold", 14), text_color=COLORS["accent"]).pack(anchor="w", padx=14, pady=(12, 6))
         return card
 
+    @staticmethod
+    def _project_action_group(parent, key: str):
+        title, subtitle = PROJECT_ACTION_GROUPS[key]
+        group = ctk.CTkFrame(
+            parent,
+            corner_radius=10,
+            fg_color="#0d1924",
+            border_width=1,
+            border_color="#22384a",
+        )
+        group.pack(fill="x", padx=12, pady=(3, 6))
+        ctk.CTkLabel(
+            group,
+            text=title,
+            font=("Segoe UI Semibold", 11),
+            text_color="#b9d7e8",
+        ).pack(anchor="w", padx=10, pady=(9, 0))
+        ctk.CTkLabel(
+            group,
+            text=subtitle,
+            font=("Segoe UI", 9),
+            text_color=COLORS["muted"],
+            wraplength=215,
+            justify="left",
+        ).pack(anchor="w", padx=10, pady=(1, 5))
+        return group
+
     # ---------- project ----------
     def _build_project_tab(self) -> None:
         tab = self.tabs.tab("DỰ ÁN")
-        left = self._card(tab, "DỮ LIỆU DỰ ÁN")
+        left = self._card(tab, "CÔNG CỤ DỰ ÁN")
         left.pack(side="left", fill="y", padx=(8, 5), pady=8)
-        self._button(left, "Nhập thư mục ảnh", self._import_folder, width=220).pack(padx=14, pady=6)
-        self._button(left, "Nhập các ảnh", self._import_files, width=220).pack(padx=14, pady=6)
-        self.delete_latest_import_button = self._button(
+        project_tools = ctk.CTkScrollableFrame(
             left,
-            "Xóa lần nhập gần nhất…",
-            self._delete_latest_import,
-            width=220,
-            color="#a94747",
-            tooltip=(
-                "Xóa các bản sao ảnh được thêm trong lượt nhập thành công gần nhất cùng nhãn liên quan. "
-                "Luôn hỏi xác nhận và không xóa ảnh nguồn."
-            ),
+            width=250,
+            fg_color="transparent",
+            corner_radius=0,
+            scrollbar_button_color="#28445a",
+            scrollbar_button_hover_color="#35627e",
         )
-        self.delete_latest_import_button.pack(padx=14, pady=6)
-        self.hydro_import_button = self._button(left, "Nhập CaptureManifestV1", self._import_capture_manifest, width=220, color="#2b906d")
-        self.hydro_import_button.pack(padx=14, pady=6)
-        self.hydro_qa_button = self._button(left, "Kiểm tra Dataset Hydro", self._run_hydro_qa, width=220, color="#6d56a4")
-        self.hydro_qa_button.pack(padx=14, pady=6)
-        self.video_import_button = self._button(left, "Tách frame từ video", self._import_video, width=220)
-        self.video_import_button.pack(padx=14, pady=6)
-        self._button(
-            left,
+        project_tools.pack(fill="both", expand=True, padx=(2, 4), pady=(0, 6))
+
+        import_group = self._project_action_group(project_tools, "import")
+        self.hydro_import_button = self._button(
+            import_group,
+            "Nhập CaptureManifestV1",
+            self._import_capture_manifest,
+            width=220,
+            color="#2b906d",
+            tooltip=self._project_action_tooltip("capture_manifest", False),
+        )
+        self.hydro_import_button.pack(fill="x", padx=8, pady=4)
+        self.import_folder_button = self._button(
+            import_group,
+            "Nhập thư mục ảnh",
+            self._import_folder,
+            width=220,
+            tooltip=self._project_action_tooltip("import_folder", False),
+        )
+        self.import_folder_button.pack(fill="x", padx=8, pady=4)
+        self.import_files_button = self._button(
+            import_group,
+            "Nhập các ảnh",
+            self._import_files,
+            width=220,
+            tooltip=self._project_action_tooltip("import_files", False),
+        )
+        self.import_files_button.pack(fill="x", padx=8, pady=4)
+        self.video_import_button = self._button(
+            import_group,
+            "Tách frame từ video",
+            self._import_video,
+            width=220,
+            tooltip=self._project_action_tooltip("import_video", False),
+        )
+        self.video_import_button.pack(fill="x", padx=8, pady=(4, 8))
+
+        quality_group = self._project_action_group(project_tools, "quality")
+        self.hydro_qa_button = self._button(
+            quality_group,
+            "Kiểm tra Dataset Hydro",
+            self._run_hydro_qa,
+            width=220,
+            color="#6d56a4",
+            tooltip=self._project_action_tooltip("hydro_qa", False),
+        )
+        self.hydro_qa_button.pack(fill="x", padx=8, pady=4)
+        self.smart_filter_button = self._button(
+            quality_group,
             "Lọc ảnh thông minh",
             self._open_frame_filter,
             width=220,
             color="#6d56a4",
-            tooltip="Lọc gần trùng, ảnh nền và ảnh chất lượng kém cho cả frame video lẫn ảnh nhập/thư mục.",
-        ).pack(padx=14, pady=6)
-        self.project_settings_button = self._button(left, "Quản lý Class & thuộc tính", self._edit_classes, width=220)
-        self.project_settings_button.pack(padx=14, pady=6)
-        ctk.CTkLabel(left, text="Ảnh được sao chép vào workspace\nđể dự án không phụ thuộc thư mục nguồn.", text_color=COLORS["muted"], justify="left").pack(padx=14, pady=14)
+            tooltip=self._project_action_tooltip("smart_filter", False),
+        )
+        self.smart_filter_button.pack(fill="x", padx=8, pady=4)
+        self.delete_latest_import_button = self._button(
+            quality_group,
+            "Xóa lần nhập gần nhất…",
+            self._delete_latest_import,
+            width=220,
+            color="#a94747",
+            tooltip=self._project_action_tooltip("delete_latest", False),
+        )
+        self.delete_latest_import_button.pack(fill="x", padx=8, pady=(4, 8))
+
+        settings_group = self._project_action_group(project_tools, "settings")
+        self.project_settings_button = self._button(
+            settings_group,
+            "Quản lý Class & thuộc tính",
+            self._edit_classes,
+            width=220,
+            tooltip=self._project_action_tooltip("project_settings", False),
+        )
+        self.project_settings_button.pack(fill="x", padx=8, pady=(4, 8))
 
         center = self._card(tab, "TỔNG QUAN")
         center.pack(side="left", fill="both", expand=True, padx=5, pady=8)
@@ -724,13 +906,32 @@ class SmartLabelApp(ctk.CTk):
 
     def _apply_project_context_visibility(self) -> None:
         hydro = is_hydroponic_project(self.project)
-        for button in (getattr(self, "hydro_import_button", None), getattr(self, "hydro_qa_button", None)):
+        contextual_buttons = (
+            (getattr(self, "hydro_import_button", None), getattr(self, "import_folder_button", None)),
+            (getattr(self, "hydro_qa_button", None), getattr(self, "smart_filter_button", None)),
+        )
+        for button, before in contextual_buttons:
             if button is None:
                 continue
             if hydro and not button.winfo_manager():
-                button.pack(padx=14, pady=6, before=self.video_import_button)
+                button.pack(fill="x", padx=8, pady=4, before=before)
             elif not hydro:
                 button.pack_forget()
+
+        tooltip_buttons = {
+            "capture_manifest": "hydro_import_button",
+            "import_folder": "import_folder_button",
+            "import_files": "import_files_button",
+            "import_video": "video_import_button",
+            "hydro_qa": "hydro_qa_button",
+            "smart_filter": "smart_filter_button",
+            "delete_latest": "delete_latest_import_button",
+            "project_settings": "project_settings_button",
+        }
+        for action, attribute in tooltip_buttons.items():
+            button = getattr(self, attribute, None)
+            if button is not None:
+                self._set_button_tooltip(button, self._project_action_tooltip(action, hydro))
         if hasattr(self, "project_settings_button"):
             self.project_settings_button.configure(
                 text="Quản lý nhãn & thuộc tính" if hydro else "Quản lý Class & thuộc tính"

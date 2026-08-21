@@ -26,6 +26,7 @@
 - Danh sách tick thuộc tính dùng chung giữa Dataset, Train và xuất RKNN; tick một nhóm cũng chạy bằng cùng luồng hàng loạt, không còn dropdown/nút train đơn trùng chức năng.
 - Khi tắt Classification, toàn bộ điều khiển chỉ dành cho thuộc tính được ẩn và ứng dụng trở về luồng định vị Detection/SEG/OBB/ORI.
 - Tooltip giải thích khi rê chuột lên nút chức năng.
+- Trang **Dự án** chia công cụ thành ba khung theo luồng làm việc: **Nhập dữ liệu**, **Kiểm tra & dọn**, **Cấu hình nhãn**; cột công cụ tự cuộn ở cửa sổ thấp. Tooltip đổi theo loại project và giải thích chi tiết giới hạn của nhập ảnh/video, `CaptureManifestV1`, Hydro QA, lọc, xóa batch và quản lý thuộc tính.
 - Trạng thái ảnh đầy đủ: duyệt, bỏ duyệt, từ chối và khôi phục.
 - Thuộc tính `condition`, `occlusion`, trạng thái duyệt từng nhãn và từng ảnh.
 - Kiểm tra lỗi cấu trúc nhãn.

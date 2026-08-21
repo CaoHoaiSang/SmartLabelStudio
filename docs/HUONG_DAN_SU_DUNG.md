@@ -56,12 +56,26 @@ Nên đặt tên class theo loại sản phẩm, không theo hình dạng tạm 
 
 ## 4. Nhập dữ liệu
 
-Trong trang **DỰ ÁN**:
+Trong trang **DỰ ÁN**, các thao tác được chia theo đúng thứ tự sử dụng. Rê chuột lên từng nút để xem giải thích chi tiết theo loại project đang mở:
+
+### 4.1. Nhập dữ liệu
 
 - **Nhập thư mục ảnh**: quét cả thư mục con.
 - **Nhập các ảnh**: chọn một hoặc nhiều file.
 - **Tách frame từ video**: ứng dụng đọc tổng số frame, đề xuất khoảng `N` để tạo tối đa khoảng 500 ảnh và cảnh báo trước nếu lựa chọn dự kiến tạo quá nhiều ảnh. `N=4` nghĩa là lưu mỗi 4 frame, không phải chỉ lưu 4 ảnh.
+- **Nhập CaptureManifestV1** *(chỉ hiện với project Hydro)*: lựa chọn khuyến nghị cho ảnh từ Camera Service vì kiểm tra checksum, lineage, hình học và đủ 10 slot. Nhập thư mục/ảnh/video thông thường không tự tạo lineage hoặc chia thành 2 ROI/10 slot.
+
+### 4.2. Kiểm tra & dọn dữ liệu
+
+- **Kiểm tra Dataset Hydro** *(chỉ hiện với project Hydro)*: báo lỗi ảnh, nhãn, phân bố và leakage; chỉ tạo báo cáo, không tự sửa hoặc xóa.
+- **Lọc ảnh thông minh**: đề xuất ảnh gần trùng, trống hoặc chất lượng kém; người dùng vẫn phải duyệt và xác nhận.
 - **Xóa lần nhập gần nhất · N**: xóa đúng toàn bộ `N` ảnh của lượt nhập thành công gần nhất cùng nhãn/trạng thái trong dự án. Hộp xác nhận hiển thị trước dự án, thời gian, nguồn rút gọn, số ảnh và số nhãn. Ảnh/video nguồn ban đầu và Dataset đã export không bị xóa.
+
+### 4.3. Cấu hình nhãn
+
+- **Quản lý Class & thuộc tính / Quản lý nhãn & thuộc tính**: sửa cấu trúc nhãn của project. Với Hydro, đây là `plant_presence`, `yellow_leaf`, `wilt`; lịch camera, exposure/WB và ROI/slot được cấu hình trong website Hydro, không nằm ở nút này.
+
+Khi chiều cao cửa sổ nhỏ, dùng thanh cuộn riêng trong cột **Công cụ dự án** để mở nhóm phía dưới.
 
 Ứng dụng sao chép ảnh vào dự án. Ảnh giống hệt nhau được nhận diện bằng SHA-256 và bỏ qua.
 
