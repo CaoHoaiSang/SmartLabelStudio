@@ -22,6 +22,10 @@ SLOT_IDS = tuple(
 )
 TRAIN_EXCLUDED_LABELS = {"uncertain", "not_applicable"}
 MODEL_KEYS = ("plant_presence", "yellow_leaf", "wilt")
+RUNTIME_TARGETS = {
+    "jetson_nano_tensorrt_fp16",
+    "windows_onnxruntime_cpu",
+}
 
 HYDRO_QA_ISSUE_MESSAGES = {
     "empty_dataset": "Dataset chưa có ảnh để kiểm tra.",
@@ -522,6 +526,8 @@ def write_hydro_model_bundle(
     camera_profile_ids: list[str],
     geometry_profile_ids: list[str],
     input_size: int = 224,
+    runtime_target: str = "jetson_nano_tensorrt_fp16",
+    deployment_mode: str = "shadow",
 ) -> Path:
     output = Path(output_dir).resolve()
     if output.exists():
@@ -530,6 +536,15 @@ def write_hydro_model_bundle(
         raise ValueError("bundle requires independent presence/yellow/wilt models and thresholds")
     if not dataset_version or not source_commit or not camera_profile_ids or not geometry_profile_ids:
         raise ValueError("dataset/source/profile compatibility metadata is required")
+    if runtime_target not in RUNTIME_TARGETS:
+        raise ValueError(f"unsupported Hydro runtime target: {runtime_target}")
+    if deployment_mode not in {"shadow", "operational"}:
+        raise ValueError("deployment_mode must be shadow or operational")
+    validation_status = str(project.metadata.get("validationStatus", "pilot_unvalidated"))
+    if runtime_target == "windows_onnxruntime_cpu" and deployment_mode != "shadow":
+        raise ValueError("Windows ONNX Runtime is only allowed in shadow mode")
+    if deployment_mode == "operational" and validation_status != "validated_holdout":
+        raise ValueError("operational deployment requires an independent validated holdout")
     label_distribution = {}
     for key in MODEL_KEYS:
         counts = Counter(
@@ -566,6 +581,7 @@ def write_hydro_model_bundle(
                 "dynamic": False,
                 "inputLayout": "NCHW",
                 "colorOrder": "RGB",
+                "resizeMode": "short_side_center_crop",
                 "normalization": {"scale": 1 / 255, "mean": [0, 0, 0], "std": [1, 1, 1]},
                 "lowThreshold": low,
                 "highThreshold": high,
@@ -580,12 +596,15 @@ def write_hydro_model_bundle(
             "models": entries,
             "datasetVersion": dataset_version,
             "sourceCommit": source_commit,
-            "runtimeTarget": "jetson_nano_tensorrt_fp16",
-            "minimumTensorRTVersion": "8.2",
-            "validationStatus": project.metadata.get("validationStatus", "pilot_unvalidated"),
+            "runtimeTarget": runtime_target,
+            "deploymentMode": deployment_mode,
+            "trainingPurpose": str(project.metadata.get("trainingPurpose", "pilot")),
+            "validationStatus": validation_status,
             "labelDistribution": label_distribution,
             "createdAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
+        if runtime_target == "jetson_nano_tensorrt_fp16":
+            manifest["minimumTensorRTVersion"] = "8.2"
         (temporary / "bundle.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(temporary, output)
         return output

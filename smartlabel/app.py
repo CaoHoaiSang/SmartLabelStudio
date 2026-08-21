@@ -1743,7 +1743,7 @@ class SmartLabelApp(ctk.CTk):
         help_label = getattr(self, "deploy_help_label", None)
         if help_label is not None:
             if is_hydroponic_project(self.project):
-                help_text = "Xuất ba classifier toàn ảnh slot sang ONNX tĩnh; TensorRT engine được build và smoke-test trực tiếp trên Jetson."
+                help_text = "Xuất ba classifier toàn ảnh slot sang ONNX tĩnh dùng chung; có thể thử shadow bằng ONNX Runtime trên Windows hoặc build TensorRT trực tiếp trên Jetson."
             elif enabled:
                 help_text = "Xuất lần lượt các classifier đã tick sang RKNN, sau đó tạo gói triển khai cùng model định vị."
             else:
@@ -3193,11 +3193,11 @@ class SmartLabelApp(ctk.CTk):
         self.bundle_export_button.pack(side="left", padx=3)
         self.hydro_onnx_export_button = self._button(
             self.deploy_action_row,
-            "XUẤT ONNX JETSON",
+            "XUẤT ONNX HYDRO",
             self._export_hydro_onnx_models,
             width=205,
             color=COLORS["good"],
-            tooltip="Xuất tĩnh batch-1 ba classifier Hydro sang ONNX; TensorRT engine chỉ build trên Jetson.",
+            tooltip="Xuất tĩnh batch-1 ba classifier Hydro sang ONNX dùng chung cho Windows shadow và Jetson TensorRT.",
         )
         self.hydro_onnx_export_button.pack(side="left", padx=3)
         self.hydro_bundle_export_button = self._button(
@@ -3206,7 +3206,7 @@ class SmartLabelApp(ctk.CTk):
             self._export_hydro_bundle,
             width=235,
             color="#48657a",
-            tooltip="Đóng gói ONNX, preprocessing, ngưỡng hiệu chỉnh, checksum và profile tương thích cho Jetson.",
+            tooltip="Đóng gói ONNX, preprocessing, ngưỡng, checksum, profile và runtime đích. Windows luôn bị khóa ở shadow.",
         )
         self.hydro_bundle_export_button.pack(side="left", padx=3)
         self.deploy_stop_button = self._button(
@@ -3635,7 +3635,7 @@ class SmartLabelApp(ctk.CTk):
         except Exception as exc:
             messagebox.showerror("Chưa đủ classifier Hydro", str(exc), parent=self)
             return
-        parent = filedialog.askdirectory(title="Chọn thư mục lưu ONNX Jetson")
+        parent = filedialog.askdirectory(title="Chọn thư mục lưu ONNX Hydro")
         if not parent:
             return
         output = Path(parent) / f"hydro_jetson_onnx_{datetime.now():%Y%m%d_%H%M%S}"
@@ -3653,11 +3653,11 @@ class SmartLabelApp(ctk.CTk):
             self.store.save(self.project)
         except Exception as exc:
             shutil.rmtree(output, ignore_errors=True)
-            messagebox.showerror("Xuất ONNX Jetson lỗi", str(exc), parent=self)
+            messagebox.showerror("Xuất ONNX Hydro lỗi", str(exc), parent=self)
             return
         messagebox.showinfo(
-            "Đã xuất ONNX Jetson",
-            "Đã xuất ba classifier batch-1 tĩnh. Không có TensorRT engine nào được build trên Windows.\n\n" + str(output),
+            "Đã xuất ONNX Hydro",
+            "Đã xuất ba classifier batch-1 tĩnh. Windows có thể chạy ONNX ở shadow; TensorRT engine chỉ build trên Jetson.\n\n" + str(output),
             parent=self,
         )
 
@@ -3676,7 +3676,7 @@ class SmartLabelApp(ctk.CTk):
         try:
             models = self._hydro_classifier_paths(suffix=".onnx")
         except Exception as exc:
-            messagebox.showerror("Chưa có ONNX Hydro", str(exc) + "\n\nHãy chạy XUẤT ONNX JETSON trước.", parent=self)
+            messagebox.showerror("Chưa có ONNX Hydro", str(exc) + "\n\nHãy chạy XUẤT ONNX HYDRO trước.", parent=self)
             return
         assignment = self.datasets.ensure_split_assignment(self.project)
         report = hydro_dataset_qa(self.project, self.store, assignment)
@@ -3694,6 +3694,7 @@ class SmartLabelApp(ctk.CTk):
             "cameraProfileIds": self.project.metadata.get("cameraProfileIds", []),
             "geometryProfileIds": self.project.metadata.get("geometryProfileIds", []),
             "thresholds": self.project.metadata.get("hydroThresholds", {}),
+            "runtimeTarget": self.project.metadata.get("hydroRuntimeTarget", "jetson_nano_tensorrt_fp16"),
         }
         config = ask_hydro_bundle_config(self, defaults)
         if not config:
@@ -3714,10 +3715,13 @@ class SmartLabelApp(ctk.CTk):
                 camera_profile_ids=config["cameraProfileIds"],
                 geometry_profile_ids=config["geometryProfileIds"],
                 input_size=224,
+                runtime_target=config["runtimeTarget"],
+                deployment_mode=config["deploymentMode"],
             )
             self.project.metadata["datasetVersion"] = config["datasetVersion"]
             self.project.metadata["sourceCommit"] = config["sourceCommit"]
             self.project.metadata["hydroThresholds"] = config["thresholds"]
+            self.project.metadata["hydroRuntimeTarget"] = config["runtimeTarget"]
             self.project.metadata["lastHydroBundle"] = str(bundle.resolve())
             self.store.save(self.project)
         except Exception as exc:
@@ -3725,7 +3729,15 @@ class SmartLabelApp(ctk.CTk):
             return
         messagebox.showinfo(
             "HydroModelBundleV1 hoàn tất",
-            f"Validation: {report['validationStatus']}\nBundle: {bundle}\n\nTensorRT engine phải được build trên Jetson.",
+            (
+                f"Validation: {report['validationStatus']}\nRuntime: {config['runtimeTarget']}\n"
+                f"Mode: {config['deploymentMode']}\nBundle: {bundle}\n\n"
+                + (
+                    "Kích hoạt bằng ONNX Runtime trên Windows chỉ chạy shadow và không được tạo cảnh báo."
+                    if config["runtimeTarget"] == "windows_onnxruntime_cpu"
+                    else "TensorRT engine phải được build trên Jetson."
+                )
+            ),
             parent=self,
         )
 

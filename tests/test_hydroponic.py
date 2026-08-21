@@ -207,9 +207,31 @@ class HydroponicMvpTests(unittest.TestCase):
         )
         manifest = json.loads((output / "bundle.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["pipeline"], "fixed_slot_multilabel_v1")
+        self.assertEqual(manifest["runtimeTarget"], "jetson_nano_tensorrt_fp16")
+        self.assertEqual(manifest["deploymentMode"], "shadow")
         self.assertEqual(manifest["models"]["yellow_leaf"]["labels"], ["absent", "present"])
+        self.assertEqual(manifest["models"]["yellow_leaf"]["resizeMode"], "short_side_center_crop")
         self.assertGreater(manifest["labelDistribution"]["plant_presence"]["absent"], 0)
         self.assertFalse(any(Path(item["path"]).is_absolute() for item in manifest["models"].values()))
+
+        windows_output = write_hydro_model_bundle(
+            self.project, self.root / "windows_bundle", models,
+            {key: {"lowThreshold": 0.25, "highThreshold": 0.75} for key in models},
+            dataset_version="dataset-v1", source_commit="abc123", camera_profile_ids=["camera-1"],
+            geometry_profile_ids=["geometry-1"], runtime_target="windows_onnxruntime_cpu",
+        )
+        windows_manifest = json.loads((windows_output / "bundle.json").read_text(encoding="utf-8"))
+        self.assertEqual(windows_manifest["runtimeTarget"], "windows_onnxruntime_cpu")
+        self.assertEqual(windows_manifest["deploymentMode"], "shadow")
+        self.assertNotIn("minimumTensorRTVersion", windows_manifest)
+        with self.assertRaisesRegex(ValueError, "only allowed in shadow"):
+            write_hydro_model_bundle(
+                self.project, self.root / "unsafe_windows_bundle", models,
+                {key: {"lowThreshold": 0.25, "highThreshold": 0.75} for key in models},
+                dataset_version="dataset-v1", source_commit="abc123", camera_profile_ids=["camera-1"],
+                geometry_profile_ids=["geometry-1"], runtime_target="windows_onnxruntime_cpu",
+                deployment_mode="operational",
+            )
 
     def test_bundle_rejects_a_classifier_without_both_reviewed_labels(self) -> None:
         import_capture_manifest(self.store, self.project, self.create_manifest())

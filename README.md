@@ -131,12 +131,19 @@ Hydro luôn dùng Classification toàn ảnh slot với ba nhóm độc lập `p
 `not_applicable` không vào train. Khi cây không hiện diện, hai condition tự chuyển thành
 `not_applicable`. `other_abnormal` chỉ là ghi chú phục vụ đánh nhãn, chưa được train.
 
-Trang **Triển khai** của project Hydro chỉ hiện luồng Jetson: xuất ba ONNX static batch 1 rồi tạo
-`HydroModelBundleV1` với camera/geometry IDs, checksum và từng cặp ngưỡng low/high đã hiệu chỉnh.
-Khoảng giữa hai ngưỡng được runtime trả về `uncertain`; TensorRT engine chỉ build/smoke-test trên
-Jetson. Các nút RKNN/Radxa cũ vẫn hiện nguyên trạng đối với project thường và không hiện trong
-project Hydro.
+Trang **Triển khai** của project Hydro xuất ba ONNX static batch 1 rồi tạo `HydroModelBundleV1`
+với camera/geometry IDs, checksum, preprocessing và từng cặp ngưỡng low/high đã hiệu chỉnh. Có hai
+runtime đích: Windows ONNX Runtime CPU để kiểm thử toàn tuyến ở chế độ `shadow` (không kích hoạt
+cảnh báo), và Jetson Nano TensorRT FP16. Khoảng giữa hai ngưỡng được runtime trả về `uncertain`;
+TensorRT engine chỉ build/smoke-test trên Jetson. Các nút RKNN/Radxa cũ vẫn giữ nguyên cho project
+thường và không hiện trong project Hydro.
 
 Schema project là v2. Project v1 cũ được migrate trong bộ nhớ khi mở và chỉ ghi an toàn khi người
 dùng lưu. Có thể đặt biến `SMARTLABEL_WORKSPACE` để chạy thử trên workspace tách biệt; nếu không đặt,
 ứng dụng vẫn dùng thư mục `workspace` cũ nên toàn bộ dự án hiện có được giữ nguyên.
+
+Để kiểm tra kỹ thuật toàn tuyến mà không giả vờ đây là model nông học đã đạt, có thể chạy
+`python -m tools.hydro_pipeline_smoke --workspace workspace --manifest <manifest.json>`. Công cụ tạo
+một project mới, không sửa project cũ; nó sinh các biến thể condition có đánh dấu
+`pipeline_smoke_only`, chạy đúng importer/export/train/ONNX/bundle và chỉ cho phép bundle Windows
+ở chế độ `shadow`.

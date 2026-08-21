@@ -30,6 +30,11 @@ PROJECT_TEMPLATE_HELP = {
     "blank": "Không tạo sẵn Class hay thuộc tính; bạn tự cấu hình sau khi tạo dự án.",
 }
 
+HYDRO_RUNTIME_LABELS = {
+    "Jetson Nano · TensorRT FP16 (build engine trên Jetson)": "jetson_nano_tensorrt_fp16",
+    "Windows · ONNX Runtime CPU (chỉ kiểm thử shadow)": "windows_onnxruntime_cpu",
+}
+
 
 class NewProjectDialog(ctk.CTkToplevel):
     def __init__(self, parent, default_template: str = "deltax_bottle"):
@@ -122,13 +127,13 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
         super().__init__(parent)
         self.result: dict | None = None
         self.title("Cấu hình HydroModelBundleV1")
-        self.geometry("720x650")
-        self.minsize(650, 590)
+        self.geometry("720x715")
+        self.minsize(650, 650)
         self.transient(parent)
         self.grab_set()
         self.configure(fg_color="#0b151f")
         ctk.CTkLabel(
-            self, text="JETSON BUNDLE · NGƯỠNG ĐÃ HIỆU CHỈNH",
+            self, text="HYDRO MODEL BUNDLE · NGƯỠNG ĐÃ HIỆU CHỈNH",
             font=("Segoe UI Semibold", 19), text_color="#22b9ee",
         ).pack(anchor="w", padx=22, pady=(20, 3))
         ctk.CTkLabel(
@@ -150,6 +155,29 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
         field("Source commit", "sourceCommit", str(defaults.get("sourceCommit", "")))
         field("Camera profile IDs", "cameraProfileIds", ",".join(defaults.get("cameraProfileIds", [])))
         field("Geometry profile IDs", "geometryProfileIds", ",".join(defaults.get("geometryProfileIds", [])))
+        runtime_row = ctk.CTkFrame(self, fg_color="transparent")
+        runtime_row.pack(fill="x", padx=22, pady=4)
+        ctk.CTkLabel(runtime_row, text="Runtime đích", width=190, anchor="w", text_color="#8298aa").pack(side="left")
+        selected_runtime = next(
+            (label for label, code in HYDRO_RUNTIME_LABELS.items() if code == defaults.get("runtimeTarget")),
+            next(iter(HYDRO_RUNTIME_LABELS)),
+        )
+        self.runtime_label = tk.StringVar(value=selected_runtime)
+        ctk.CTkOptionMenu(
+            runtime_row,
+            values=list(HYDRO_RUNTIME_LABELS),
+            variable=self.runtime_label,
+        ).pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(
+            self,
+            text=(
+                "Windows dùng chính ONNX để thử toàn tuyến và luôn ở shadow: không kích hoạt cảnh báo. "
+                "Jetson vẫn build TensorRT engine trực tiếp trên thiết bị."
+            ),
+            wraplength=660,
+            justify="left",
+            text_color="#8298aa",
+        ).pack(anchor="w", padx=22, pady=(2, 4))
         ctk.CTkLabel(self, text="NGƯỠNG TỪNG CLASSIFIER", text_color="#22b9ee", font=("Segoe UI Semibold", 12)).pack(anchor="w", padx=22, pady=(14, 4))
         thresholds = defaults.get("thresholds", {})
         for key, title in (("plant_presence", "Cây hiện diện"), ("yellow_leaf", "Lá vàng"), ("wilt", "Héo")):
@@ -188,6 +216,8 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
             "cameraProfileIds": [item.strip() for item in self.variables["cameraProfileIds"].get().split(",") if item.strip()],
             "geometryProfileIds": [item.strip() for item in self.variables["geometryProfileIds"].get().split(",") if item.strip()],
             "thresholds": thresholds,
+            "runtimeTarget": HYDRO_RUNTIME_LABELS[self.runtime_label.get()],
+            "deploymentMode": "shadow",
         }
         self.destroy()
 
