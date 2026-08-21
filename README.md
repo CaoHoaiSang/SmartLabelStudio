@@ -117,12 +117,12 @@ Luồng Hydro được bổ sung bằng mẫu cấu hình trên chính hộp tho
 hay một engine train thứ hai. Chọn `Hydroponic · mẫu Classification 10 slot`; project chai/robot cũ vẫn
 giữ nguyên Classification theo crop annotation và RKNN/RK3588 như trước.
 
-Trong project Hydro, trang **Dự án** mới hiện hai thao tác chuyên biệt:
+Trong project Hydro, hai thao tác chuyên biệt được đặt theo đúng giai đoạn sử dụng:
 
-- **Nhập CaptureManifestV1**: kiểm tra checksum, lineage, hình học ROI/slot, ID trùng và đủ đúng 10
+- Trang **Dự án** có **Nhập CaptureManifestV1**: kiểm tra checksum, lineage, hình học ROI/slot, ID trùng và đủ đúng 10
   slot trước khi nhập. Ảnh slot, full frame và hai ROI đều được sao chép vào project để provenance
   không còn phụ thuộc máy capture; export không chứa đường dẫn tuyệt đối.
-- **Kiểm tra Dataset Hydro**: báo ảnh hỏng/trùng/thiếu, nhãn mâu thuẫn, phân bố nhãn, leakage theo
+- Trang **Kiểm duyệt** có **Kiểm tra Dataset Hydro**: báo ảnh hỏng/trùng/thiếu, nhãn mâu thuẫn, phân bố nhãn, leakage theo
   `plant_instance_id`, crop-cycle holdout và cho mở thẳng ảnh có lỗi để sửa.
 
 Hydro luôn dùng Classification toàn ảnh slot với ba nhóm độc lập `plant_presence`, `yellow_leaf` và

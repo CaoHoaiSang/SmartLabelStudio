@@ -93,8 +93,13 @@ SPLIT_STRATEGY_LABELS = {
 
 PROJECT_ACTION_GROUPS = {
     "import": ("1 · NHẬP DỮ LIỆU", "Đưa ảnh, capture hoặc frame video vào project"),
-    "quality": ("2 · KIỂM TRA & DỌN", "Kiểm tra chất lượng trước khi gán nhãn hoặc train"),
+    "cleanup": ("2 · DỌN DỮ LIỆU NHẬP", "Lọc hoặc hoàn tác lượt nhập ảnh gần nhất"),
     "settings": ("3 · CẤU HÌNH NHÃN", "Quản lý Class và thuộc tính của project"),
+}
+
+REVIEW_ACTION_GROUPS = {
+    "checks": ("KIỂM TRA DATASET", "Tìm lỗi trước khi duyệt, export hoặc train"),
+    "triage": ("XỬ LÝ KẾT QUẢ", "Ưu tiên ảnh cần người dùng kiểm tra"),
 }
 
 PROJECT_ACTION_TOOLTIPS = {
@@ -142,9 +147,9 @@ PROJECT_ACTION_TOOLTIPS = {
     "hydro_qa": {
         "standard": "Chức năng này chỉ hiện trong project dùng mẫu Hydroponic Slot Condition.",
         "hydro": (
-            "Chạy báo cáo QA chỉ đọc: phát hiện ảnh thiếu/hỏng/trùng, nhãn mâu thuẫn, phân bố nhãn, nguy cơ "
-            "leakage theo plant/crop cycle và đường dẫn không portable. QA không tự sửa hay xóa dữ liệu; bạn xem "
-            "báo cáo rồi quyết định."
+            "Chạy báo cáo QA chỉ đọc ngay trong trang Kiểm duyệt: phát hiện ảnh thiếu/hỏng/trùng, nhãn mâu thuẫn, "
+            "phân bố nhãn, nguy cơ leakage theo plant/crop cycle và đường dẫn không portable. QA không tự sửa hay "
+            "xóa dữ liệu; bạn xem báo cáo rồi mở đúng ảnh cần xử lý."
         ),
     },
     "smart_filter": {
@@ -437,6 +442,33 @@ class SmartLabelApp(ctk.CTk):
         ).pack(anchor="w", padx=10, pady=(1, 5))
         return group
 
+    @staticmethod
+    def _review_action_group(parent, key: str):
+        title, subtitle = REVIEW_ACTION_GROUPS[key]
+        group = ctk.CTkFrame(
+            parent,
+            corner_radius=10,
+            fg_color="#0d1924",
+            border_width=1,
+            border_color="#22384a",
+        )
+        group.pack(side="left", fill="y", padx=(0, 8))
+        ctk.CTkLabel(
+            group,
+            text=title,
+            font=("Segoe UI Semibold", 10),
+            text_color="#b9d7e8",
+        ).pack(anchor="w", padx=10, pady=(7, 0))
+        ctk.CTkLabel(
+            group,
+            text=subtitle,
+            font=("Segoe UI", 9),
+            text_color=COLORS["muted"],
+        ).pack(anchor="w", padx=10, pady=(0, 4))
+        actions = ctk.CTkFrame(group, fg_color="transparent")
+        actions.pack(fill="x", padx=8, pady=(0, 8))
+        return actions
+
     # ---------- project ----------
     def _build_project_tab(self) -> None:
         tab = self.tabs.tab("DỰ ÁN")
@@ -487,18 +519,9 @@ class SmartLabelApp(ctk.CTk):
         )
         self.video_import_button.pack(fill="x", padx=8, pady=(4, 8))
 
-        quality_group = self._project_action_group(project_tools, "quality")
-        self.hydro_qa_button = self._button(
-            quality_group,
-            "Kiểm tra Dataset Hydro",
-            self._run_hydro_qa,
-            width=220,
-            color="#6d56a4",
-            tooltip=self._project_action_tooltip("hydro_qa", False),
-        )
-        self.hydro_qa_button.pack(fill="x", padx=8, pady=4)
+        cleanup_group = self._project_action_group(project_tools, "cleanup")
         self.smart_filter_button = self._button(
-            quality_group,
+            cleanup_group,
             "Lọc ảnh thông minh",
             self._open_frame_filter,
             width=220,
@@ -507,7 +530,7 @@ class SmartLabelApp(ctk.CTk):
         )
         self.smart_filter_button.pack(fill="x", padx=8, pady=4)
         self.delete_latest_import_button = self._button(
-            quality_group,
+            cleanup_group,
             "Xóa lần nhập gần nhất…",
             self._delete_latest_import,
             width=220,
@@ -908,7 +931,6 @@ class SmartLabelApp(ctk.CTk):
         hydro = is_hydroponic_project(self.project)
         contextual_buttons = (
             (getattr(self, "hydro_import_button", None), getattr(self, "import_folder_button", None)),
-            (getattr(self, "hydro_qa_button", None), getattr(self, "smart_filter_button", None)),
         )
         for button, before in contextual_buttons:
             if button is None:
@@ -917,6 +939,18 @@ class SmartLabelApp(ctk.CTk):
                 button.pack(fill="x", padx=8, pady=4, before=before)
             elif not hydro:
                 button.pack_forget()
+
+        hydro_qa_button = getattr(self, "hydro_qa_button", None)
+        quality_check_button = getattr(self, "quality_check_button", None)
+        if hydro_qa_button is not None:
+            if hydro and not hydro_qa_button.winfo_manager():
+                hydro_qa_button.pack(
+                    side="left",
+                    padx=(0, 8),
+                    before=quality_check_button,
+                )
+            elif not hydro:
+                hydro_qa_button.pack_forget()
 
         tooltip_buttons = {
             "capture_manifest": "hydro_import_button",
@@ -2460,10 +2494,54 @@ class SmartLabelApp(ctk.CTk):
         tab = self.tabs.tab("KIỂM DUYỆT")
         controls = ctk.CTkFrame(tab, fg_color="transparent")
         controls.pack(fill="x", padx=8, pady=8)
-        self._button(controls, "Quét lỗi nhãn", self._run_quality_check, width=150).pack(side="left")
-        self._button(controls, "Ảnh AI chưa chắc", self._build_active_learning_queue, width=160, color="#7655b5").pack(side="left", padx=8)
-        self._button(controls, "Mở ảnh đang chọn", self._open_issue, width=160).pack(side="left", padx=8)
-        ctk.CTkLabel(controls, text="AI không tự duyệt nhãn; lỗi phải được xử lý trước khi đóng băng dataset.", text_color=COLORS["muted"]).pack(side="left", padx=12)
+        checks = self._review_action_group(controls, "checks")
+        self.hydro_qa_button = self._button(
+            checks,
+            "Kiểm tra Dataset Hydro",
+            self._run_hydro_qa,
+            width=190,
+            color="#6d56a4",
+            tooltip=self._project_action_tooltip("hydro_qa", False),
+        )
+        self.quality_check_button = self._button(
+            checks,
+            "Quét lỗi nhãn",
+            self._run_quality_check,
+            width=150,
+            tooltip=(
+                "Kiểm tra lỗi cấu trúc nhãn trên từng ảnh như Class không tồn tại, tọa độ ngoài ảnh, polygon thiếu "
+                "điểm hoặc ảnh đã duyệt nhưng thiếu nhãn. Kết quả xuất hiện trong danh sách bên dưới và không tự sửa dữ liệu."
+            ),
+        )
+        self.quality_check_button.pack(side="left")
+
+        triage = self._review_action_group(controls, "triage")
+        self._button(
+            triage,
+            "Ảnh AI chưa chắc",
+            self._build_active_learning_queue,
+            width=160,
+            color="#7655b5",
+            tooltip=(
+                "Xếp hạng ảnh chưa duyệt theo confidence thấp và Class hiếm để người dùng kiểm tra trước. "
+                "Danh sách này không thay đổi nhãn và AI không tự đánh dấu ảnh là đã duyệt."
+            ),
+        ).pack(side="left", padx=(0, 8))
+        self._button(
+            triage,
+            "Mở ảnh đang chọn",
+            self._open_issue,
+            width=160,
+            tooltip="Mở dòng đang chọn trong trang Gán nhãn để sửa hoặc xác nhận; không tự thay đổi trạng thái duyệt.",
+        ).pack(side="left")
+
+        ctk.CTkLabel(
+            controls,
+            text="AI không tự duyệt nhãn; mọi lỗi cần được người dùng xử lý trước khi đóng băng dataset.",
+            text_color=COLORS["muted"],
+            wraplength=330,
+            justify="left",
+        ).pack(side="left", fill="x", expand=True, padx=(6, 0))
         self.review_list = tk.Listbox(tab, bg="#091119", fg=COLORS["text"], selectbackground="#217fa9", borderwidth=0, highlightthickness=0, font=("Consolas", 11))
         self.review_list.pack(fill="both", expand=True, padx=8, pady=(0, 8))
         self.quality_issues = []

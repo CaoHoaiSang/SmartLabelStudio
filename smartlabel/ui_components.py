@@ -129,6 +129,7 @@ class HydroQaDialog(ctk.CTkToplevel):
         issues = list(report.get("issues", []))
         errors = sum(issue.get("severity") == "error" for issue in issues)
         warnings = sum(issue.get("severity") == "warning" for issue in issues)
+        summary_color = "#f26464" if errors else ("#ffb547" if warnings else "#43d17d")
         ctk.CTkLabel(
             self,
             text="DATASET QA · HYDROPONIC SLOT",
@@ -141,7 +142,7 @@ class HydroQaDialog(ctk.CTkToplevel):
                 f"{report.get('images', 0)} ảnh · {errors} lỗi · {warnings} cảnh báo · "
                 f"{report.get('validationStatus', 'pilot_unvalidated')}"
             ),
-            text_color="#f26464" if errors else "#43d17d",
+            text_color=summary_color,
         ).pack(anchor="w", padx=20, pady=(0, 10))
         distribution = ctk.CTkTextbox(self, height=135, fg_color="#091119", font=("Consolas", 12))
         distribution.pack(fill="x", padx=20, pady=(0, 10))
@@ -157,8 +158,9 @@ class HydroQaDialog(ctk.CTkToplevel):
             row.pack(fill="x", padx=4, pady=4)
             severity = str(issue.get("severity", "info"))
             color = {"error": "#f26464", "warning": "#ffb547"}.get(severity, "#8298aa")
-            ctk.CTkLabel(row, text=severity.upper(), width=82, text_color=color, anchor="w").pack(side="left", padx=8, pady=8)
-            detail = str(issue.get("code", "unknown"))
+            severity_label = {"error": "LỖI", "warning": "CẢNH BÁO"}.get(severity, severity.upper())
+            ctk.CTkLabel(row, text=severity_label, width=82, text_color=color, anchor="w").pack(side="left", padx=8, pady=8)
+            detail = str(issue.get("message") or issue.get("code", "unknown"))
             if issue.get("captureId"):
                 detail += f" · capture {issue['captureId']}"
             if issue.get("missing"):

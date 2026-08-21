@@ -30,7 +30,7 @@ from smartlabel.frame_filter_dialog import PREVIEW_BACKGROUND, PREVIEW_SIZE, bui
 from smartlabel.frame_filter_dialog import SmartFrameFilterDialog
 from smartlabel.ui_components import PROJECT_TEMPLATE_HELP, PROJECT_TEMPLATE_LABELS
 from smartlabel.ui_components import ToolTip
-from smartlabel.app import PROJECT_ACTION_GROUPS, PROJECT_ACTION_TOOLTIPS
+from smartlabel.app import PROJECT_ACTION_GROUPS, PROJECT_ACTION_TOOLTIPS, REVIEW_ACTION_GROUPS
 
 
 class SmartLabelCoreTests(unittest.TestCase):
@@ -223,7 +223,10 @@ class SmartLabelCoreTests(unittest.TestCase):
         self.assertTrue(all("project_" not in code for code in PROJECT_TEMPLATE_LABELS.values()))
 
     def test_project_page_actions_have_groups_and_detailed_hydro_help(self):
-        self.assertEqual(set(PROJECT_ACTION_GROUPS), {"import", "quality", "settings"})
+        self.assertEqual(set(PROJECT_ACTION_GROUPS), {"import", "cleanup", "settings"})
+        self.assertIn("DỌN DỮ LIỆU NHẬP", PROJECT_ACTION_GROUPS["cleanup"][0])
+        self.assertEqual(set(REVIEW_ACTION_GROUPS), {"checks", "triage"})
+        self.assertIn("KIỂM TRA DATASET", REVIEW_ACTION_GROUPS["checks"][0])
         self.assertEqual(
             set(PROJECT_ACTION_TOOLTIPS),
             {
@@ -242,6 +245,7 @@ class SmartLabelCoreTests(unittest.TestCase):
             self.assertGreater(len(variants["standard"]), 50)
             self.assertGreater(len(variants["hydro"]), 80)
         self.assertIn("đủ đúng 10 slot", PROJECT_ACTION_TOOLTIPS["capture_manifest"]["hydro"])
+        self.assertIn("trang Kiểm duyệt", PROJECT_ACTION_TOOLTIPS["hydro_qa"]["hydro"])
         self.assertIn("không tự sửa hay xóa", PROJECT_ACTION_TOOLTIPS["hydro_qa"]["hydro"])
         self.assertIn("không thể hoàn tác", PROJECT_ACTION_TOOLTIPS["delete_latest"]["hydro"])
         self.assertIn("Cài đặt AI Camera", PROJECT_ACTION_TOOLTIPS["project_settings"]["hydro"])

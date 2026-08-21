@@ -65,9 +65,8 @@ Trong trang **DỰ ÁN**, các thao tác được chia theo đúng thứ tự s�
 - **Tách frame từ video**: ứng dụng đọc tổng số frame, đề xuất khoảng `N` để tạo tối đa khoảng 500 ảnh và cảnh báo trước nếu lựa chọn dự kiến tạo quá nhiều ảnh. `N=4` nghĩa là lưu mỗi 4 frame, không phải chỉ lưu 4 ảnh.
 - **Nhập CaptureManifestV1** *(chỉ hiện với project Hydro)*: lựa chọn khuyến nghị cho ảnh từ Camera Service vì kiểm tra checksum, lineage, hình học và đủ 10 slot. Nhập thư mục/ảnh/video thông thường không tự tạo lineage hoặc chia thành 2 ROI/10 slot.
 
-### 4.2. Kiểm tra & dọn dữ liệu
+### 4.2. Dọn dữ liệu vừa nhập
 
-- **Kiểm tra Dataset Hydro** *(chỉ hiện với project Hydro)*: báo lỗi ảnh, nhãn, phân bố và leakage; chỉ tạo báo cáo, không tự sửa hoặc xóa.
 - **Lọc ảnh thông minh**: đề xuất ảnh gần trùng, trống hoặc chất lượng kém; người dùng vẫn phải duyệt và xác nhận.
 - **Xóa lần nhập gần nhất · N**: xóa đúng toàn bộ `N` ảnh của lượt nhập thành công gần nhất cùng nhãn/trạng thái trong dự án. Hộp xác nhận hiển thị trước dự án, thời gian, nguồn rút gọn, số ảnh và số nhãn. Ảnh/video nguồn ban đầu và Dataset đã export không bị xóa.
 
@@ -210,7 +209,12 @@ Model được chạy với ngưỡng thấp để các dự đoán yếu đi v�
 
 Ứng dụng gắn một mã `import_batch` cho mỗi lần nhập có thêm ảnh thành công. Nếu một lượt nhập chỉ gặp ảnh trùng và không thêm ảnh nào thì lượt mới nhất trước đó vẫn được giữ nguyên. Khi mở bộ lọc lần đầu với dự án cũ chưa có mã này, ứng dụng tự nhóm metadata theo các phiên nhập liên tiếp dựa trên `created_at`; thao tác chuyển đổi không sửa ảnh, nhãn hay trạng thái duyệt.
 
-Trang **KIỂM DUYỆT** tìm các lỗi như class không tồn tại, box ngoài ảnh, polygon thiếu điểm hoặc ảnh đã duyệt nhưng không có nhãn.
+Trang **KIỂM DUYỆT** gom các phép kiểm tra và hàng đợi xử lý vào hai khung riêng:
+
+- **Quét lỗi nhãn** tìm các lỗi như Class không tồn tại, box ngoài ảnh, polygon thiếu điểm hoặc ảnh đã duyệt nhưng không có nhãn.
+- **Kiểm tra Dataset Hydro** *(chỉ hiện với project Hydro)* kiểm tra thêm ảnh hỏng/trùng/thiếu, nhãn mâu thuẫn, phân bố nhãn, lineage và leakage theo plant/crop cycle. Báo cáo chỉ đọc, không tự sửa hoặc xóa dữ liệu; có thể mở thẳng ảnh có lỗi để xử lý.
+- **Ảnh AI chưa chắc** tạo hàng đợi ưu tiên theo confidence thấp và Class hiếm; AI không tự duyệt ảnh.
+- **Mở ảnh đang chọn** chuyển sang trang **GÁN NHÃN** tại đúng ảnh cần sửa.
 
 ## 9. Tạo dataset
 

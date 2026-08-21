@@ -149,6 +149,15 @@ class HydroponicMvpTests(unittest.TestCase):
         self.assertFalse((exported / "train" / "uncertain").exists())
         self.assertEqual(metadata["exported_crops"], 9)
 
+    def test_hydro_qa_warns_instead_of_passing_an_empty_dataset(self) -> None:
+        report = hydro_dataset_qa(self.project, self.store)
+
+        self.assertEqual(report["images"], 0)
+        issue = next(issue for issue in report["issues"] if issue["code"] == "empty_dataset")
+        self.assertEqual(issue["severity"], "warning")
+        self.assertEqual(issue["message"], "Dataset chưa có ảnh để kiểm tra.")
+        self.assertEqual(report["validationStatus"], "pilot_unvalidated")
+
     def test_hydro_qa_and_bundle_are_portable_and_checksum_bound(self) -> None:
         import_capture_manifest(self.store, self.project, self.create_manifest())
         for index, record in enumerate(self.project.images):

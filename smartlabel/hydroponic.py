@@ -344,6 +344,13 @@ def import_capture_manifest(store: ProjectStore, project: Project, manifest_path
 
 def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: dict[str, Any] | None = None) -> dict[str, Any]:
     issues = []
+    if not project.images:
+        issues.append({
+            "severity": "warning",
+            "imageId": "",
+            "code": "empty_dataset",
+            "message": "Dataset chưa có ảnh để kiểm tra.",
+        })
     distributions = {key: Counter() for key in MODEL_KEYS}
     digests = defaultdict(list)
     plant_splits = defaultdict(set)
