@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import json
 import unittest
+import zipfile
 
 from PIL import Image
 
@@ -213,6 +214,12 @@ class HydroponicMvpTests(unittest.TestCase):
         self.assertEqual(manifest["models"]["yellow_leaf"]["resizeMode"], "short_side_center_crop")
         self.assertGreater(manifest["labelDistribution"]["plant_presence"]["absent"], 0)
         self.assertFalse(any(Path(item["path"]).is_absolute() for item in manifest["models"].values()))
+        self.assertTrue(output.with_suffix(".zip").is_file())
+        with zipfile.ZipFile(output.with_suffix(".zip")) as package:
+            self.assertEqual(
+                sorted(package.namelist()),
+                ["bundle.json", "models/plant_presence.onnx", "models/wilt.onnx", "models/yellow_leaf.onnx"],
+            )
 
         windows_output = write_hydro_model_bundle(
             self.project, self.root / "windows_bundle", models,

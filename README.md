@@ -126,13 +126,16 @@ Trong project Hydro, hai thao tác chuyên biệt được đặt theo đúng gi
   `plant_instance_id`, crop-cycle holdout ngay trong vùng kết quả bên dưới; chọn dòng lỗi rồi mở thẳng ảnh để sửa,
   không bật thêm cửa sổ QA.
 
-Hydro luôn dùng Classification toàn ảnh slot với ba nhóm độc lập `plant_presence`, `yellow_leaf` và
+Mẫu Hydro ghi rõ cây của project là **Cải ngọt cọng xanh** (`cropCode=cai_ngot`). Đây là taxonomy
+của vụ trồng, không phải một classifier loài cây. Hydro vẫn dùng Classification toàn ảnh slot với
+ba nhóm độc lập `plant_presence` (hiển thị “Có cây cải ngọt trong rọ”), `yellow_leaf` và
 `wilt`; công tắc Classification bị khóa ON để không vô tình quay về Detection/SEG. `uncertain` và
 `not_applicable` không vào train. Khi cây không hiện diện, hai condition tự chuyển thành
 `not_applicable`. `other_abnormal` chỉ là ghi chú phục vụ đánh nhãn, chưa được train.
 
 Trang **Triển khai** của project Hydro xuất ba ONNX static batch 1 rồi tạo `HydroModelBundleV1`
-với camera/geometry IDs, checksum, preprocessing và từng cặp ngưỡng low/high đã hiệu chỉnh. Có hai
+với camera/geometry IDs, checksum, preprocessing và từng cặp ngưỡng low/high đã hiệu chỉnh. Studio
+đồng thời tạo file `.zip` portable cạnh thư mục bundle để tải trực tiếp tại **HydroFlow → Cài đặt → AI → Model AI đang chạy**. Có hai
 runtime đích: Windows ONNX Runtime CPU để kiểm thử toàn tuyến ở chế độ `shadow` (không kích hoạt
 cảnh báo), và Jetson Nano TensorRT FP16. Khoảng giữa hai ngưỡng được runtime trả về `uncertain`;
 TensorRT engine chỉ build/smoke-test trên Jetson. Các nút RKNN/Radxa cũ vẫn giữ nguyên cho project

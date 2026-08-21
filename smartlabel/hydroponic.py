@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shutil
+import zipfile
 
 from PIL import Image
 
@@ -95,6 +96,7 @@ def apply_hydroponic_slot_template(project: Project) -> Project:
     project.metadata.update({
         "template": HYDROPONIC_TEMPLATE,
         "cropCode": "cai_ngot",
+        "cropDisplayName": "Cải ngọt cọng xanh",
         "pipeline": "fixed_slot_multilabel_v1",
         "validationStatus": "pilot_unvalidated",
     })
@@ -105,7 +107,7 @@ def apply_hydroponic_slot_template(project: Project) -> Project:
     }
     project.attribute_settings = {
         "plant_presence": {
-            "title": "Cây hiện diện",
+            "title": "Có cây cải ngọt trong rọ",
             "default": "uncertain",
             "required": True,
             "role": "classification",
@@ -607,6 +609,12 @@ def write_hydro_model_bundle(
             manifest["minimumTensorRTVersion"] = "8.2"
         (temporary / "bundle.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(temporary, output)
+        archive = output.with_suffix(".zip")
+        if archive.exists():
+            raise FileExistsError(f"bundle ZIP already exists: {archive}")
+        with zipfile.ZipFile(archive, "x", compression=zipfile.ZIP_DEFLATED) as package:
+            for item in sorted(path for path in output.rglob("*") if path.is_file()):
+                package.write(item, item.relative_to(output).as_posix())
         return output
     except Exception:
         shutil.rmtree(temporary, ignore_errors=True)

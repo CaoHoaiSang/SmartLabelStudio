@@ -3731,7 +3731,7 @@ class SmartLabelApp(ctk.CTk):
             "HydroModelBundleV1 hoàn tất",
             (
                 f"Validation: {report['validationStatus']}\nRuntime: {config['runtimeTarget']}\n"
-                f"Mode: {config['deploymentMode']}\nBundle: {bundle}\n\n"
+            f"Mode: {config['deploymentMode']}\nBundle: {bundle}\nZIP để tải lên HydroFlow: {bundle.with_suffix('.zip')}\n\n"
                 + (
                     "Kích hoạt bằng ONNX Runtime trên Windows chỉ chạy shadow và không được tạo cảnh báo."
                     if config["runtimeTarget"] == "windows_onnxruntime_cpu"

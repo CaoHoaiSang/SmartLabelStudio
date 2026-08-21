@@ -24,7 +24,8 @@ PROJECT_TEMPLATE_HELP = {
         "Phù hợp khi bắt đầu một dự án chai mới."
     ),
     "hydroponic_slot": (
-        "Tạo sẵn Classification toàn ảnh slot với plant_presence, yellow_leaf và wilt. "
+        "Tạo project Cải ngọt cọng xanh (cropCode cai_ngot) và ba Classification toàn ảnh slot: "
+        "có cây cải ngọt trong rọ (plant_presence), lá vàng và héo. "
         "Không thay đổi các dự án chai đang có."
     ),
     "blank": "Không tạo sẵn Class hay thuộc tính; bạn tự cấu hình sau khi tạo dự án.",
@@ -180,7 +181,7 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
         ).pack(anchor="w", padx=22, pady=(2, 4))
         ctk.CTkLabel(self, text="NGƯỠNG TỪNG CLASSIFIER", text_color="#22b9ee", font=("Segoe UI Semibold", 12)).pack(anchor="w", padx=22, pady=(14, 4))
         thresholds = defaults.get("thresholds", {})
-        for key, title in (("plant_presence", "Cây hiện diện"), ("yellow_leaf", "Lá vàng"), ("wilt", "Héo")):
+        for key, title in (("plant_presence", "Có cây cải ngọt trong rọ"), ("yellow_leaf", "Lá vàng"), ("wilt", "Héo")):
             row = ctk.CTkFrame(self, fg_color="#142333", corner_radius=8)
             row.pack(fill="x", padx=22, pady=4)
             ctk.CTkLabel(row, text=title, width=190, anchor="w").pack(side="left", padx=10, pady=8)
