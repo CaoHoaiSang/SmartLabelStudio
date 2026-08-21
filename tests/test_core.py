@@ -28,7 +28,7 @@ from smartlabel.frame_filter import (
 )
 from smartlabel.frame_filter_dialog import PREVIEW_BACKGROUND, PREVIEW_SIZE, build_contained_preview
 from smartlabel.frame_filter_dialog import SmartFrameFilterDialog
-from smartlabel.ui_components import PROJECT_TEMPLATE_HELP, PROJECT_TEMPLATE_LABELS
+from smartlabel.ui_components import IMAGE_REVIEW_STATUS_STYLE, PROJECT_TEMPLATE_HELP, PROJECT_TEMPLATE_LABELS, ThumbnailList
 from smartlabel.ui_components import ToolTip
 from smartlabel.app import PROJECT_ACTION_GROUPS, PROJECT_ACTION_TOOLTIPS, REVIEW_ACTION_GROUPS
 
@@ -221,6 +221,14 @@ class SmartLabelCoreTests(unittest.TestCase):
         )
         self.assertEqual(set(PROJECT_TEMPLATE_HELP), set(PROJECT_TEMPLATE_LABELS.values()))
         self.assertTrue(all("project_" not in code for code in PROJECT_TEMPLATE_LABELS.values()))
+
+    def test_thumbnail_status_dot_reuses_the_canonical_review_colors(self):
+        self.assertEqual(set(IMAGE_REVIEW_STATUS_STYLE), {"unlabeled", "draft", "reviewed", "rejected"})
+        for status, style in IMAGE_REVIEW_STATUS_STYLE.items():
+            self.assertEqual(ThumbnailList.status_style(status), style)
+            self.assertTrue(style["indicator"].startswith("#"))
+            self.assertTrue(style["label"])
+        self.assertEqual(ThumbnailList.status_style("unknown"), IMAGE_REVIEW_STATUS_STYLE["unlabeled"])
 
     def test_project_page_actions_have_groups_and_detailed_hydro_help(self):
         self.assertEqual(set(PROJECT_ACTION_GROUPS), {"import", "cleanup", "settings"})

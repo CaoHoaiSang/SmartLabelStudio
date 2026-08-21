@@ -27,6 +27,7 @@ RUNTIME_TARGETS = {
     "jetson_nano_tensorrt_fp16",
     "windows_onnxruntime_cpu",
 }
+CROP_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
 
 HYDRO_QA_ISSUE_MESSAGES = {
     "empty_dataset": "Dataset chưa có ảnh để kiểm tra.",
@@ -89,14 +90,32 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def apply_hydroponic_slot_template(project: Project) -> Project:
+def validate_crop_identity(crop_code: str, crop_display_name: str) -> tuple[str, str]:
+    """Validate the portable crop identity shared by projects and model bundles."""
+
+    normalized_code = str(crop_code or "").strip()
+    normalized_name = str(crop_display_name or "").strip()
+    if not CROP_CODE_PATTERN.fullmatch(normalized_code):
+        raise ValueError("cropCode must use 2-64 lowercase ASCII letters, numbers or underscores")
+    if not normalized_name or len(normalized_name) > 100:
+        raise ValueError("cropDisplayName must contain 1-100 characters")
+    return normalized_code, normalized_name
+
+
+def apply_hydroponic_slot_template(
+    project: Project,
+    *,
+    crop_code: str = "cai_ngot",
+    crop_display_name: str = "Cải ngọt cọng xanh",
+) -> Project:
+    crop_code, crop_display_name = validate_crop_identity(crop_code, crop_display_name)
     project.schema_version = 2
     project.task = "classify"
     project.description = "Hydroponic fixed-slot condition classification"
     project.metadata.update({
         "template": HYDROPONIC_TEMPLATE,
-        "cropCode": "cai_ngot",
-        "cropDisplayName": "Cải ngọt cọng xanh",
+        "cropCode": crop_code,
+        "cropDisplayName": crop_display_name,
         "pipeline": "fixed_slot_multilabel_v1",
         "validationStatus": "pilot_unvalidated",
     })
@@ -107,7 +126,7 @@ def apply_hydroponic_slot_template(project: Project) -> Project:
     }
     project.attribute_settings = {
         "plant_presence": {
-            "title": "Có cây cải ngọt trong rọ",
+            "title": f"Có {crop_display_name} trong rọ",
             "default": "uncertain",
             "required": True,
             "role": "classification",
@@ -532,6 +551,10 @@ def write_hydro_model_bundle(
     deployment_mode: str = "shadow",
 ) -> Path:
     output = Path(output_dir).resolve()
+    crop_code, _crop_display_name = validate_crop_identity(
+        str(project.metadata.get("cropCode") or ""),
+        str(project.metadata.get("cropDisplayName") or ""),
+    )
     if output.exists():
         raise FileExistsError(f"bundle output already exists: {output}")
     if set(models) != set(MODEL_KEYS) or set(thresholds) != set(MODEL_KEYS):
@@ -557,7 +580,7 @@ def write_hydro_model_bundle(
         if counts["present"] < 1 or counts["absent"] < 1:
             raise ValueError(f"{key} requires reviewed present and absent samples before bundle export")
         label_distribution[key] = {"absent": counts["absent"], "present": counts["present"]}
-    bundle_id = f"hydro_cai_ngot_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+    bundle_id = f"hydro_{crop_code}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     temporary = output.with_name(output.name + ".tmp")
     temporary.mkdir(parents=True)
     try:
@@ -591,7 +614,7 @@ def write_hydro_model_bundle(
         manifest = {
             "schemaVersion": 1,
             "bundleId": bundle_id,
-            "cropCode": str(project.metadata.get("cropCode") or "cai_ngot"),
+            "cropCode": crop_code,
             "pipeline": "fixed_slot_multilabel_v1",
             "compatibleCameraProfileIds": camera_profile_ids,
             "compatibleGeometryProfileIds": geometry_profile_ids,

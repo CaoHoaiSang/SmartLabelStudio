@@ -40,6 +40,17 @@ class HydroponicMvpTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    def test_hydro_template_accepts_a_portable_crop_identity(self) -> None:
+        project = self.store.create_project("Xà lách slots", task="classify")
+        apply_hydroponic_slot_template(
+            project, crop_code="xa_lach", crop_display_name="Xà lách Romaine",
+        )
+        self.assertEqual(project.metadata["cropCode"], "xa_lach")
+        self.assertEqual(project.metadata["cropDisplayName"], "Xà lách Romaine")
+        self.assertEqual(project.attribute_settings["plant_presence"]["title"], "Có Xà lách Romaine trong rọ")
+        with self.assertRaisesRegex(ValueError, "cropCode"):
+            apply_hydroponic_slot_template(project, crop_code="Xà lách", crop_display_name="Xà lách")
+
     def create_manifest(self, capture_id: str = "cap_001") -> Path:
         data_root = self.root / "camera_data"
         capture_dir = data_root / "captures" / "2026" / "08" / "20" / capture_id
@@ -207,6 +218,8 @@ class HydroponicMvpTests(unittest.TestCase):
             geometry_profile_ids=["geometry-1"],
         )
         manifest = json.loads((output / "bundle.json").read_text(encoding="utf-8"))
+        self.assertTrue(manifest["bundleId"].startswith("hydro_cai_ngot_"))
+        self.assertEqual(manifest["cropCode"], "cai_ngot")
         self.assertEqual(manifest["pipeline"], "fixed_slot_multilabel_v1")
         self.assertEqual(manifest["runtimeTarget"], "jetson_nano_tensorrt_fp16")
         self.assertEqual(manifest["deploymentMode"], "shadow")
@@ -239,6 +252,18 @@ class HydroponicMvpTests(unittest.TestCase):
                 geometry_profile_ids=["geometry-1"], runtime_target="windows_onnxruntime_cpu",
                 deployment_mode="operational",
             )
+
+        self.project.metadata["cropCode"] = "xa_lach"
+        self.project.metadata["cropDisplayName"] = "Xà lách Romaine"
+        custom_output = write_hydro_model_bundle(
+            self.project, self.root / "custom_crop_bundle", models,
+            {key: {"lowThreshold": 0.25, "highThreshold": 0.75} for key in models},
+            dataset_version="dataset-v1", source_commit="abc123", camera_profile_ids=["camera-1"],
+            geometry_profile_ids=["geometry-1"],
+        )
+        custom_manifest = json.loads((custom_output / "bundle.json").read_text(encoding="utf-8"))
+        self.assertTrue(custom_manifest["bundleId"].startswith("hydro_xa_lach_"))
+        self.assertEqual(custom_manifest["cropCode"], "xa_lach")
 
     def test_bundle_rejects_a_classifier_without_both_reviewed_labels(self) -> None:
         import_capture_manifest(self.store, self.project, self.create_manifest())

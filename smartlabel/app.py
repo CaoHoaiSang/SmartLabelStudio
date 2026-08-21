@@ -38,6 +38,7 @@ from .quality import inspect_project
 from .split_dialog import SplitManagerDialog
 from .training import TrainingConfig, TrainingJob
 from .ui_components import (
+    IMAGE_REVIEW_STATUS_STYLE,
     ProjectSettingsDialog,
     ThumbnailList,
     ToolTip,
@@ -572,10 +573,14 @@ class SmartLabelApp(ctk.CTk):
         selection = ask_new_project(self, default_template)
         if not selection:
             return
-        name, template = selection
+        name, template, options = selection
         if template == "hydroponic_slot":
             project = self.store.create_project(name, task="classify", classes=[])
-            apply_hydroponic_slot_template(project)
+            apply_hydroponic_slot_template(
+                project,
+                crop_code=options["cropCode"],
+                crop_display_name=options["cropDisplayName"],
+            )
         elif template == "blank":
             project = self.store.create_project(name, task="instance_segmentation", classes=[])
             project.metadata["template"] = "Blank"
@@ -2134,15 +2139,11 @@ class SmartLabelApp(ctk.CTk):
         if not self.project or not (0 <= self.current_index < len(self.project.images)):
             return
         status = self.project.images[self.current_index].review_status
-        labels = {
-            "unlabeled": ("○  CHƯA GÁN NHÃN", "#a7bac9", "#243342", "#3a5368"),
-            "draft": ("●  BẢN NHÁP · CẦN KIỂM TRA", "#ffd080", "#40351f", "#6b572d"),
-            "reviewed": ("✓  ĐÃ DUYỆT", "#69e0a0", "#19372c", "#2d684f"),
-            "rejected": ("×  ĐÃ TỪ CHỐI", "#ff8f96", "#402427", "#733b42"),
-        }
-        text, color, background, border = labels.get(status, (status, COLORS["muted"], "#243342", "#3a5368"))
-        self.image_status_frame.configure(fg_color=background, border_color=border)
-        self.image_status_label.configure(text=text, text_color=color, fg_color=background)
+        style = IMAGE_REVIEW_STATUS_STYLE.get(status, IMAGE_REVIEW_STATUS_STYLE["unlabeled"])
+        self.image_status_frame.configure(fg_color=style["background"], border_color=style["border"])
+        self.image_status_label.configure(
+            text=style["full_label"], text_color=style["text"], fg_color=style["background"],
+        )
         self._set_button_enabled(self.approve_image_button, status != "reviewed")
         self._set_button_enabled(self.unapprove_image_button, status == "reviewed")
         self._set_button_enabled(self.reject_image_button, status != "rejected")
@@ -3695,6 +3696,7 @@ class SmartLabelApp(ctk.CTk):
             "geometryProfileIds": self.project.metadata.get("geometryProfileIds", []),
             "thresholds": self.project.metadata.get("hydroThresholds", {}),
             "runtimeTarget": self.project.metadata.get("hydroRuntimeTarget", "jetson_nano_tensorrt_fp16"),
+            "cropDisplayName": self.project.metadata.get("cropDisplayName", "cây mục tiêu"),
         }
         config = ask_hydro_bundle_config(self, defaults)
         if not config:

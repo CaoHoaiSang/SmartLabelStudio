@@ -126,9 +126,10 @@ Trong project Hydro, hai thao tác chuyên biệt được đặt theo đúng gi
   `plant_instance_id`, crop-cycle holdout ngay trong vùng kết quả bên dưới; chọn dòng lỗi rồi mở thẳng ảnh để sửa,
   không bật thêm cửa sổ QA.
 
-Mẫu Hydro ghi rõ cây của project là **Cải ngọt cọng xanh** (`cropCode=cai_ngot`). Đây là taxonomy
-của vụ trồng, không phải một classifier loài cây. Hydro vẫn dùng Classification toàn ảnh slot với
-ba nhóm độc lập `plant_presence` (hiển thị “Có cây cải ngọt trong rọ”), `yellow_leaf` và
+Khi tạo project bằng mẫu Hydro, nhập **tên cây hiển thị** và `cropCode`; giá trị mặc định là
+**Cải ngọt cọng xanh** (`cai_ngot`). Đây là định danh cây của vụ trồng và model bundle, không phải
+một classifier nhận dạng loài cây. Hydro vẫn dùng Classification toàn ảnh slot với ba nhóm độc lập
+`plant_presence` (hiển thị theo cây đã cấu hình), `yellow_leaf` và
 `wilt`; công tắc Classification bị khóa ON để không vô tình quay về Detection/SEG. `uncertain` và
 `not_applicable` không vào train. Khi cây không hiện diện, hai condition tự chuyển thành
 `not_applicable`. `other_abnormal` chỉ là ghi chú phục vụ đánh nhãn, chưa được train.

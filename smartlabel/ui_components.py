@@ -24,8 +24,8 @@ PROJECT_TEMPLATE_HELP = {
         "Phù hợp khi bắt đầu một dự án chai mới."
     ),
     "hydroponic_slot": (
-        "Tạo project Cải ngọt cọng xanh (cropCode cai_ngot) và ba Classification toàn ảnh slot: "
-        "có cây cải ngọt trong rọ (plant_presence), lá vàng và héo. "
+        "Tạo ba Classification toàn ảnh slot cho cây được cấu hình: "
+        "cây hiện diện trong rọ (plant_presence), lá vàng và héo. "
         "Không thay đổi các dự án chai đang có."
     ),
     "blank": "Không tạo sẵn Class hay thuộc tính; bạn tự cấu hình sau khi tạo dự án.",
@@ -36,11 +36,32 @@ HYDRO_RUNTIME_LABELS = {
     "Windows · ONNX Runtime CPU (chỉ kiểm thử shadow)": "windows_onnxruntime_cpu",
 }
 
+CROP_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
+
+IMAGE_REVIEW_STATUS_STYLE = {
+    "unlabeled": {
+        "label": "CHƯA GÁN NHÃN", "full_label": "○  CHƯA GÁN NHÃN",
+        "indicator": "#a7bac9", "text": "#a7bac9", "background": "#243342", "border": "#3a5368",
+    },
+    "draft": {
+        "label": "BẢN NHÁP · CẦN KIỂM TRA", "full_label": "●  BẢN NHÁP · CẦN KIỂM TRA",
+        "indicator": "#ffd080", "text": "#ffd080", "background": "#40351f", "border": "#6b572d",
+    },
+    "reviewed": {
+        "label": "ĐÃ DUYỆT", "full_label": "✓  ĐÃ DUYỆT",
+        "indicator": "#69e0a0", "text": "#69e0a0", "background": "#19372c", "border": "#2d684f",
+    },
+    "rejected": {
+        "label": "ĐÃ TỪ CHỐI", "full_label": "×  ĐÃ TỪ CHỐI",
+        "indicator": "#ff8f96", "text": "#ff8f96", "background": "#402427", "border": "#733b42",
+    },
+}
+
 
 class NewProjectDialog(ctk.CTkToplevel):
     def __init__(self, parent, default_template: str = "deltax_bottle"):
         super().__init__(parent)
-        self.result: tuple[str, str] | None = None
+        self.result: tuple[str, str, dict[str, str]] | None = None
         self.title("Dự án mới")
         self.geometry("560x410")
         self.resizable(False, False)
@@ -87,37 +108,80 @@ class NewProjectDialog(ctk.CTkToplevel):
             text_color="#b7c7d4",
         )
         self.template_help.pack(fill="x", padx=24, pady=(0, 12))
-        self._template_changed(selected)
+        self.crop_display_name = tk.StringVar(value="Cải ngọt cọng xanh")
+        self.crop_code = tk.StringVar(value="cai_ngot")
+        self.hydro_fields = ctk.CTkFrame(self, fg_color="#142333", corner_radius=8)
         ctk.CTkLabel(
+            self.hydro_fields, text="Tên cây hiển thị", width=145, anchor="w", text_color="#8298aa",
+        ).grid(row=0, column=0, padx=(12, 6), pady=(10, 4), sticky="w")
+        ctk.CTkEntry(self.hydro_fields, textvariable=self.crop_display_name).grid(
+            row=0, column=1, padx=(6, 12), pady=(10, 4), sticky="ew"
+        )
+        ctk.CTkLabel(
+            self.hydro_fields, text="Mã cây (cropCode)", width=145, anchor="w", text_color="#8298aa",
+        ).grid(row=1, column=0, padx=(12, 6), pady=(4, 10), sticky="w")
+        ctk.CTkEntry(self.hydro_fields, textvariable=self.crop_code).grid(
+            row=1, column=1, padx=(6, 12), pady=(4, 10), sticky="ew"
+        )
+        self.hydro_fields.grid_columnconfigure(1, weight=1)
+        self.existing_projects_help = ctk.CTkLabel(
             self,
             text="Để mở dự án Cao hoặc dự án khác đã có: đóng hộp thoại này và chọn dự án ở thanh trên cùng.",
             wraplength=510,
             justify="left",
             anchor="w",
             text_color="#8298aa",
-        ).pack(fill="x", padx=24, pady=(0, 14))
+        )
+        self.existing_projects_help.pack(fill="x", padx=24, pady=(0, 14))
         actions = ctk.CTkFrame(self, fg_color="transparent")
         actions.pack(fill="x", padx=24)
         ctk.CTkButton(actions, text="Hủy", width=110, fg_color="#415466", command=self.destroy).pack(side="right", padx=(6, 0))
         ctk.CTkButton(actions, text="TẠO DỰ ÁN", width=150, fg_color="#2b906d", command=self._accept).pack(side="right")
         self.bind("<Return>", lambda _event: self._accept())
         self.bind("<Escape>", lambda _event: self.destroy())
+        self._template_changed(selected)
         self.after(100, self.name_entry.focus_set)
 
     def _template_changed(self, label: str) -> None:
         code = PROJECT_TEMPLATE_LABELS.get(label, "blank")
         self.template_help.configure(text=PROJECT_TEMPLATE_HELP[code])
+        if code == "hydroponic_slot":
+            self.hydro_fields.pack(
+                fill="x", padx=24, pady=(0, 12), before=self.existing_projects_help,
+            )
+            self.geometry("560x520")
+        else:
+            self.hydro_fields.pack_forget()
+            self.geometry("560x410")
 
     def _accept(self) -> None:
         name = self.name.get().strip()
         if not name:
             messagebox.showwarning("Thiếu tên", "Hãy nhập tên dự án.", parent=self)
             return
-        self.result = (name, PROJECT_TEMPLATE_LABELS[self.template.get()])
+        template = PROJECT_TEMPLATE_LABELS[self.template.get()]
+        options: dict[str, str] = {}
+        if template == "hydroponic_slot":
+            crop_display_name = self.crop_display_name.get().strip()
+            crop_code = self.crop_code.get().strip()
+            if not crop_display_name or len(crop_display_name) > 100:
+                messagebox.showwarning(
+                    "Tên cây không hợp lệ", "Tên cây hiển thị cần từ 1 đến 100 ký tự.", parent=self,
+                )
+                return
+            if not CROP_CODE_PATTERN.fullmatch(crop_code):
+                messagebox.showwarning(
+                    "Mã cây không hợp lệ",
+                    "cropCode cần 2–64 ký tự thường không dấu, bắt đầu bằng chữ; chỉ dùng a-z, 0-9 và dấu gạch dưới.",
+                    parent=self,
+                )
+                return
+            options = {"cropCode": crop_code, "cropDisplayName": crop_display_name}
+        self.result = (name, template, options)
         self.destroy()
 
 
-def ask_new_project(parent, default_template: str = "deltax_bottle") -> tuple[str, str] | None:
+def ask_new_project(parent, default_template: str = "deltax_bottle") -> tuple[str, str, dict[str, str]] | None:
     dialog = NewProjectDialog(parent, default_template)
     parent.wait_window(dialog)
     return dialog.result
@@ -181,7 +245,8 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
         ).pack(anchor="w", padx=22, pady=(2, 4))
         ctk.CTkLabel(self, text="NGƯỠNG TỪNG CLASSIFIER", text_color="#22b9ee", font=("Segoe UI Semibold", 12)).pack(anchor="w", padx=22, pady=(14, 4))
         thresholds = defaults.get("thresholds", {})
-        for key, title in (("plant_presence", "Có cây cải ngọt trong rọ"), ("yellow_leaf", "Lá vàng"), ("wilt", "Héo")):
+        crop_display_name = str(defaults.get("cropDisplayName") or "cây mục tiêu").strip()
+        for key, title in (("plant_presence", f"Có {crop_display_name} trong rọ"), ("yellow_leaf", "Lá vàng"), ("wilt", "Héo")):
             row = ctk.CTkFrame(self, fg_color="#142333", corner_radius=8)
             row.pack(fill="x", padx=22, pady=4)
             ctk.CTkLabel(row, text=title, width=190, anchor="w").pack(side="left", padx=10, pady=8)
@@ -230,14 +295,13 @@ def ask_hydro_bundle_config(parent, defaults: dict) -> dict | None:
 
 
 class ThumbnailList(ctk.CTkScrollableFrame):
-    """Scrollable image browser with thumbnails, soft status badges and selection."""
+    """Scrollable image browser with thumbnails, status dots and selection."""
 
-    STATUS_STYLE = {
-        "unlabeled": ("CHƯA NHÃN", "#52677a", "#ffffff"),
-        "draft": ("NHÁP", "#e5a22f", "#211604"),
-        "reviewed": ("ĐÃ DUYỆT", "#22ad70", "#ffffff"),
-        "rejected": ("TỪ CHỐI", "#dc505b", "#ffffff"),
-    }
+    STATUS_STYLE = IMAGE_REVIEW_STATUS_STYLE
+
+    @classmethod
+    def status_style(cls, status: str) -> dict[str, str]:
+        return cls.STATUS_STYLE.get(status, cls.STATUS_STYLE["unlabeled"])
 
     def __init__(
         self,
@@ -321,7 +385,7 @@ class ThumbnailList(ctk.CTkScrollableFrame):
 
     def _create_item(self, item: dict) -> dict:
         status = item.get("status", "unlabeled")
-        badge_text, badge_bg, badge_fg = self.STATUS_STYLE.get(status, self.STATUS_STYLE["unlabeled"])
+        status_style = self.status_style(status)
         row = ctk.CTkFrame(
             self,
             height=82,
@@ -331,35 +395,44 @@ class ThumbnailList(ctk.CTkScrollableFrame):
             border_color="#22394c",
             cursor="hand2",
         )
-        row.pack_propagate(False)
+        row.grid_columnconfigure(1, weight=1, minsize=60)
+        row.grid_columnconfigure(2, weight=0, minsize=42)
+        row.grid_rowconfigure(0, weight=1)
+        row.grid_propagate(False)
         image_path = str(item["path"])
         thumbnail = self._thumbnail(image_path)
         thumb_label = ctk.CTkLabel(row, text="" if thumbnail else "Không có ảnh", image=thumbnail, width=84, height=68, fg_color="#091119", corner_radius=7)
-        thumb_label.pack(side="left", padx=7, pady=7)
+        thumb_label.grid(row=0, column=0, padx=7, pady=7, sticky="nsw")
         center = ctk.CTkFrame(row, fg_color="transparent")
-        center.pack(side="left", fill="both", expand=True, padx=(2, 4), pady=7)
+        center.grid(row=0, column=1, padx=(2, 4), pady=7, sticky="nsew")
         display_name = item.get("display_name") or item.get("name", "")
         name_label = ctk.CTkLabel(center, text=display_name, anchor="w", justify="left", wraplength=150, font=("Segoe UI Semibold", 10), text_color="#dbeaf4")
         name_label.pack(fill="x", anchor="w")
         info_label = ctk.CTkLabel(center, text=f"{item.get('count', 0)} nhãn", anchor="w", font=("Segoe UI", 9), text_color="#7f96a8")
         info_label.pack(fill="x", anchor="w", pady=(2, 0))
-        actions = ctk.CTkFrame(row, width=76, fg_color="transparent")
-        actions.pack(side="right", fill="y", padx=(2, 7), pady=5)
+        actions = ctk.CTkFrame(row, width=42, height=70, fg_color="transparent")
+        actions.grid(row=0, column=2, padx=(2, 7), pady=5, sticky="ns")
+        actions.grid_propagate(False)
         delete_button = ctk.CTkButton(
             actions,
             text="×",
-            width=28,
-            height=23,
+            width=30,
+            height=28,
             corner_radius=8,
             fg_color="#81363d",
             hover_color="#c44d57",
             font=("Segoe UI Semibold", 14),
             command=lambda key=item["key"]: self._delete_key(key),
         )
-        delete_button.pack(anchor="e", pady=(0, 4))
-        badge = ctk.CTkLabel(actions, text=badge_text, width=72, height=24, corner_radius=12, fg_color=badge_bg, text_color=badge_fg, font=("Segoe UI Semibold", 8))
-        badge.pack(anchor="e")
+        delete_button.pack(anchor="center", pady=(0, 7))
+        badge = ctk.CTkLabel(
+            actions, text="", width=18, height=18, corner_radius=9,
+            fg_color=status_style["indicator"],
+        )
+        badge.pack(anchor="center")
         ToolTip(delete_button, "Xóa ảnh này cùng toàn bộ nhãn và thuộc tính liên quan.")
+        name_tooltip = ToolTip(name_label, display_name)
+        status_tooltip = ToolTip(badge, f"Trạng thái ảnh: {status_style['label']}")
         data = {
             "key": item["key"],
             "frame": row,
@@ -368,6 +441,8 @@ class ThumbnailList(ctk.CTkScrollableFrame):
             "name": name_label,
             "info": info_label,
             "badge": badge,
+            "name_tooltip": name_tooltip,
+            "status_tooltip": status_tooltip,
             "delete": delete_button,
             "status": status,
             "count": item.get("count", 0),
@@ -380,17 +455,19 @@ class ThumbnailList(ctk.CTkScrollableFrame):
 
     def _configure_item(self, row: dict, item: dict) -> None:
         status = item.get("status", "unlabeled")
-        badge_text, badge_bg, badge_fg = self.STATUS_STYLE.get(status, self.STATUS_STYLE["unlabeled"])
+        status_style = self.status_style(status)
         display_name = item.get("display_name") or item.get("name", "")
         count = item.get("count", 0)
         if display_name != row["display_name"]:
             row["name"].configure(text=display_name)
+            row["name_tooltip"].set_text(display_name)
             row["display_name"] = display_name
         if count != row["count"]:
             row["info"].configure(text=f"{count} nhãn")
             row["count"] = count
         if status != row["status"]:
-            row["badge"].configure(text=badge_text, fg_color=badge_bg, text_color=badge_fg)
+            row["badge"].configure(text="", fg_color=status_style["indicator"])
+            row["status_tooltip"].set_text(f"Trạng thái ảnh: {status_style['label']}")
             row["status"] = status
         image_path = str(item["path"])
         if image_path != row["path"]:
@@ -457,12 +534,13 @@ class ThumbnailList(ctk.CTkScrollableFrame):
     def update_item(self, index: int, *, status: str, count: int) -> None:
         if not (0 <= index < len(self.rows)):
             return
-        badge_text, badge_bg, badge_fg = self.STATUS_STYLE.get(status, self.STATUS_STYLE["unlabeled"])
+        status_style = self.status_style(status)
         row = self.rows[index]
         row["status"] = status
         row["count"] = count
         row["info"].configure(text=f"{count} nhãn")
-        row["badge"].configure(text=badge_text, fg_color=badge_bg, text_color=badge_fg)
+        row["badge"].configure(text="", fg_color=status_style["indicator"])
+        row["status_tooltip"].set_text(f"Trạng thái ảnh: {status_style['label']}")
 
 
 class ToolTip:
