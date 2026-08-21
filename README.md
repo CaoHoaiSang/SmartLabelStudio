@@ -123,7 +123,8 @@ Trong project Hydro, hai thao tác chuyên biệt được đặt theo đúng gi
   slot trước khi nhập. Ảnh slot, full frame và hai ROI đều được sao chép vào project để provenance
   không còn phụ thuộc máy capture; export không chứa đường dẫn tuyệt đối.
 - Trang **Kiểm duyệt** có **Kiểm tra Dataset Hydro**: báo ảnh hỏng/trùng/thiếu, nhãn mâu thuẫn, phân bố nhãn, leakage theo
-  `plant_instance_id`, crop-cycle holdout và cho mở thẳng ảnh có lỗi để sửa.
+  `plant_instance_id`, crop-cycle holdout ngay trong vùng kết quả bên dưới; chọn dòng lỗi rồi mở thẳng ảnh để sửa,
+  không bật thêm cửa sổ QA.
 
 Hydro luôn dùng Classification toàn ảnh slot với ba nhóm độc lập `plant_presence`, `yellow_leaf` và
 `wilt`; công tắc Classification bị khóa ON để không vô tình quay về Detection/SEG. `uncertain` và

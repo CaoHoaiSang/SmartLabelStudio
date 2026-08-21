@@ -22,6 +22,7 @@ from .hardware import inspect_hardware
 from .hydroponic import (
     MODEL_KEYS as HYDRO_MODEL_KEYS,
     apply_hydroponic_slot_template,
+    describe_hydro_qa_issue,
     export_jetson_onnx,
     hydro_dataset_qa,
     import_capture_manifest,
@@ -37,7 +38,6 @@ from .quality import inspect_project
 from .split_dialog import SplitManagerDialog
 from .training import TrainingConfig, TrainingJob
 from .ui_components import (
-    HydroQaDialog,
     ProjectSettingsDialog,
     ThumbnailList,
     ToolTip,
@@ -147,9 +147,9 @@ PROJECT_ACTION_TOOLTIPS = {
     "hydro_qa": {
         "standard": "Chức năng này chỉ hiện trong project dùng mẫu Hydroponic Slot Condition.",
         "hydro": (
-            "Chạy báo cáo QA chỉ đọc ngay trong trang Kiểm duyệt: phát hiện ảnh thiếu/hỏng/trùng, nhãn mâu thuẫn, "
-            "phân bố nhãn, nguy cơ leakage theo plant/crop cycle và đường dẫn không portable. QA không tự sửa hay "
-            "xóa dữ liệu; bạn xem báo cáo rồi mở đúng ảnh cần xử lý."
+            "Chạy báo cáo QA chỉ đọc và hiện kết quả trực tiếp bên dưới trang Kiểm duyệt: phát hiện ảnh thiếu/hỏng/trùng, "
+            "nhãn mâu thuẫn, phân bố nhãn, nguy cơ leakage theo plant/crop cycle và đường dẫn không portable. QA "
+            "không tự sửa hay xóa dữ liệu; chọn một dòng lỗi rồi bấm Mở ảnh đang chọn để xử lý."
         ),
     },
     "smart_filter": {
@@ -628,7 +628,37 @@ class SmartLabelApp(ctk.CTk):
         report = hydro_dataset_qa(self.project, self.store, assignment)
         self.project.metadata["validationStatus"] = report["validationStatus"]
         self.store.save(self.project)
-        HydroQaDialog(self, report, self._open_qa_image)
+        issues = list(report.get("issues", []))
+        errors = sum(issue.get("severity") == "error" for issue in issues)
+        warnings = sum(issue.get("severity") == "warning" for issue in issues)
+        color = COLORS["bad"] if errors else (COLORS["warn"] if warnings else COLORS["good"])
+        self._begin_review_results(
+            "KẾT QUẢ · DATASET HYDROPONIC",
+            (
+                f"{report.get('images', 0)} ảnh · {errors} lỗi · {warnings} cảnh báo · "
+                f"{report.get('validationStatus', 'pilot_unvalidated')}"
+            ),
+            color,
+        )
+        distributions = report.get("distributions", {})
+        for key in HYDRO_MODEL_KEYS:
+            title = self.project.attribute_settings.get(key, {}).get("title", key)
+            counts = distributions.get(key, {})
+            values = ATTRIBUTE_DISPLAY.get(key, {})
+            parts = [f"{values.get(value, value)}: {counts.get(value, 0)}" for value in values]
+            self._append_review_result(f"[PHÂN BỐ] {title} · " + " · ".join(parts))
+        if not issues:
+            self._append_review_result("✓ Không phát hiện lỗi hoặc cảnh báo Dataset Hydro.")
+        for issue in issues:
+            severity = str(issue.get("severity", "info"))
+            severity_label = {"error": "LỖI", "warning": "CẢNH BÁO"}.get(severity, severity.upper())
+            image_id = str(issue.get("imageId", ""))
+            record = self.project.image_by_id(image_id) if image_id else None
+            context = record.file_name if record else "Toàn dataset"
+            self._append_review_result(
+                f"[{severity_label:8}] {context} · {describe_hydro_qa_issue(issue)}",
+                image_id,
+            )
 
     def _open_qa_image(self, image_id: str) -> None:
         if not self.project:
@@ -2543,24 +2573,70 @@ class SmartLabelApp(ctk.CTk):
             justify="left",
         ).pack(side="left", fill="x", expand=True, padx=(6, 0))
         self.review_list = tk.Listbox(tab, bg="#091119", fg=COLORS["text"], selectbackground="#217fa9", borderwidth=0, highlightthickness=0, font=("Consolas", 11))
+        result_header = ctk.CTkFrame(tab, corner_radius=9, fg_color="#0d1924", border_width=1, border_color="#22384a")
+        result_header.pack(fill="x", padx=8, pady=(0, 6))
+        self.review_result_title = ctk.CTkLabel(
+            result_header,
+            text="KẾT QUẢ KIỂM DUYỆT",
+            font=("Segoe UI Semibold", 11),
+            text_color=COLORS["accent"],
+        )
+        self.review_result_title.pack(side="left", padx=(12, 10), pady=9)
+        self.review_result_summary = ctk.CTkLabel(
+            result_header,
+            text="Chọn một phép kiểm tra ở phía trên để xem kết quả tại đây.",
+            text_color=COLORS["muted"],
+            anchor="w",
+        )
+        self.review_result_summary.pack(side="left", fill="x", expand=True, padx=(0, 12), pady=9)
         self.review_list.pack(fill="both", expand=True, padx=8, pady=(0, 8))
         self.quality_issues = []
+        self.review_row_image_ids: list[str] = []
+
+    def _begin_review_results(self, title: str, summary: str, color: str = COLORS["muted"]) -> None:
+        self.review_list.delete(0, tk.END)
+        self.quality_issues = []
+        self.review_row_image_ids = []
+        self.review_result_title.configure(text=title)
+        self.review_result_summary.configure(text=summary, text_color=color)
+
+    def _append_review_result(self, text: str, image_id: str = "") -> None:
+        self.review_list.insert(tk.END, text)
+        self.review_row_image_ids.append(image_id)
+
+    def _reset_review_results(self) -> None:
+        if not hasattr(self, "review_list"):
+            return
+        self._begin_review_results(
+            "KẾT QUẢ KIỂM DUYỆT",
+            "Chọn một phép kiểm tra ở phía trên để xem kết quả tại đây.",
+        )
 
     def _run_quality_check(self) -> None:
-        self.review_list.delete(0, tk.END)
         if not self.project:
             return
         self.quality_issues = inspect_project(self.project)
+        errors = sum(issue.severity == "error" for issue in self.quality_issues)
+        warnings = sum(issue.severity == "warning" for issue in self.quality_issues)
+        color = COLORS["bad"] if errors else (COLORS["warn"] if warnings else COLORS["good"])
+        issues = list(self.quality_issues)
+        self._begin_review_results(
+            "KẾT QUẢ · LỖI CẤU TRÚC NHÃN",
+            f"{len(self.project.images)} ảnh · {errors} lỗi · {warnings} cảnh báo",
+            color,
+        )
+        self.quality_issues = issues
         for issue in self.quality_issues:
             record = self.project.image_by_id(issue.image_id)
-            self.review_list.insert(tk.END, f"[{issue.severity.upper():7}] {record.file_name if record else issue.image_id} · {issue.message}")
+            self._append_review_result(
+                f"[{issue.severity.upper():7}] {record.file_name if record else issue.image_id} · {issue.message}",
+                issue.image_id,
+            )
         if not self.quality_issues:
-            self.review_list.insert(tk.END, "✓ Không phát hiện lỗi cấu trúc nhãn.")
+            self._append_review_result("✓ Không phát hiện lỗi cấu trúc nhãn.")
 
     def _build_active_learning_queue(self) -> None:
         from .quality import QualityIssue
-        self.review_list.delete(0, tk.END)
-        self.quality_issues = []
         if not self.project:
             return
         ranked = []
@@ -2582,21 +2658,27 @@ class SmartLabelApp(ctk.CTk):
                 priority = (1.0 - lowest) + 0.35 * rare_bonus
                 reason = f"confidence thấp nhất {lowest:.2f}" + (" · class hiếm" if rare_bonus > 0.5 else "")
             ranked.append((priority, record, reason))
+        self._begin_review_results(
+            "KẾT QUẢ · ẢNH AI CHƯA CHẮC",
+            f"{len(ranked)} ảnh chưa duyệt cần ưu tiên kiểm tra",
+            COLORS["warn"] if ranked else COLORS["good"],
+        )
         for priority, record, reason in sorted(ranked, key=lambda item: item[0], reverse=True):
             issue = QualityIssue(record.id, "", "review", reason)
             self.quality_issues.append(issue)
-            self.review_list.insert(tk.END, f"[{priority:4.2f}] {record.file_name} · {reason}")
+            self._append_review_result(f"[{priority:4.2f}] {record.file_name} · {reason}", record.id)
+        if not ranked:
+            self._append_review_result("✓ Không có ảnh nào cần ưu tiên kiểm duyệt.")
 
     def _open_issue(self) -> None:
         selected = self.review_list.curselection()
-        if not selected or not self.project or selected[0] >= len(self.quality_issues):
+        if not selected or not self.project or selected[0] >= len(self.review_row_image_ids):
             return
-        issue = self.quality_issues[selected[0]]
-        record = self.project.image_by_id(issue.image_id)
-        if record:
-            self.current_index = self.project.images.index(record)
-            self.tabs.set("GÁN NHÃN")
-            self._load_current_image()
+        image_id = self.review_row_image_ids[selected[0]]
+        if not image_id:
+            self._set_status("Dòng này là kết quả tổng hợp, không gắn với một ảnh cụ thể.", COLORS["warn"])
+            return
+        self._open_qa_image(image_id)
 
     # ---------- dataset ----------
     def _build_dataset_tab(self) -> None:
@@ -4356,6 +4438,7 @@ class SmartLabelApp(ctk.CTk):
 
     # ---------- shared refresh/events ----------
     def _refresh_everything(self, keep_image: bool = False) -> None:
+        self._reset_review_results()
         self._refresh_project_menu()
         self._apply_project_context_visibility()
         self._refresh_image_list()

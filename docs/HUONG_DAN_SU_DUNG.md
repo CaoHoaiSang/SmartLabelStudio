@@ -212,7 +212,7 @@ Model được chạy với ngưỡng thấp để các dự đoán yếu đi v�
 Trang **KIỂM DUYỆT** gom các phép kiểm tra và hàng đợi xử lý vào hai khung riêng:
 
 - **Quét lỗi nhãn** tìm các lỗi như Class không tồn tại, box ngoài ảnh, polygon thiếu điểm hoặc ảnh đã duyệt nhưng không có nhãn.
-- **Kiểm tra Dataset Hydro** *(chỉ hiện với project Hydro)* kiểm tra thêm ảnh hỏng/trùng/thiếu, nhãn mâu thuẫn, phân bố nhãn, lineage và leakage theo plant/crop cycle. Báo cáo chỉ đọc, không tự sửa hoặc xóa dữ liệu; có thể mở thẳng ảnh có lỗi để xử lý.
+- **Kiểm tra Dataset Hydro** *(chỉ hiện với project Hydro)* kiểm tra thêm ảnh hỏng/trùng/thiếu, nhãn mâu thuẫn, phân bố nhãn, lineage và leakage theo plant/crop cycle. Báo cáo chỉ đọc được hiển thị ngay trong vùng kết quả bên dưới, không mở cửa sổ riêng và không tự sửa hoặc xóa dữ liệu; chọn dòng có ảnh rồi bấm **Mở ảnh đang chọn** để xử lý.
 - **Ảnh AI chưa chắc** tạo hàng đợi ưu tiên theo confidence thấp và Class hiếm; AI không tự duyệt ảnh.
 - **Mở ảnh đang chọn** chuyển sang trang **GÁN NHÃN** tại đúng ảnh cần sửa.
 

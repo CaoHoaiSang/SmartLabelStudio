@@ -246,6 +246,7 @@ class SmartLabelCoreTests(unittest.TestCase):
             self.assertGreater(len(variants["hydro"]), 80)
         self.assertIn("đủ đúng 10 slot", PROJECT_ACTION_TOOLTIPS["capture_manifest"]["hydro"])
         self.assertIn("trang Kiểm duyệt", PROJECT_ACTION_TOOLTIPS["hydro_qa"]["hydro"])
+        self.assertIn("hiện kết quả trực tiếp bên dưới", PROJECT_ACTION_TOOLTIPS["hydro_qa"]["hydro"])
         self.assertIn("không tự sửa hay xóa", PROJECT_ACTION_TOOLTIPS["hydro_qa"]["hydro"])
         self.assertIn("không thể hoàn tác", PROJECT_ACTION_TOOLTIPS["delete_latest"]["hydro"])
         self.assertIn("Cài đặt AI Camera", PROJECT_ACTION_TOOLTIPS["project_settings"]["hydro"])

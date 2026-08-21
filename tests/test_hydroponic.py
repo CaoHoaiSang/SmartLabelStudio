@@ -12,6 +12,7 @@ from smartlabel.hydroponic import (
     CaptureManifestError,
     SLOT_IDS,
     apply_hydroponic_slot_template,
+    describe_hydro_qa_issue,
     hydro_dataset_qa,
     import_capture_manifest,
     validate_capture_manifest,
@@ -157,6 +158,19 @@ class HydroponicMvpTests(unittest.TestCase):
         self.assertEqual(issue["severity"], "warning")
         self.assertEqual(issue["message"], "Dataset chưa có ảnh để kiểm tra.")
         self.assertEqual(report["validationStatus"], "pilot_unvalidated")
+
+    def test_hydro_qa_issue_description_is_vietnamese_and_keeps_context(self) -> None:
+        detail = describe_hydro_qa_issue({
+            "code": "incomplete_capture_slots",
+            "captureId": "capture-01",
+            "missing": ["upper_05", "lower_05"],
+            "duplicates": ["upper_01"],
+        })
+
+        self.assertIn("không đủ đúng 10 slot", detail)
+        self.assertIn("capture capture-01", detail)
+        self.assertIn("thiếu upper_05, lower_05", detail)
+        self.assertIn("slot trùng upper_01", detail)
 
     def test_hydro_qa_and_bundle_are_portable_and_checksum_bound(self) -> None:
         import_capture_manifest(self.store, self.project, self.create_manifest())

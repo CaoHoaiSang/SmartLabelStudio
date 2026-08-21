@@ -22,6 +22,48 @@ SLOT_IDS = tuple(
 )
 TRAIN_EXCLUDED_LABELS = {"uncertain", "not_applicable"}
 MODEL_KEYS = ("plant_presence", "yellow_leaf", "wilt")
+
+HYDRO_QA_ISSUE_MESSAGES = {
+    "empty_dataset": "Dataset chưa có ảnh để kiểm tra.",
+    "missing_image": "Thiếu file ảnh trong project.",
+    "broken_image": "File ảnh bị hỏng hoặc không đọc được.",
+    "checksum_mismatch": "Checksum ảnh không khớp với metadata.",
+    "missing_capture_id": "Ảnh thiếu capture ID.",
+    "invalid_asset_role": "Ảnh không có asset role là slot.",
+    "plant_instance_mismatch": "Plant instance ID không khớp crop cycle và slot.",
+    "missing_fullFrameRelativePath": "Thiếu liên kết tới full frame.",
+    "missing_roiRelativePath": "Thiếu liên kết tới ROI cha.",
+    "unsafe_lineage_path": "Đường dẫn lineage không an toàn hoặc không portable.",
+    "missing_parent_asset": "Không tìm thấy full frame hoặc ROI cha.",
+    "contradictory_condition_label": "Nhãn condition mâu thuẫn với plant presence.",
+    "absolute_source_path": "Source path còn chứa đường dẫn tuyệt đối.",
+    "absolute_metadata_path": "Metadata còn chứa đường dẫn tuyệt đối.",
+    "sensitive_metadata_reference": "Metadata tham chiếu file nhạy cảm.",
+    "image_not_reviewed": "Ảnh chưa được người dùng duyệt.",
+    "duplicate_sha256": "Phát hiện ảnh trùng nội dung SHA-256.",
+    "incomplete_capture_slots": "Capture không đủ đúng 10 slot.",
+    "plant_instance_leakage": "Plant instance xuất hiện trong nhiều split.",
+    "crop_cycle_holdout_missing": "Chưa có crop cycle độc lập dành riêng cho test holdout.",
+}
+
+
+def describe_hydro_qa_issue(issue: dict[str, Any]) -> str:
+    """Return a concise Vietnamese description suitable for inline review results."""
+
+    code = str(issue.get("code", "unknown"))
+    detail = str(issue.get("message") or HYDRO_QA_ISSUE_MESSAGES.get(code, code))
+    extras = []
+    if issue.get("captureId"):
+        extras.append(f"capture {issue['captureId']}")
+    if issue.get("missing"):
+        extras.append("thiếu " + ", ".join(str(value) for value in issue["missing"]))
+    if issue.get("duplicates"):
+        extras.append("slot trùng " + ", ".join(str(value) for value in issue["duplicates"]))
+    if issue.get("related"):
+        extras.append(f"trùng với {len(issue['related'])} ảnh khác")
+    if issue.get("plantInstanceId"):
+        extras.append(f"plant {issue['plantInstanceId']}")
+    return detail + (" · " + " · ".join(extras) if extras else "")
 SENSITIVE_SUFFIXES = {".env", ".pt", ".pth", ".onnx", ".engine", ".rknn", ".ckpt"}
 HYDROPONIC_TEMPLATE = "Hydroponic Slot Condition"
 
