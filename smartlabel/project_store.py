@@ -84,6 +84,10 @@ class ProjectStore:
 
         ordered = sorted(enumerate(project.images), key=lambda pair: (created(pair[1]), pair[0]))
         if not ordered:
+            if project.last_import_batch:
+                project.last_import_batch = ""
+                self.save(project)
+                return True
             return False
         changed = False
         current_batch = ""
@@ -112,6 +116,15 @@ class ProjectStore:
         if changed:
             self.save(project)
         return changed
+
+    @staticmethod
+    def _sync_last_import_batch(project: Project) -> None:
+        """Point to the newest batch that still has at least one image."""
+
+        project.last_import_batch = next(
+            (record.import_batch for record in reversed(project.images) if record.import_batch),
+            "",
+        )
 
     def import_images(
         self,
@@ -179,11 +192,14 @@ class ProjectStore:
 
         image_path = self.image_path(project, record)
         annotation_count = len(record.annotations)
+        previous_last_import_batch = project.last_import_batch
         project.images.remove(record)
+        self._sync_last_import_batch(project)
         try:
             self.save(project)
         except Exception:
             project.images.append(record)
+            project.last_import_batch = previous_last_import_batch
             raise
 
         try:
@@ -203,11 +219,14 @@ class ProjectStore:
         annotation_count = sum(len(record.annotations) for record in targets)
         paths = [self.image_path(project, record) for record in targets]
         previous = list(project.images)
+        previous_last_import_batch = project.last_import_batch
         project.images = [record for record in project.images if record.id not in record_ids]
+        self._sync_last_import_batch(project)
         try:
             self.save(project)
         except Exception:
             project.images = previous
+            project.last_import_batch = previous_last_import_batch
             raise
         failures = []
         for path in paths:

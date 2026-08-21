@@ -17,6 +17,7 @@
 - SAM2 tùy chọn: tự phát hiện config thực sự có trong package, kiểm tra cặp checkpoint/config và chuyển `RECT → SEG`; có thể dùng `SEG → RECT` để trở về bounding box được giữ lại.
 - Quản lý Class trực quan: thêm/xóa an toàn, đổi tên và chọn màu; tạo không giới hạn nhóm thuộc tính cùng lựa chọn riêng.
 - Xóa ảnh khỏi dự án cùng toàn bộ nhãn, tọa độ, thuộc tính và trạng thái liên quan; không xóa ảnh nguồn ban đầu.
+- Xóa an toàn toàn bộ ảnh của lần nhập thành công gần nhất bằng một lần xác nhận; hiển thị trước số ảnh, số nhãn, thời gian và nguồn rút gọn, đồng thời luôn giữ ảnh/video nguồn ban đầu.
 - Lọc ảnh thông minh cho cả frame video và ảnh nhập/thư mục: mặc định chỉ quét lượt nhập mới nhất, có tùy chọn bao gồm dữ liệu cũ; dùng model đang hoạt động kết hợp OpenCV để nhóm ảnh nên giữ, ảnh gần trùng, ảnh trống và ảnh chất lượng kém; giữ một tỷ lệ negative sample, bảo vệ ảnh đã có nhãn/đã duyệt và cho duyệt lại trước khi xóa.
 - Mỗi nhóm thuộc tính có tên, giá trị mặc định, cờ bắt buộc và mục đích `metadata`, `classification` hoặc quy tắc `OK/NG`.
 - Dấu tick trong trang Gán nhãn là công tắc chế độ: tắt để train định vị Detection/SEG/OBB/ORI; bật để hiện thuộc tính và train Classification hai giai đoạn trên crop vật.
@@ -49,7 +50,6 @@ Máy hiện tại đã có các thư viện chính:
 
 ```bat
 cd /d D:\DeltaX\SmartLabelStudio
-python bootstrap_demo.py
 python run.py
 ```
 
@@ -112,8 +112,8 @@ Xem hướng dẫn chi tiết tại [docs/HUONG_DAN_SU_DUNG.md](docs/HUONG_DAN_S
 
 ## Hydroponic Slot Condition
 
-Luồng Hydro được bổ sung bằng template trên chính hộp thoại **Dự án mới**, không tạo một loại project
-hay một engine train thứ hai. Chọn `Hydroponic Slot Condition · cải ngọt`; project chai/robot cũ vẫn
+Luồng Hydro được bổ sung bằng mẫu cấu hình trên chính hộp thoại **Dự án mới**, không tạo một loại project
+hay một engine train thứ hai. Chọn `Hydroponic · mẫu Classification 10 slot`; project chai/robot cũ vẫn
 giữ nguyên Classification theo crop annotation và RKNN/RK3588 như trước.
 
 Trong project Hydro, trang **Dự án** mới hiện hai thao tác chuyên biệt:

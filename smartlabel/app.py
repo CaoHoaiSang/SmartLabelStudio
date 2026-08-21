@@ -29,6 +29,7 @@ from .hydroponic import (
     write_hydro_model_bundle,
 )
 from .frame_filter_dialog import SmartFrameFilterDialog
+from .frame_filter import latest_import_records
 from .model_export import RknnExportConfig, RknnExportJob, diagnose_rknn_environment
 from .models import Annotation, Project
 from .project_store import ProjectStore
@@ -48,7 +49,6 @@ from .version_dialog import ask_dataset_version_name
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = Path(os.environ.get("SMARTLABEL_WORKSPACE", APP_ROOT / "workspace")).resolve()
-DEMO_IMAGES = Path(r"D:\DeltaX\Tai Lieu Demo\Phan Loai Chai Nhua\Data\images")
 DEMO_MODEL = Path(r"D:\DeltaX\Tai Lieu Demo\Phan Loai Chai Nhua\Model\best.pt")
 SAM2_SMALL_URL = "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_small.pt"
 
@@ -107,6 +107,7 @@ class SmartLabelApp(ctk.CTk):
         self.settings_path = WORKSPACE / "settings.json"
         self.app_settings = self._load_app_settings()
         self.project: Project | None = None
+        self.import_in_progress = False
         self.current_index = -1
         self.image_page_size = 50
         self.image_page = 0
@@ -269,7 +270,7 @@ class SmartLabelApp(ctk.CTk):
             ("các ảnh", "Chọn một hoặc nhiều file ảnh để nhập."),
             ("video", "Tách frame từ video theo khoảng frame đã chọn."),
             ("lọc frame", "Nhóm ảnh gần trùng, ảnh trống và frame nên giữ; chỉ xóa sau khi người dùng xác nhận."),
-            ("demo", "Nhập bộ 126 ảnh chai nhựa dùng để thử nghiệm."),
+            ("xóa lần nhập", "Xóa toàn bộ bản sao ảnh của lượt nhập thành công gần nhất; ảnh nguồn vẫn được giữ."),
             ("quản lý", "Thêm/xóa Class, chọn màu và sửa các lựa chọn thuộc tính."),
             ("polygon", "Bấm các điểm quanh vật; double-click để kết thúc polygon."),
             ("box", "Kéo chuột để tạo bounding box quanh vật."),
@@ -313,6 +314,18 @@ class SmartLabelApp(ctk.CTk):
         left.pack(side="left", fill="y", padx=(8, 5), pady=8)
         self._button(left, "Nhập thư mục ảnh", self._import_folder, width=220).pack(padx=14, pady=6)
         self._button(left, "Nhập các ảnh", self._import_files, width=220).pack(padx=14, pady=6)
+        self.delete_latest_import_button = self._button(
+            left,
+            "Xóa lần nhập gần nhất…",
+            self._delete_latest_import,
+            width=220,
+            color="#a94747",
+            tooltip=(
+                "Xóa các bản sao ảnh được thêm trong lượt nhập thành công gần nhất cùng nhãn liên quan. "
+                "Luôn hỏi xác nhận và không xóa ảnh nguồn."
+            ),
+        )
+        self.delete_latest_import_button.pack(padx=14, pady=6)
         self.hydro_import_button = self._button(left, "Nhập CaptureManifestV1", self._import_capture_manifest, width=220, color="#2b906d")
         self.hydro_import_button.pack(padx=14, pady=6)
         self.hydro_qa_button = self._button(left, "Kiểm tra Dataset Hydro", self._run_hydro_qa, width=220, color="#6d56a4")
@@ -327,7 +340,6 @@ class SmartLabelApp(ctk.CTk):
             color="#6d56a4",
             tooltip="Lọc gần trùng, ảnh nền và ảnh chất lượng kém cho cả frame video lẫn ảnh nhập/thư mục.",
         ).pack(padx=14, pady=6)
-        self._button(left, "Nạp demo 126 ảnh chai", self._import_demo, width=220, color="#2b906d").pack(padx=14, pady=6)
         self.project_settings_button = self._button(left, "Quản lý Class & thuộc tính", self._edit_classes, width=220)
         self.project_settings_button.pack(padx=14, pady=6)
         ctk.CTkLabel(left, text="Ảnh được sao chép vào workspace\nđể dự án không phụ thuộc thư mục nguồn.", text_color=COLORS["muted"], justify="left").pack(padx=14, pady=14)
@@ -386,6 +398,9 @@ class SmartLabelApp(ctk.CTk):
         self._new_project("hydroponic_slot")
 
     def _import_capture_manifest(self) -> None:
+        if self.import_in_progress:
+            messagebox.showinfo("Đang nhập dữ liệu", "Hãy đợi lượt nhập hiện tại hoàn tất.", parent=self)
+            return
         if not self.project or self.project.metadata.get("template") != "Hydroponic Slot Condition":
             messagebox.showerror("Sai loại dự án", "Hãy tạo hoặc mở project Hydroponic Slot Condition trước.")
             return
@@ -494,13 +509,10 @@ class SmartLabelApp(ctk.CTk):
         if files:
             self._run_import(files)
 
-    def _import_demo(self) -> None:
-        if not DEMO_IMAGES.exists():
-            messagebox.showerror("Không tìm thấy", f"Không tìm thấy dữ liệu demo:\n{DEMO_IMAGES}")
-            return
-        self._run_import([DEMO_IMAGES])
-
     def _import_video(self) -> None:
+        if self.import_in_progress:
+            messagebox.showinfo("Đang nhập dữ liệu", "Hãy đợi lượt nhập hiện tại hoàn tất.", parent=self)
+            return
         if not self.project:
             self._new_project()
         if not self.project:
@@ -547,15 +559,24 @@ class SmartLabelApp(ctk.CTk):
         ):
             return
         project = self.project
+        self.import_in_progress = True
+        self._apply_project_context_visibility()
         def worker():
             try:
                 result = self.store.import_video(project, path, every, lambda i, n, name: self.event_queue.put(("status", f"Video {i}/{n}: {name}")))
                 self.event_queue.put(("import_done", result))
             except Exception as exc:
-                self.event_queue.put(("error", str(exc)))
+                self.event_queue.put(("import_error", str(exc)))
         Thread(target=worker, daemon=True).start()
 
     def _open_frame_filter(self) -> None:
+        if self.import_in_progress:
+            messagebox.showinfo(
+                "Đang nhập dữ liệu",
+                "Hãy đợi lượt nhập hiện tại hoàn tất trước khi phân tích hoặc xóa ảnh.",
+                parent=self,
+            )
+            return
         if not self.project:
             messagebox.showinfo("Chưa có dự án", "Hãy mở hoặc tạo một dự án trước.", parent=self)
             return
@@ -578,18 +599,121 @@ class SmartLabelApp(ctk.CTk):
             COLORS["good"],
         )
 
+    @staticmethod
+    def _latest_import_source_summary(records) -> str:
+        if records and records[0].import_batch.startswith("capture_"):
+            return "CaptureManifestV1"
+        labels: list[str] = []
+        for record in records:
+            raw = record.source_path.removesuffix("#frame")
+            if not raw:
+                continue
+            path = Path(raw)
+            label = path.name if record.source_path.endswith("#frame") else (path.parent.name or path.name)
+            if label and label not in labels:
+                labels.append(label)
+        if not labels:
+            return "Không rõ nguồn"
+        return ", ".join(labels[:2]) + (f" và {len(labels) - 2} nguồn khác" if len(labels) > 2 else "")
+
+    @staticmethod
+    def _latest_import_time(records) -> str:
+        timestamps = []
+        for record in records:
+            try:
+                timestamps.append(datetime.fromisoformat(record.created_at))
+            except (TypeError, ValueError):
+                continue
+        if not timestamps:
+            return "Không rõ thời gian"
+        return max(timestamps).astimezone().strftime("%d/%m/%Y %H:%M:%S")
+
+    def _delete_latest_import(self) -> None:
+        if self.import_in_progress:
+            messagebox.showinfo(
+                "Đang nhập dữ liệu",
+                "Không thể xóa lượt nhập khi ứng dụng vẫn đang sao chép ảnh. Hãy đợi lượt nhập hoàn tất.",
+                parent=self,
+            )
+            return
+        if not self.project:
+            messagebox.showinfo("Chưa có dự án", "Hãy mở một dự án trước.", parent=self)
+            return
+        try:
+            self.store.ensure_import_batches(self.project)
+        except Exception as exc:
+            messagebox.showerror("Không đọc được lần nhập", str(exc), parent=self)
+            return
+        records = latest_import_records(self.project)
+        if not records:
+            messagebox.showinfo("Không có lần nhập", "Dự án chưa có lượt nhập ảnh nào để xóa.", parent=self)
+            return
+
+        annotation_count = sum(len(record.annotations) for record in records)
+        reviewed_count = sum(record.review_status == "reviewed" for record in records)
+        reviewed_warning = (
+            f"\nCảnh báo: {reviewed_count} ảnh đã duyệt cũng nằm trong lần nhập này."
+            if reviewed_count
+            else ""
+        )
+        confirmed = messagebox.askyesno(
+            "Xóa toàn bộ lần nhập gần nhất",
+            f"Dự án: {self.project.name}\n"
+            f"Thời gian: {self._latest_import_time(records)}\n"
+            f"Nguồn: {self._latest_import_source_summary(records)}\n\n"
+            f"Sẽ xóa {len(records)} ảnh và {annotation_count} nhãn liên quan khỏi dự án."
+            f"{reviewed_warning}\n\n"
+            "Ảnh/video nguồn ban đầu và Dataset đã export sẽ không bị xóa.\n"
+            "Thao tác này không thể hoàn tác trong dự án.",
+            parent=self,
+        )
+        if not confirmed:
+            return
+
+        try:
+            removed_images, removed_annotations = self.store.delete_images(self.project, records)
+        except Exception as exc:
+            messagebox.showerror("Không xóa được lần nhập", str(exc), parent=self)
+            return
+
+        self.selected_annotation_id = None
+        self.last_selected_by_image = {
+            image_id: annotation_id
+            for image_id, annotation_id in self.last_selected_by_image.items()
+            if self.project.image_by_id(image_id)
+        }
+        self.current_index = min(self.current_index, len(self.project.images) - 1)
+        self.image_page = 0
+        self._refresh_everything()
+        self._set_status(
+            f"Đã xóa lần nhập gần nhất: {removed_images} ảnh, {removed_annotations} nhãn",
+            COLORS["good"],
+        )
+        messagebox.showinfo(
+            "Đã xóa lần nhập",
+            f"Đã xóa {removed_images} ảnh và {removed_annotations} nhãn khỏi dự án.\n"
+            "Ảnh/video nguồn ban đầu vẫn được giữ nguyên.",
+            parent=self,
+        )
+
     def _run_import(self, paths) -> None:
+        if self.import_in_progress:
+            messagebox.showinfo("Đang nhập dữ liệu", "Hãy đợi lượt nhập hiện tại hoàn tất.", parent=self)
+            return
         if not self.project:
             self._new_project()
         if not self.project:
             return
+        project = self.project
+        self.import_in_progress = True
+        self._apply_project_context_visibility()
         self._set_status("Đang nhập ảnh…")
         def worker():
             try:
-                result = self.store.import_images(self.project, paths, lambda i, n, name: self.event_queue.put(("status", f"Nhập {i}/{n}: {name}")))
+                result = self.store.import_images(project, paths, lambda i, n, name: self.event_queue.put(("status", f"Nhập {i}/{n}: {name}")))
                 self.event_queue.put(("import_done", result))
             except Exception as exc:
-                self.event_queue.put(("error", str(exc)))
+                self.event_queue.put(("import_error", str(exc)))
         Thread(target=worker, daemon=True).start()
 
     def _edit_classes(self) -> None:
@@ -610,6 +734,16 @@ class SmartLabelApp(ctk.CTk):
         if hasattr(self, "project_settings_button"):
             self.project_settings_button.configure(
                 text="Quản lý nhãn & thuộc tính" if hydro else "Quản lý Class & thuộc tính"
+            )
+        if hasattr(self, "delete_latest_import_button"):
+            records = latest_import_records(self.project) if self.project else []
+            count = len(records)
+            self.delete_latest_import_button.configure(
+                text=f"Xóa lần nhập gần nhất · {count}" if count else "Xóa lần nhập gần nhất…"
+            )
+            self._set_button_enabled(
+                self.delete_latest_import_button,
+                bool(self.project and self.project.images and not self.import_in_progress),
             )
 
     def _save_project_settings(self) -> None:
@@ -1045,6 +1179,13 @@ class SmartLabelApp(ctk.CTk):
         self._delete_current_image()
 
     def _delete_current_image(self) -> None:
+        if self.import_in_progress:
+            messagebox.showinfo(
+                "Đang nhập dữ liệu",
+                "Hãy đợi lượt nhập hiện tại hoàn tất trước khi xóa ảnh.",
+                parent=self,
+            )
+            return
         if not self.project or not (0 <= self.current_index < len(self.project.images)):
             messagebox.showinfo("Chưa chọn ảnh", "Hãy chọn một ảnh cần xóa trước.")
             return
@@ -4029,7 +4170,12 @@ class SmartLabelApp(ctk.CTk):
                     self._set_status(str(payload))
                 elif kind == "error":
                     messagebox.showerror("Lỗi", str(payload))
+                elif kind == "import_error":
+                    self.import_in_progress = False
+                    self._apply_project_context_visibility()
+                    messagebox.showerror("Nhập dữ liệu thất bại", str(payload))
                 elif kind == "import_done":
+                    self.import_in_progress = False
                     added, skipped = payload
                     self._refresh_everything()
                     messagebox.showinfo("Nhập hoàn tất", f"Đã thêm: {added}\nBỏ qua ảnh trùng: {skipped}")

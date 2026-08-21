@@ -13,9 +13,21 @@ from .models import LabelClass, Project
 
 
 PROJECT_TEMPLATE_LABELS = {
-    "DeltaX chai · giữ luồng hiện tại": "deltax_bottle",
-    "Hydroponic Slot Condition · cải ngọt": "hydroponic_slot",
-    "Dự án trống · tự cấu hình": "blank",
+    "DeltaX chai · mẫu Detection + Classification": "deltax_bottle",
+    "Hydroponic · mẫu Classification 10 slot": "hydroponic_slot",
+    "Dự án trống · không tạo nhãn mẫu": "blank",
+}
+
+PROJECT_TEMPLATE_HELP = {
+    "deltax_bottle": (
+        "Tạo sẵn 3 Class chai và các nhóm thuộc tính tình trạng, che khuất, nắp chai. "
+        "Phù hợp khi bắt đầu một dự án chai mới."
+    ),
+    "hydroponic_slot": (
+        "Tạo sẵn Classification toàn ảnh slot với plant_presence, yellow_leaf và wilt. "
+        "Không thay đổi các dự án chai đang có."
+    ),
+    "blank": "Không tạo sẵn Class hay thuộc tính; bạn tự cấu hình sau khi tạo dự án.",
 }
 
 
@@ -24,21 +36,24 @@ class NewProjectDialog(ctk.CTkToplevel):
         super().__init__(parent)
         self.result: tuple[str, str] | None = None
         self.title("Dự án mới")
-        self.geometry("520x300")
+        self.geometry("560x410")
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
         self.configure(fg_color="#0b151f")
         ctk.CTkLabel(
             self,
-            text="TẠO DỰ ÁN TỪ TEMPLATE",
+            text="TẠO DỰ ÁN MỚI",
             font=("Segoe UI Semibold", 19),
             text_color="#22b9ee",
         ).pack(anchor="w", padx=24, pady=(24, 4))
         ctk.CTkLabel(
             self,
-            text="Template chỉ cấu hình dữ liệu và runtime; mọi project vẫn dùng chung engine gán nhãn/train.",
-            wraplength=460,
+            text=(
+                "Mẫu cấu hình chỉ tạo sẵn Class, thuộc tính và kiểu bài toán cho dự án mới. "
+                "Đây không phải danh sách các dự án đã lưu."
+            ),
+            wraplength=510,
             justify="left",
             text_color="#8298aa",
         ).pack(anchor="w", padx=24, pady=(0, 16))
@@ -49,8 +64,32 @@ class NewProjectDialog(ctk.CTkToplevel):
         labels = list(PROJECT_TEMPLATE_LABELS)
         selected = next((label for label, code in PROJECT_TEMPLATE_LABELS.items() if code == default_template), labels[0])
         self.template = tk.StringVar(value=selected)
-        ctk.CTkLabel(self, text="Template", text_color="#8298aa").pack(anchor="w", padx=24)
-        ctk.CTkOptionMenu(self, values=labels, variable=self.template, width=470).pack(fill="x", padx=24, pady=(3, 18))
+        ctk.CTkLabel(self, text="Mẫu cấu hình ban đầu", text_color="#8298aa").pack(anchor="w", padx=24)
+        ctk.CTkOptionMenu(
+            self,
+            values=labels,
+            variable=self.template,
+            width=510,
+            command=self._template_changed,
+        ).pack(fill="x", padx=24, pady=(3, 8))
+        self.template_help = ctk.CTkLabel(
+            self,
+            text="",
+            wraplength=510,
+            justify="left",
+            anchor="w",
+            text_color="#b7c7d4",
+        )
+        self.template_help.pack(fill="x", padx=24, pady=(0, 12))
+        self._template_changed(selected)
+        ctk.CTkLabel(
+            self,
+            text="Để mở dự án Cao hoặc dự án khác đã có: đóng hộp thoại này và chọn dự án ở thanh trên cùng.",
+            wraplength=510,
+            justify="left",
+            anchor="w",
+            text_color="#8298aa",
+        ).pack(fill="x", padx=24, pady=(0, 14))
         actions = ctk.CTkFrame(self, fg_color="transparent")
         actions.pack(fill="x", padx=24)
         ctk.CTkButton(actions, text="Hủy", width=110, fg_color="#415466", command=self.destroy).pack(side="right", padx=(6, 0))
@@ -58,6 +97,10 @@ class NewProjectDialog(ctk.CTkToplevel):
         self.bind("<Return>", lambda _event: self._accept())
         self.bind("<Escape>", lambda _event: self.destroy())
         self.after(100, self.name_entry.focus_set)
+
+    def _template_changed(self, label: str) -> None:
+        code = PROJECT_TEMPLATE_LABELS.get(label, "blank")
+        self.template_help.configure(text=PROJECT_TEMPLATE_HELP[code])
 
     def _accept(self) -> None:
         name = self.name.get().strip()

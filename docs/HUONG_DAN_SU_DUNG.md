@@ -36,12 +36,16 @@ Nếu chọn `cuda` nhưng CUDA chưa sẵn sàng, ứng dụng dừng job và b
 
 1. Nhấn **Dự án mới**.
 2. Nhập tên dự án.
-3. Ứng dụng tạo sẵn ba class demo.
-4. Nhấn **Quản lý Class & thuộc tính**.
-5. Trong tab **CLASS**, thêm Class, đổi tên hoặc bấm ô màu để chọn màu overlay.
-6. Chỉ Class cuối chưa được nhãn sử dụng mới có thể xóa; quy tắc này bảo vệ ánh xạ Class ID của model/dataset.
-7. Trong tab **THUỘC TÍNH**, nhấn **+ Thêm nhóm thuộc tính** để tạo nhóm mới hoặc sửa các nhóm tình trạng, che khuất và nắp chai có sẵn.
-8. Mỗi nhóm gồm:
+3. Chọn **Mẫu cấu hình ban đầu**. Đây chỉ là bộ Class/thuộc tính/kiểu bài toán được tạo sẵn cho dự án mới, không phải danh sách dự án đã lưu:
+   - **DeltaX chai**: tạo sẵn ba Class chai và các nhóm thuộc tính hiện có.
+   - **Hydroponic**: tạo Classification toàn ảnh cho 10 slot với `plant_presence`, `yellow_leaf`, `wilt`.
+   - **Dự án trống**: không tạo sẵn Class hay thuộc tính.
+4. Muốn mở dự án `Cao` hoặc dự án đã có khác, đóng hộp thoại **Dự án mới** và chọn ở danh sách trên thanh trên cùng.
+5. Nhấn **Quản lý Class & thuộc tính**.
+6. Trong tab **CLASS**, thêm Class, đổi tên hoặc bấm ô màu để chọn màu overlay.
+7. Chỉ Class cuối chưa được nhãn sử dụng mới có thể xóa; quy tắc này bảo vệ ánh xạ Class ID của model/dataset.
+8. Trong tab **THUỘC TÍNH**, nhấn **+ Thêm nhóm thuộc tính** để tạo nhóm mới hoặc sửa các nhóm tình trạng, che khuất và nắp chai có sẵn.
+9. Mỗi nhóm gồm:
    - **Tên nhóm**: tên nhìn thấy trong trang Gán nhãn.
    - **Mã**: khóa ổn định lưu trong `project.json`; ứng dụng tự tạo và không đổi khi sửa tên.
    - **Mặc định**: tự gán cho nhãn mới; chọn “Không mặc định” nếu muốn người dùng quyết định từng nhãn.
@@ -57,7 +61,7 @@ Trong trang **DỰ ÁN**:
 - **Nhập thư mục ảnh**: quét cả thư mục con.
 - **Nhập các ảnh**: chọn một hoặc nhiều file.
 - **Tách frame từ video**: ứng dụng đọc tổng số frame, đề xuất khoảng `N` để tạo tối đa khoảng 500 ảnh và cảnh báo trước nếu lựa chọn dự kiến tạo quá nhiều ảnh. `N=4` nghĩa là lưu mỗi 4 frame, không phải chỉ lưu 4 ảnh.
-- **Nạp demo 126 ảnh chai**: sử dụng dữ liệu tại thư mục Demo hiện có.
+- **Xóa lần nhập gần nhất · N**: xóa đúng toàn bộ `N` ảnh của lượt nhập thành công gần nhất cùng nhãn/trạng thái trong dự án. Hộp xác nhận hiển thị trước dự án, thời gian, nguồn rút gọn, số ảnh và số nhãn. Ảnh/video nguồn ban đầu và Dataset đã export không bị xóa.
 
 Ứng dụng sao chép ảnh vào dự án. Ảnh giống hệt nhau được nhận diện bằng SHA-256 và bỏ qua.
 

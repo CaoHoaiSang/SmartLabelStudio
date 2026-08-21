@@ -28,6 +28,7 @@ from smartlabel.frame_filter import (
 )
 from smartlabel.frame_filter_dialog import PREVIEW_BACKGROUND, PREVIEW_SIZE, build_contained_preview
 from smartlabel.frame_filter_dialog import SmartFrameFilterDialog
+from smartlabel.ui_components import PROJECT_TEMPLATE_HELP, PROJECT_TEMPLATE_LABELS
 
 
 class SmartLabelCoreTests(unittest.TestCase):
@@ -182,6 +183,42 @@ class SmartLabelCoreTests(unittest.TestCase):
         self.assertTrue((self.source / "image_1.jpg").exists())
         loaded = self.store.load(self.project.id)
         self.assertEqual(loaded.images, [])
+        self.assertEqual(loaded.last_import_batch, "")
+
+    def test_delete_latest_import_keeps_previous_batch_and_original_sources(self):
+        self.store.import_images(self.project, [self.source])
+        first_record = self.project.images[0]
+        first_batch = self.project.last_import_batch
+
+        latest_source = self.root / "accidental_bottle_import"
+        latest_source.mkdir()
+        Image.new("RGB", (100, 80), "blue").save(latest_source / "bottle_1.jpg")
+        Image.new("RGB", (100, 80), "green").save(latest_source / "bottle_2.jpg")
+        self.store.import_images(self.project, [latest_source])
+        latest_records = latest_import_records(self.project)
+        self.assertEqual(len(latest_records), 2)
+        latest_records[0].annotations.append(Annotation.create_box(0, [1, 2, 30, 40]))
+        latest_records[0].review_status = "reviewed"
+        self.store.save(self.project)
+
+        removed_images, removed_annotations = self.store.delete_images(self.project, latest_records)
+
+        self.assertEqual((removed_images, removed_annotations), (2, 1))
+        self.assertEqual([record.id for record in self.project.images], [first_record.id])
+        self.assertEqual(self.project.last_import_batch, first_batch)
+        self.assertTrue((latest_source / "bottle_1.jpg").exists())
+        self.assertTrue((latest_source / "bottle_2.jpg").exists())
+        loaded = self.store.load(self.project.id)
+        self.assertEqual([record.id for record in loaded.images], [first_record.id])
+        self.assertEqual(loaded.last_import_batch, first_batch)
+
+    def test_new_project_templates_are_presets_not_saved_project_entries(self):
+        self.assertEqual(
+            set(PROJECT_TEMPLATE_LABELS.values()),
+            {"deltax_bottle", "hydroponic_slot", "blank"},
+        )
+        self.assertEqual(set(PROJECT_TEMPLATE_HELP), set(PROJECT_TEMPLATE_LABELS.values()))
+        self.assertTrue(all("project_" not in code for code in PROJECT_TEMPLATE_LABELS.values()))
 
     def test_bulk_delete_and_video_frame_filter_keep_original_images(self):
         self.store.import_images(self.project, [self.source])
