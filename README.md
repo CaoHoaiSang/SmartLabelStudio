@@ -119,7 +119,10 @@ giữ nguyên Classification theo crop annotation và RKNN/RK3588 như trước.
 
 Trong project Hydro, hai thao tác chuyên biệt được đặt theo đúng giai đoạn sử dụng:
 
-- Trang **Dự án** có **Nhập CaptureManifestV1**: kiểm tra checksum, lineage, hình học ROI/slot, ID trùng và đủ đúng 10
+- Trang **Dự án** có **Nhập gói HydroFlow (.zip)** để nhập hàng loạt tất cả capture đã được duyệt từ Thư viện AI Camera.
+  Gói `HydroDatasetExportV1` được kiểm tra toàn bộ trước khi ghi project và có thể nạp lại an toàn: capture đã nhập
+  được bỏ qua, dữ liệu cũ không bị ghi đè. Nút **Nhập 1 CaptureManifestV1** vẫn được giữ cho kiểm thử hoặc sửa chữa
+  một capture riêng lẻ. Cả hai luồng đều kiểm tra checksum, lineage, hình học ROI/slot, ID trùng và đủ đúng 10
   slot trước khi nhập. Ảnh slot, full frame và hai ROI đều được sao chép vào project để provenance
   không còn phụ thuộc máy capture; export không chứa đường dẫn tuyệt đối. Importer từ chối capture đã
   được HydroFlow đánh dấu `excluded`, đồng thời giữ snapshot tuổi cây (`daysAfterSowing`, `daysAfterNft`),

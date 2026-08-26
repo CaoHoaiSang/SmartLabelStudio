@@ -4,11 +4,14 @@ from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from contextlib import contextmanager
 import hashlib
 import json
 import os
 import re
 import shutil
+import stat
+import tempfile
 import zipfile
 
 from PIL import Image
@@ -371,7 +374,8 @@ def import_capture_manifest(store: ProjectStore, project: Project, manifest_path
         for asset in sorted(slot_assets, key=lambda item: SLOT_IDS.index(item["slotId"])):
             source = resolved[asset["assetId"]]
             suffix = source.suffix.lower() if source.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"} else ".jpg"
-            file_name = f"{asset['sha256'][:12]}_{asset['slotId']}{suffix}"
+            capture_name_hash = hashlib.sha256(manifest["captureId"].encode("utf-8")).hexdigest()[:8]
+            file_name = f"{asset['sha256'][:12]}_{capture_name_hash}_{asset['slotId']}{suffix}"
             destination = images_dir / file_name
             if destination.exists():
                 raise CaptureManifestError(f"project image collision: {file_name}")
@@ -475,6 +479,213 @@ def import_capture_manifest(store: ProjectStore, project: Project, manifest_path
             shutil.rmtree(provenance_dir, ignore_errors=True)
         raise
     return len(created_records), 0
+
+
+DATASET_ARCHIVE_MAX_FILES = 10_000
+DATASET_ARCHIVE_MAX_CAPTURES = 500
+DATASET_ARCHIVE_MAX_UNCOMPRESSED_BYTES = 20 * 1024 * 1024 * 1024
+DATASET_ARCHIVE_MAX_MEMBER_BYTES = 512 * 1024 * 1024
+
+
+def _safe_archive_member(value: Any) -> str:
+    if not isinstance(value, str) or not value or "\\" in value or value.startswith("/"):
+        raise CaptureManifestError(f"unsafe archive member: {value}")
+    parts = value.split("/")
+    if any(part in {"", ".", ".."} for part in parts) or ":" in parts[0]:
+        raise CaptureManifestError(f"unsafe archive member: {value}")
+    return "/".join(parts)
+
+
+def _required_archive_text(value: Any, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise CaptureManifestError(f"dataset export {field} is required")
+    return value
+
+
+@contextmanager
+def _validated_capture_dataset_archive(archive_path: str | Path):
+    package_path = Path(archive_path).resolve()
+    if package_path.suffix.lower() != ".zip" or not package_path.is_file():
+        raise CaptureManifestError("Hydro dataset package must be a ZIP file")
+    try:
+        package = zipfile.ZipFile(package_path)
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise CaptureManifestError(f"cannot read Hydro dataset package: {exc}") from exc
+    with package, tempfile.TemporaryDirectory(prefix="smartlabel_hydro_import_") as temporary:
+        infos = package.infolist()
+        files = [info for info in infos if not info.is_dir()]
+        if not files or len(files) > DATASET_ARCHIVE_MAX_FILES:
+            raise CaptureManifestError("Hydro dataset package has an invalid file count")
+        if sum(info.file_size for info in files) > DATASET_ARCHIVE_MAX_UNCOMPRESSED_BYTES:
+            raise CaptureManifestError("Hydro dataset package is too large after extraction")
+        names: dict[str, zipfile.ZipInfo] = {}
+        for info in infos:
+            member_name = info.filename[:-1] if info.is_dir() and info.filename.endswith("/") else info.filename
+            safe_name = _safe_archive_member(member_name)
+            folded = safe_name.casefold()
+            if folded in names:
+                raise CaptureManifestError(f"duplicate archive member: {safe_name}")
+            names[folded] = info
+            mode = info.external_attr >> 16
+            if stat.S_ISLNK(mode) or info.flag_bits & 0x1:
+                raise CaptureManifestError(f"unsupported archive member: {safe_name}")
+            if not info.is_dir() and info.file_size > DATASET_ARCHIVE_MAX_MEMBER_BYTES:
+                raise CaptureManifestError(f"archive member is too large: {safe_name}")
+        if "dataset-export.json" not in {info.filename for info in files}:
+            raise CaptureManifestError("HydroDatasetExportV1 requires dataset-export.json at archive root")
+        extraction_root = Path(temporary).resolve()
+        for info in files:
+            safe_name = _safe_archive_member(info.filename)
+            destination = (extraction_root / Path(*safe_name.split("/"))).resolve()
+            if extraction_root not in destination.parents:
+                raise CaptureManifestError(f"unsafe archive member: {safe_name}")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with package.open(info) as source, destination.open("wb") as target:
+                shutil.copyfileobj(source, target, length=1024 * 1024)
+        index_path = extraction_root / "dataset-export.json"
+        try:
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError) as exc:
+            raise CaptureManifestError(f"cannot read HydroDatasetExportV1: {exc}") from exc
+        if not isinstance(index, dict) or index.get("kind") != "HydroDatasetExportV1" or index.get("schemaVersion") != 1:
+            raise CaptureManifestError("dataset-export.json must be HydroDatasetExportV1 schemaVersion 1")
+        for field in ("datasetExportId", "createdAt", "deviceId", "siteId", "cropCode"):
+            _required_archive_text(index.get(field), field)
+        capture_rows = index.get("captures")
+        if not isinstance(capture_rows, list) or not capture_rows:
+            raise CaptureManifestError("HydroDatasetExportV1 must contain at least one capture")
+        if len(capture_rows) > DATASET_ARCHIVE_MAX_CAPTURES:
+            raise CaptureManifestError("HydroDatasetExportV1 contains too many captures")
+        if index.get("captureCount") != len(capture_rows) or index.get("slotImageCount") != len(capture_rows) * 10:
+            raise CaptureManifestError("dataset export capture or slot count is inconsistent")
+        capture_ids: set[str] = set()
+        manifest_paths: set[str] = set()
+        all_asset_ids: set[str] = set()
+        all_asset_paths: set[str] = set()
+        expected_files = {"dataset-export.json"}
+        manifests: list[tuple[dict[str, Any], Path]] = []
+        for row in capture_rows:
+            if not isinstance(row, dict):
+                raise CaptureManifestError("dataset export capture entry must be an object")
+            capture_id = _required_archive_text(row.get("captureId"), "captures[].captureId")
+            if capture_id in capture_ids:
+                raise CaptureManifestError(f"duplicate captureId in dataset export: {capture_id}")
+            capture_ids.add(capture_id)
+            manifest_relative = _safe_archive_member(row.get("manifestPath"))
+            if not manifest_relative.startswith("captures/") or not manifest_relative.endswith("/manifest.json"):
+                raise CaptureManifestError(f"invalid capture manifest path: {manifest_relative}")
+            if manifest_relative.casefold() in manifest_paths:
+                raise CaptureManifestError(f"duplicate capture manifest path: {manifest_relative}")
+            manifest_paths.add(manifest_relative.casefold())
+            manifest_path = extraction_root / Path(*manifest_relative.split("/"))
+            if not manifest_path.is_file():
+                raise CaptureManifestError(f"capture manifest is missing: {manifest_relative}")
+            expected_manifest_sha = row.get("manifestSha256")
+            if not isinstance(expected_manifest_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_manifest_sha):
+                raise CaptureManifestError(f"capture manifest checksum is invalid: {capture_id}")
+            if _sha256(manifest_path) != expected_manifest_sha:
+                raise CaptureManifestError(f"capture manifest checksum mismatch: {capture_id}")
+            manifest, _resolved = validate_capture_manifest(manifest_path)
+            dataset_review = manifest.get("datasetReview")
+            if not isinstance(dataset_review, dict) or dataset_review.get("status") != "approved":
+                raise CaptureManifestError(f"capture is not approved for dataset export: {capture_id}")
+            for field in ("deviceId", "siteId", "cropCode"):
+                if manifest.get(field) != index[field]:
+                    raise CaptureManifestError(f"capture {capture_id} {field} does not match dataset export")
+            for field in ("captureId", "capturedAt", "trigger", "cropCycleId"):
+                if manifest.get(field) != row.get(field):
+                    raise CaptureManifestError(f"capture {capture_id} {field} does not match dataset export entry")
+            if row.get("slotCount") != 10:
+                raise CaptureManifestError(f"capture {capture_id} slot count must be 10")
+            expected_files.add(manifest_relative)
+            for asset in manifest["assets"]:
+                if asset["assetId"] in all_asset_ids:
+                    raise CaptureManifestError(f"duplicate assetId across captures: {asset['assetId']}")
+                all_asset_ids.add(asset["assetId"])
+                asset_path = _safe_archive_member(asset["relativePath"])
+                if asset_path.casefold() in all_asset_paths:
+                    raise CaptureManifestError(f"duplicate asset path across captures: {asset_path}")
+                all_asset_paths.add(asset_path.casefold())
+                expected_files.add(asset_path)
+            manifests.append((manifest, manifest_path))
+        profile_fields = {
+            "cropCycleIds": "cropCycleId",
+            "cameraProfileIds": "cameraProfileId",
+            "geometryProfileIds": "geometryProfileId",
+        }
+        for index_field, manifest_field in profile_fields.items():
+            declared = index.get(index_field)
+            expected = sorted({manifest[manifest_field] for manifest, _path in manifests})
+            if not isinstance(declared, list) or declared != expected:
+                raise CaptureManifestError(f"dataset export {index_field} is inconsistent")
+        actual_files = {_safe_archive_member(info.filename) for info in files}
+        if actual_files != expected_files:
+            missing = sorted(expected_files - actual_files)
+            unexpected = sorted(actual_files - expected_files)
+            detail = f"missing={missing[:3]} unexpected={unexpected[:3]}"
+            raise CaptureManifestError(f"Hydro dataset package file list is inconsistent: {detail}")
+        yield index, manifests
+
+
+def import_capture_dataset_archive(
+    store: ProjectStore,
+    project: Project,
+    archive_path: str | Path,
+) -> dict[str, Any]:
+    if not is_hydroponic_project(project):
+        raise CaptureManifestError("project must use the Hydroponic Slot Condition template")
+    with _validated_capture_dataset_archive(archive_path) as (index, manifests):
+        expected_crop = str(project.metadata.get("cropCode", ""))
+        if expected_crop and index["cropCode"] != expected_crop:
+            raise CaptureManifestError(
+                f"dataset cropCode {index['cropCode']} does not match project cropCode {expected_crop}"
+            )
+        for field in ("siteId", "deviceId"):
+            configured = str(project.metadata.get(field, ""))
+            if configured and index[field] != configured:
+                raise CaptureManifestError(
+                    f"dataset {field} {index[field]} does not match project {field} {configured}"
+                )
+        records_by_capture: dict[str, list[ImageRecord]] = defaultdict(list)
+        known_asset_ids = {record.metadata.get("assetId") for record in project.images}
+        for record in project.images:
+            capture_id = record.metadata.get("captureId")
+            if isinstance(capture_id, str) and capture_id:
+                records_by_capture[capture_id].append(record)
+        to_import: list[Path] = []
+        skipped_capture_ids: list[str] = []
+        for manifest, manifest_path in manifests:
+            capture_id = manifest["captureId"]
+            existing = records_by_capture.get(capture_id, [])
+            if existing:
+                existing_slot_ids = {record.metadata.get("slotId") for record in existing if record.asset_role == "slot"}
+                if len(existing) != 10 or existing_slot_ids != set(SLOT_IDS):
+                    raise CaptureManifestError(f"project contains an incomplete imported capture: {capture_id}")
+                skipped_capture_ids.append(capture_id)
+                continue
+            duplicate = next(
+                (asset["assetId"] for asset in manifest["assets"] if asset.get("role") == "slot" and asset["assetId"] in known_asset_ids),
+                None,
+            )
+            if duplicate:
+                raise CaptureManifestError(f"capture asset was already imported under another capture: {duplicate}")
+            provenance_dir = store.project_dir(project) / "assets" / capture_id
+            if provenance_dir.exists():
+                raise CaptureManifestError(f"capture provenance exists without a complete import: {capture_id}")
+            to_import.append(manifest_path)
+        imported = 0
+        slot_images = 0
+        for manifest_path in to_import:
+            added, _skipped = import_capture_manifest(store, project, manifest_path)
+            imported += 1
+            slot_images += added
+        return {
+            "datasetExportId": index["datasetExportId"],
+            "capturesImported": imported,
+            "capturesSkipped": len(skipped_capture_ids),
+            "slotImagesImported": slot_images,
+            "skippedCaptureIds": skipped_capture_ids,
+        }
 
 
 def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: dict[str, Any] | None = None) -> dict[str, Any]:

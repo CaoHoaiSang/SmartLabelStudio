@@ -240,6 +240,7 @@ class SmartLabelCoreTests(unittest.TestCase):
             {
                 "import_folder",
                 "import_files",
+                "capture_dataset_archive",
                 "capture_manifest",
                 "import_video",
                 "hydro_qa",
@@ -253,6 +254,7 @@ class SmartLabelCoreTests(unittest.TestCase):
             self.assertGreater(len(variants["standard"]), 50)
             self.assertGreater(len(variants["hydro"]), 80)
         self.assertIn("đủ đúng 10 slot", PROJECT_ACTION_TOOLTIPS["capture_manifest"]["hydro"])
+        self.assertIn("bỏ qua an toàn", PROJECT_ACTION_TOOLTIPS["capture_dataset_archive"]["hydro"])
         self.assertIn("trang Kiểm duyệt", PROJECT_ACTION_TOOLTIPS["hydro_qa"]["hydro"])
         self.assertIn("hiện kết quả trực tiếp bên dưới", PROJECT_ACTION_TOOLTIPS["hydro_qa"]["hydro"])
         self.assertIn("không tự sửa hay xóa", PROJECT_ACTION_TOOLTIPS["hydro_qa"]["hydro"])

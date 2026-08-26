@@ -15,6 +15,7 @@ from smartlabel.hydroponic import (
     apply_hydroponic_slot_template,
     describe_hydro_qa_issue,
     hydro_dataset_qa,
+    import_capture_dataset_archive,
     import_capture_manifest,
     validate_capture_manifest,
     write_hydro_model_bundle,
@@ -59,8 +60,9 @@ class HydroponicMvpTests(unittest.TestCase):
         Image.new("RGB", (1920, 1080), "green").save(capture_dir / "full.jpg")
         Image.new("RGB", (1000, 400), "darkgreen").save(capture_dir / "upper_roi.jpg")
         Image.new("RGB", (1000, 400), "olive").save(capture_dir / "lower_roi.jpg")
+        capture_color = (sum(capture_id.encode("utf-8")) % 180) + 40
         for index, slot_id in enumerate(SLOT_IDS):
-            Image.new("RGB", (180, 300), (index * 20, 100, 40)).save(slot_dir / f"{slot_id}.jpg")
+            Image.new("RGB", (180, 300), (index * 20, 100, capture_color)).save(slot_dir / f"{slot_id}.jpg")
         prefix = f"captures/2026/08/20/{capture_id}"
         full_id = f"{capture_id}_full"
         assets = [{
@@ -103,6 +105,60 @@ class HydroponicMvpTests(unittest.TestCase):
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
         return manifest_path
 
+    def create_dataset_archive(self, capture_ids: list[str], *, extra_file: bool = False, review_status: str = "approved") -> Path:
+        manifests = [self.create_manifest(capture_id) for capture_id in capture_ids]
+        if review_status != "approved":
+            for manifest_path in manifests:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest["datasetReview"]["status"] = review_status
+                manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        rows = []
+        crop_cycles = set()
+        camera_profiles = set()
+        geometry_profiles = set()
+        for manifest_path in manifests:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            relative_manifest = manifest_path.relative_to(self.root / "camera_data").as_posix()
+            rows.append({
+                "captureId": manifest["captureId"],
+                "capturedAt": manifest["capturedAt"],
+                "trigger": manifest["trigger"],
+                "cropCycleId": manifest["cropCycleId"],
+                "manifestPath": relative_manifest,
+                "manifestSha256": sha256(manifest_path),
+                "slotCount": 10,
+            })
+            crop_cycles.add(manifest["cropCycleId"])
+            camera_profiles.add(manifest["cameraProfileId"])
+            geometry_profiles.add(manifest["geometryProfileId"])
+        index = {
+            "kind": "HydroDatasetExportV1",
+            "schemaVersion": 1,
+            "datasetExportId": "hydro_export_test_01",
+            "createdAt": "2026-08-26T00:00:00Z",
+            "deviceId": "device001",
+            "siteId": "site-1",
+            "cropCode": "cai_ngot",
+            "captureCount": len(rows),
+            "slotImageCount": len(rows) * 10,
+            "cropCycleIds": sorted(crop_cycles),
+            "cameraProfileIds": sorted(camera_profiles),
+            "geometryProfileIds": sorted(geometry_profiles),
+            "captures": rows,
+        }
+        archive_path = self.root / "hydro_dataset.zip"
+        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_STORED) as package:
+            package.writestr("dataset-export.json", json.dumps(index))
+            for manifest_path in manifests:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                package.write(manifest_path, manifest_path.relative_to(self.root / "camera_data").as_posix())
+                for asset in manifest["assets"]:
+                    source = self.root / "camera_data" / Path(*asset["relativePath"].split("/"))
+                    package.write(source, asset["relativePath"])
+            if extra_file:
+                package.writestr("unexpected.txt", "not part of the dataset contract")
+        return archive_path
+
     def test_project_v1_migrates_in_memory_and_saves_as_v2(self) -> None:
         payload = self.project.to_dict()
         payload["schema_version"] = 1
@@ -143,6 +199,42 @@ class HydroponicMvpTests(unittest.TestCase):
         manifest_path.write_text(json.dumps(broken), encoding="utf-8")
         with self.assertRaisesRegex(CaptureManifestError, "checksum"):
             validate_capture_manifest(manifest_path)
+
+    def test_dataset_archive_imports_multiple_approved_captures_and_is_idempotent(self) -> None:
+        archive_path = self.create_dataset_archive(["cap_archive_01", "cap_archive_02"])
+
+        result = import_capture_dataset_archive(self.store, self.project, archive_path)
+
+        self.assertEqual(result["capturesImported"], 2)
+        self.assertEqual(result["capturesSkipped"], 0)
+        self.assertEqual(result["slotImagesImported"], 20)
+        self.assertEqual(len(self.project.images), 20)
+        self.assertEqual({record.metadata["captureId"] for record in self.project.images}, {"cap_archive_01", "cap_archive_02"})
+        self.assertTrue(all(record.metadata["datasetReviewStatus"] == "approved" for record in self.project.images))
+        repeated = import_capture_dataset_archive(self.store, self.project, archive_path)
+        self.assertEqual(repeated["capturesImported"], 0)
+        self.assertEqual(repeated["capturesSkipped"], 2)
+        self.assertEqual(repeated["slotImagesImported"], 0)
+        self.assertEqual(len(self.project.images), 20)
+
+    def test_dataset_archive_rejects_unapproved_unsafe_or_unexpected_content_before_import(self) -> None:
+        pending_archive = self.create_dataset_archive(["cap_archive_pending"], review_status="pending")
+        with self.assertRaisesRegex(CaptureManifestError, "not approved"):
+            import_capture_dataset_archive(self.store, self.project, pending_archive)
+        self.assertEqual(self.project.images, [])
+
+        unexpected_archive = self.create_dataset_archive(["cap_archive_extra"], extra_file=True)
+        with self.assertRaisesRegex(CaptureManifestError, "file list is inconsistent"):
+            import_capture_dataset_archive(self.store, self.project, unexpected_archive)
+        self.assertEqual(self.project.images, [])
+
+        unsafe_archive = self.root / "unsafe_dataset.zip"
+        with zipfile.ZipFile(unsafe_archive, "w") as package:
+            package.writestr("dataset-export.json", "{}")
+            package.writestr("../outside.txt", "blocked")
+        with self.assertRaisesRegex(CaptureManifestError, "unsafe archive member"):
+            import_capture_dataset_archive(self.store, self.project, unsafe_archive)
+        self.assertEqual(self.project.images, [])
 
     def test_manifest_import_rejects_excluded_capture_or_inconsistent_crop_age(self) -> None:
         excluded_path = self.create_manifest("cap_excluded")

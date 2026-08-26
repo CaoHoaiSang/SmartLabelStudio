@@ -25,6 +25,7 @@ from .hydroponic import (
     describe_hydro_qa_issue,
     export_jetson_onnx,
     hydro_dataset_qa,
+    import_capture_dataset_archive,
     import_capture_manifest,
     is_hydroponic_project,
     write_hydro_model_bundle,
@@ -133,6 +134,14 @@ PROJECT_ACTION_TOOLTIPS = {
             "Cách nhập khuyến nghị cho dữ liệu từ AI Camera. Ứng dụng kiểm tra schema, checksum, ID trùng, "
             "lineage, hình học ROI/slot và đủ đúng 10 slot trước khi nhập; ảnh slot được dùng để gán nhãn và "
             "vẫn giữ liên kết tới full frame/ROI. Nút này không chụp ảnh và không chạy inference."
+        ),
+    },
+    "capture_dataset_archive": {
+        "standard": "Chức năng này chỉ hiện trong project dùng mẫu Hydroponic Slot Condition.",
+        "hydro": (
+            "Nhập gói ZIP do Thư viện AI Camera của HydroFlow xuất. SmartLabel kiểm tra toàn bộ danh sách capture, "
+            "trạng thái Đạt dataset, checksum, lineage, 1 full frame, 2 ROI và đủ 10 slot trước khi thêm bất kỳ ảnh nào. "
+            "Capture đã nhập được bỏ qua an toàn khi nạp lại cùng gói; project hiện có không bị xóa hoặc ghi đè."
         ),
     },
     "import_video": {
@@ -486,9 +495,18 @@ class SmartLabelApp(ctk.CTk):
         project_tools.pack(fill="both", expand=True, padx=(2, 4), pady=(0, 6))
 
         import_group = self._project_action_group(project_tools, "import")
+        self.hydro_archive_import_button = self._button(
+            import_group,
+            "Nhập gói HydroFlow (.zip)",
+            self._import_capture_dataset_archive,
+            width=220,
+            color="#24845f",
+            tooltip=self._project_action_tooltip("capture_dataset_archive", False),
+        )
+        self.hydro_archive_import_button.pack(fill="x", padx=8, pady=4)
         self.hydro_import_button = self._button(
             import_group,
-            "Nhập CaptureManifestV1",
+            "Nhập 1 CaptureManifestV1",
             self._import_capture_manifest,
             width=220,
             color="#2b906d",
@@ -624,6 +642,33 @@ class SmartLabelApp(ctk.CTk):
             messagebox.showinfo("Import hoàn tất", f"Đã nhập {added} slot; bỏ qua {skipped}.")
         except Exception as exc:
             messagebox.showerror("Import CaptureManifestV1 lỗi", str(exc))
+
+    def _import_capture_dataset_archive(self) -> None:
+        if self.import_in_progress:
+            messagebox.showinfo("Đang nhập dữ liệu", "Hãy đợi lượt nhập hiện tại hoàn tất.", parent=self)
+            return
+        if not self.project or self.project.metadata.get("template") != "Hydroponic Slot Condition":
+            messagebox.showerror("Sai loại dự án", "Hãy tạo hoặc mở project Hydroponic Slot Condition trước.")
+            return
+        path = filedialog.askopenfilename(
+            title="Chọn gói dữ liệu đã duyệt từ HydroFlow",
+            filetypes=[("HydroDatasetExportV1", "*.zip")],
+        )
+        if not path:
+            return
+        project = self.project
+        self.import_in_progress = True
+        self._apply_project_context_visibility()
+        self._set_status("Đang kiểm tra gói HydroFlow…")
+
+        def worker() -> None:
+            try:
+                result = import_capture_dataset_archive(self.store, project, path)
+                self.event_queue.put(("hydro_archive_done", result))
+            except Exception as exc:
+                self.event_queue.put(("hydro_archive_error", str(exc)))
+
+        Thread(target=worker, daemon=True).start()
 
     def _run_hydro_qa(self) -> None:
         if not self.project or self.project.metadata.get("template") != "Hydroponic Slot Condition":
@@ -965,6 +1010,7 @@ class SmartLabelApp(ctk.CTk):
     def _apply_project_context_visibility(self) -> None:
         hydro = is_hydroponic_project(self.project)
         contextual_buttons = (
+            (getattr(self, "hydro_archive_import_button", None), getattr(self, "hydro_import_button", None)),
             (getattr(self, "hydro_import_button", None), getattr(self, "import_folder_button", None)),
         )
         for button, before in contextual_buttons:
@@ -988,6 +1034,7 @@ class SmartLabelApp(ctk.CTk):
                 hydro_qa_button.pack_forget()
 
         tooltip_buttons = {
+            "capture_dataset_archive": "hydro_archive_import_button",
             "capture_manifest": "hydro_import_button",
             "import_folder": "import_folder_button",
             "import_files": "import_files_button",
@@ -4555,6 +4602,26 @@ class SmartLabelApp(ctk.CTk):
                     added, skipped = payload
                     self._refresh_everything()
                     messagebox.showinfo("Nhập hoàn tất", f"Đã thêm: {added}\nBỏ qua ảnh trùng: {skipped}")
+                elif kind == "hydro_archive_error":
+                    self.import_in_progress = False
+                    self._apply_project_context_visibility()
+                    self._set_status("Gói HydroFlow không được nhập")
+                    messagebox.showerror("Nhập gói HydroFlow thất bại", str(payload))
+                elif kind == "hydro_archive_done":
+                    self.import_in_progress = False
+                    result = payload
+                    if self.project and self.project.images and self.current_index < 0:
+                        self.current_index = 0
+                    self._refresh_everything()
+                    self._set_status("Đã nhập gói HydroFlow")
+                    messagebox.showinfo(
+                        "Nhập gói HydroFlow hoàn tất",
+                        (
+                            f"Capture mới: {result['capturesImported']}\n"
+                            f"Capture đã có, bỏ qua: {result['capturesSkipped']}\n"
+                            f"Ảnh slot mới: {result['slotImagesImported']}"
+                        ),
+                    )
                 elif kind == "auto_progress":
                     index, total, name = payload
                     self.auto_progress.set(index / max(total, 1))
