@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import json
+import subprocess
+import sys
 import unittest
 import zipfile
 
@@ -40,6 +42,18 @@ class HydroponicMvpTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
+
+    def test_pipeline_smoke_entrypoint_loads_from_repository_root(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "tools/hydro_pipeline_smoke.py", "--help"],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Hydro SmartLabel", result.stdout)
 
     def test_hydro_template_accepts_a_portable_crop_identity(self) -> None:
         project = self.store.create_project("Xà lách slots", task="classify")
