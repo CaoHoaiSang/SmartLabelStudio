@@ -103,6 +103,19 @@ def write_jpeg(path: Path, image: np.ndarray) -> None:
     temporary.replace(path)
 
 
+def crop_context_for_timestamp(base_context: dict, captured_at: datetime) -> dict:
+    """Return a copied crop context whose derived dates match a smoke capture."""
+    local_date = captured_at.astimezone(timezone(timedelta(hours=7))).date()
+    sowing_date = datetime.fromisoformat(str(base_context["sowingDate"])).date()
+    nft_start_date = datetime.fromisoformat(str(base_context["nftStartDate"])).date()
+    return {
+        **base_context,
+        "localDate": local_date.isoformat(),
+        "daysAfterSowing": (local_date - sowing_date).days,
+        "daysAfterNft": (local_date - nft_start_date).days,
+    }
+
+
 def build_smoke_manifests(base_manifest_path: Path, output_root: Path) -> list[tuple[Path, tuple[str, str, str]]]:
     base_manifest, resolved = validate_capture_manifest(base_manifest_path)
     full_asset = next(asset for asset in base_manifest["assets"] if asset["role"] == "full_frame")
@@ -181,6 +194,8 @@ def build_smoke_manifests(base_manifest_path: Path, output_root: Path) -> list[t
                 "purpose": "pipeline_smoke_only",
             },
         })
+        if isinstance(base_manifest.get("cropContext"), dict):
+            manifest["cropContext"] = crop_context_for_timestamp(base_manifest["cropContext"], captured_at)
         manifest_path = capture_dir / "manifest.json"
         temporary = manifest_path.with_suffix(".json.tmp")
         temporary.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")

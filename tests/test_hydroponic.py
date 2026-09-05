@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from datetime import datetime
 import json
 import subprocess
 import sys
@@ -23,6 +24,7 @@ from smartlabel.hydroponic import (
     write_hydro_model_bundle,
 )
 from smartlabel.project_store import ProjectStore
+from tools.hydro_pipeline_smoke import crop_context_for_timestamp
 
 
 def sha256(path: Path) -> str:
@@ -54,6 +56,24 @@ class HydroponicMvpTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Hydro SmartLabel", result.stdout)
+
+    def test_pipeline_smoke_recomputes_crop_context_for_generated_timestamp(self) -> None:
+        context = crop_context_for_timestamp(
+            {
+                "cropDisplayName": "Cải ngọt cọng xanh",
+                "sowingDate": "2026-08-03",
+                "nftStartDate": "2026-08-19",
+                "timezone": "Asia/Bangkok",
+                "localDate": "2026-09-05",
+                "daysAfterSowing": 33,
+                "daysAfterNft": 17,
+            },
+            datetime.fromisoformat("2026-09-06T18:30:00+00:00"),
+        )
+
+        self.assertEqual(context["localDate"], "2026-09-07")
+        self.assertEqual(context["daysAfterSowing"], 35)
+        self.assertEqual(context["daysAfterNft"], 19)
 
     def test_hydro_template_accepts_a_portable_crop_identity(self) -> None:
         project = self.store.create_project("Xà lách slots", task="classify")
