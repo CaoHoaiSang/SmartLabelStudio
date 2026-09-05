@@ -703,6 +703,10 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
     cycle_splits = defaultdict(set)
     capture_slots = defaultdict(list)
     assignments = dict((split_assignment or {}).get("groups", {}))
+    reviewed_images = 0
+    trainable_labels = {key: Counter() for key in MODEL_KEYS}
+    validation_labels = {key: Counter() for key in MODEL_KEYS}
+    excluded_labels = {key: Counter() for key in MODEL_KEYS}
     for record in project.images:
         path = store.image_path(project, record)
         if not path.is_file():
@@ -763,6 +767,16 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
             issues.append({"severity": "warning", "imageId": record.id, "code": "image_not_reviewed"})
         group = str(record.metadata.get("plant_instance_id") or record.capture_group or record.id)
         split = assignments.get(group)
+        if record.review_status == "reviewed":
+            reviewed_images += 1
+            for key in MODEL_KEYS:
+                label = record.attributes.get(key, "missing")
+                if label in {"present", "absent"}:
+                    trainable_labels[key][label] += 1
+                    if split == "val":
+                        validation_labels[key][label] += 1
+                else:
+                    excluded_labels[key][label] += 1
         if split:
             plant_splits[group].add(split)
             cycle_splits[str(record.metadata.get("cropCycleId", "unknown"))].add(split)
@@ -792,6 +806,56 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
         if independent_holdout and not any(issue["severity"] == "error" for issue in issues)
         else "pilot_unvalidated"
     )
+    model_readiness = {}
+    for key in MODEL_KEYS:
+        train_counts = trainable_labels[key]
+        val_counts = validation_labels[key]
+        model_readiness[key] = {
+            "reviewedTrainable": {
+                "present": train_counts["present"],
+                "absent": train_counts["absent"],
+            },
+            "validationTrainable": {
+                "present": val_counts["present"],
+                "absent": val_counts["absent"],
+            },
+            "excludedFromTraining": dict(excluded_labels[key]),
+            "workflowTrainable": train_counts["present"] > 0 and train_counts["absent"] > 0,
+            "thresholdCalibrationReady": val_counts["present"] > 0 and val_counts["absent"] > 0,
+        }
+    has_errors = any(issue["severity"] == "error" for issue in issues)
+    all_trainable = all(item["workflowTrainable"] for item in model_readiness.values())
+    all_threshold_ready = all(item["thresholdCalibrationReady"] for item in model_readiness.values())
+    if not project.images:
+        readiness_status = "empty_dataset"
+        next_actions = ["import_reviewed_capture_export"]
+    elif has_errors:
+        readiness_status = "dataset_qa_blocked"
+        next_actions = ["resolve_dataset_errors"]
+    elif reviewed_images == 0:
+        readiness_status = "label_review_required"
+        next_actions = ["label_and_review_slot_images"]
+    elif not all_trainable:
+        readiness_status = "class_pair_incomplete"
+        next_actions = ["add_reviewed_present_and_absent_labels"]
+    elif not all_threshold_ready:
+        readiness_status = "validation_split_incomplete"
+        next_actions = ["add_validation_examples_for_both_labels"]
+    else:
+        readiness_status = "ready_for_shadow_training"
+        next_actions = (["collect_independent_crop_cycle_holdout"] if not independent_holdout else [])
+    pilot_readiness = {
+        "schemaVersion": 1,
+        "status": readiness_status,
+        "reviewedImages": reviewed_images,
+        "unreviewedImages": len(project.images) - reviewed_images,
+        "models": model_readiness,
+        "shadowBundleReady": not has_errors and all_trainable and all_threshold_ready,
+        "operationalBundleReady": (
+            not has_errors and all_trainable and all_threshold_ready and validation_status == "validated_holdout"
+        ),
+        "nextActions": next_actions,
+    }
     return {
         "schemaVersion": 1,
         "images": len(project.images),
@@ -799,6 +863,7 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
         "distributions": {key: dict(value) for key, value in distributions.items()},
         "independentCropCycleHoldout": independent_holdout,
         "validationStatus": validation_status,
+        "pilotReadiness": pilot_readiness,
     }
 
 

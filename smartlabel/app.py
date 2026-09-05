@@ -691,12 +691,34 @@ class SmartLabelApp(ctk.CTk):
             color,
         )
         distributions = report.get("distributions", {})
+        readiness = report.get("pilotReadiness", {})
+        readiness_labels = {
+            "empty_dataset": "Chưa có dữ liệu",
+            "dataset_qa_blocked": "Cần sửa lỗi dataset",
+            "label_review_required": "Cần gắn nhãn và duyệt ảnh",
+            "class_pair_incomplete": "Thiếu cặp nhãn Có/Không",
+            "validation_split_incomplete": "Thiếu nhãn ở tập validation",
+            "ready_for_shadow_training": "Sẵn sàng train shadow pilot",
+        }
+        self._append_review_result(
+            f"[PILOT] {readiness_labels.get(readiness.get('status'), readiness.get('status', 'Chưa xác định'))} · "
+            f"đã duyệt {readiness.get('reviewedImages', 0)}/{report.get('images', 0)} ảnh · "
+            f"bundle shadow: {'sẵn sàng' if readiness.get('shadowBundleReady') else 'chưa sẵn sàng'}"
+        )
         for key in HYDRO_MODEL_KEYS:
             title = self.project.attribute_settings.get(key, {}).get("title", key)
             counts = distributions.get(key, {})
             values = ATTRIBUTE_DISPLAY.get(key, {})
             parts = [f"{values.get(value, value)}: {counts.get(value, 0)}" for value in values]
             self._append_review_result(f"[PHÂN BỐ] {title} · " + " · ".join(parts))
+            model_gate = readiness.get("models", {}).get(key, {})
+            train_counts = model_gate.get("reviewedTrainable", {})
+            validation_counts = model_gate.get("validationTrainable", {})
+            self._append_review_result(
+                f"[TRAIN] {title} · Có/Không đã duyệt: "
+                f"{train_counts.get('present', 0)}/{train_counts.get('absent', 0)} · "
+                f"validation: {validation_counts.get('present', 0)}/{validation_counts.get('absent', 0)}"
+            )
         if not issues:
             self._append_review_result("✓ Không phát hiện lỗi hoặc cảnh báo Dataset Hydro.")
         for issue in issues:

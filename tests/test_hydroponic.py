@@ -286,6 +286,8 @@ class HydroponicMvpTests(unittest.TestCase):
         self.assertEqual(issue["severity"], "warning")
         self.assertEqual(issue["message"], "Dataset chưa có ảnh để kiểm tra.")
         self.assertEqual(report["validationStatus"], "pilot_unvalidated")
+        self.assertEqual(report["pilotReadiness"]["status"], "empty_dataset")
+        self.assertFalse(report["pilotReadiness"]["shadowBundleReady"])
 
     def test_hydro_qa_issue_description_is_vietnamese_and_keeps_context(self) -> None:
         detail = describe_hydro_qa_issue({
@@ -315,6 +317,10 @@ class HydroponicMvpTests(unittest.TestCase):
         assignment = DatasetManager(self.store).ensure_split_assignment(self.project, force_rebalance=True)
         report = hydro_dataset_qa(self.project, self.store, assignment)
         self.assertEqual(report["validationStatus"], "pilot_unvalidated")
+        self.assertTrue(all(
+            item["workflowTrainable"]
+            for item in report["pilotReadiness"]["models"].values()
+        ))
         self.assertFalse(any(issue["code"] == "absolute_source_path" for issue in report["issues"]))
 
         removed = self.project.images.pop()
