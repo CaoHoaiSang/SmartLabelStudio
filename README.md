@@ -127,6 +127,9 @@ Trong project Hydro, hai thao tác chuyên biệt được đặt theo đúng gi
   không còn phụ thuộc máy capture; export không chứa đường dẫn tuyệt đối. Importer từ chối capture đã
   được HydroFlow đánh dấu `excluded`, đồng thời giữ snapshot tuổi cây (`daysAfterSowing`, `daysAfterNft`),
   ngày chụp địa phương, trigger, crop cycle, Camera/geometry/binding và quality trong metadata từng slot.
+  Nếu người vận hành sửa một ngày gieo đã nhập nhầm, importer kiểm tra correction ledger trong gói,
+  giữ nguyên snapshot gốc để truy vết nhưng dùng `effectiveCropContext` đã xác minh làm metadata huấn luyện;
+  nạp lại gói mới chỉ cập nhật metadata của capture cũ, không nhân đôi ảnh hoặc làm mất nhãn đã gắn.
 - Trang **Kiểm duyệt** có **Kiểm tra Dataset Hydro**: báo ảnh hỏng/trùng/thiếu, nhãn mâu thuẫn, phân bố nhãn, leakage theo
   `plant_instance_id`, crop-cycle holdout ngay trong vùng kết quả bên dưới; chọn dòng lỗi rồi mở thẳng ảnh để sửa,
   không bật thêm cửa sổ QA.

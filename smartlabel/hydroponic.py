@@ -323,8 +323,21 @@ def validate_capture_manifest(manifest_path: str | Path) -> tuple[dict[str, Any]
     return manifest, resolved
 
 
-def import_capture_manifest(store: ProjectStore, project: Project, manifest_path: str | Path) -> tuple[int, int]:
+def import_capture_manifest(
+    store: ProjectStore,
+    project: Project,
+    manifest_path: str | Path,
+    *,
+    effective_crop_context: dict[str, Any] | None = None,
+    crop_context_correction_ids: list[str] | None = None,
+) -> tuple[int, int]:
     manifest, resolved = validate_capture_manifest(manifest_path)
+    if effective_crop_context is not None:
+        captured_at = _validate_captured_at(manifest.get("capturedAt"))
+        _validate_crop_context(effective_crop_context, captured_at)
+    correction_ids = crop_context_correction_ids or []
+    if any(not isinstance(item, str) or not item.strip() for item in correction_ids) or len(set(correction_ids)) != len(correction_ids):
+        raise CaptureManifestError("crop context correction IDs are invalid")
     if not is_hydroponic_project(project):
         raise CaptureManifestError("project must use the Hydroponic Slot Condition template")
     expected_crop = str(project.metadata.get("cropCode", ""))
@@ -389,7 +402,8 @@ def import_capture_manifest(store: ProjectStore, project: Project, manifest_path
                 if manifest.get("bindingId")
                 else f"{manifest['cropCycleId']}:{asset['slotId']}"
             )
-            crop_context = manifest.get("cropContext") if isinstance(manifest.get("cropContext"), dict) else {}
+            original_crop_context = manifest.get("cropContext") if isinstance(manifest.get("cropContext"), dict) else {}
+            crop_context = effective_crop_context or original_crop_context
             record = ImageRecord(
                 id=new_id("img"),
                 file_name=file_name,
@@ -433,6 +447,11 @@ def import_capture_manifest(store: ProjectStore, project: Project, manifest_path
                     "daysAfterSowing": crop_context.get("daysAfterSowing"),
                     "daysAfterNft": crop_context.get("daysAfterNft"),
                     "timezone": crop_context.get("timezone"),
+                    "cropContextCorrectionIds": list(correction_ids),
+                    "originalSowingDate": original_crop_context.get("sowingDate"),
+                    "originalNftStartDate": original_crop_context.get("nftStartDate"),
+                    "originalDaysAfterSowing": original_crop_context.get("daysAfterSowing"),
+                    "originalDaysAfterNft": original_crop_context.get("daysAfterNft"),
                     "other_abnormal": "",
                 },
                 parent_asset_id=asset["parentAssetId"],
@@ -595,6 +614,34 @@ def _validated_capture_dataset_archive(archive_path: str | Path):
             for field in ("captureId", "capturedAt", "trigger", "cropCycleId"):
                 if manifest.get(field) != row.get(field):
                     raise CaptureManifestError(f"capture {capture_id} {field} does not match dataset export entry")
+            effective_context = row.get("effectiveCropContext")
+            correction_ids = row.get("cropContextCorrectionIds")
+            if effective_context is not None:
+                captured_at = _validate_captured_at(manifest.get("capturedAt"))
+                _validate_crop_context(effective_context, captured_at)
+                if not isinstance(correction_ids, list) or not correction_ids:
+                    raise CaptureManifestError(f"capture {capture_id} effective crop context requires correction IDs")
+                if any(not isinstance(item, str) or not item for item in correction_ids) or len(set(correction_ids)) != len(correction_ids):
+                    raise CaptureManifestError(f"capture {capture_id} crop context correction IDs are invalid")
+                declared_corrections = index.get("cropCycleCorrections")
+                if not isinstance(declared_corrections, list):
+                    raise CaptureManifestError("dataset export cropCycleCorrections must be an array")
+                known_corrections = {
+                    item.get("correctionId"): item
+                    for item in declared_corrections if isinstance(item, dict)
+                }
+                if any(item not in known_corrections for item in correction_ids):
+                    raise CaptureManifestError(f"capture {capture_id} references an unknown crop context correction")
+                if any(known_corrections[item].get("cropCycleId") != manifest["cropCycleId"] for item in correction_ids):
+                    raise CaptureManifestError(f"capture {capture_id} references a correction from another crop cycle")
+                cycle = index.get("cropCycle")
+                if not isinstance(cycle, dict) or cycle.get("cropCycleId") != manifest["cropCycleId"]:
+                    raise CaptureManifestError("dataset export corrected context requires its cropCycle record")
+                for field in ("cropDisplayName", "sowingDate", "nftStartDate"):
+                    if effective_context.get(field) != cycle.get(field):
+                        raise CaptureManifestError(f"capture {capture_id} effective crop context does not match cropCycle {field}")
+            elif correction_ids is not None:
+                raise CaptureManifestError(f"capture {capture_id} correction IDs require effectiveCropContext")
             if row.get("slotCount") != 10:
                 raise CaptureManifestError(f"capture {capture_id} slot count must be 10")
             expected_files.add(manifest_relative)
@@ -647,6 +694,10 @@ def import_capture_dataset_archive(
                     f"dataset {field} {index[field]} does not match project {field} {configured}"
                 )
         records_by_capture: dict[str, list[ImageRecord]] = defaultdict(list)
+        rows_by_capture = {
+            row["captureId"]: row
+            for row in index["captures"] if isinstance(row, dict) and isinstance(row.get("captureId"), str)
+        }
         known_asset_ids = {record.metadata.get("assetId") for record in project.images}
         for record in project.images:
             capture_id = record.metadata.get("captureId")
@@ -654,13 +705,39 @@ def import_capture_dataset_archive(
                 records_by_capture[capture_id].append(record)
         to_import: list[Path] = []
         skipped_capture_ids: list[str] = []
+        metadata_updated_capture_ids: list[str] = []
         for manifest, manifest_path in manifests:
             capture_id = manifest["captureId"]
+            row = rows_by_capture[capture_id]
             existing = records_by_capture.get(capture_id, [])
             if existing:
                 existing_slot_ids = {record.metadata.get("slotId") for record in existing if record.asset_role == "slot"}
                 if len(existing) != 10 or existing_slot_ids != set(SLOT_IDS):
                     raise CaptureManifestError(f"project contains an incomplete imported capture: {capture_id}")
+                effective_context = row.get("effectiveCropContext")
+                if isinstance(effective_context, dict):
+                    correction_ids = list(row.get("cropContextCorrectionIds") or [])
+                    capture_metadata_changed = False
+                    for record in existing:
+                        metadata = record.metadata
+                        before_metadata = dict(metadata)
+                        metadata.setdefault("originalSowingDate", metadata.get("sowingDate"))
+                        metadata.setdefault("originalNftStartDate", metadata.get("nftStartDate"))
+                        metadata.setdefault("originalDaysAfterSowing", metadata.get("daysAfterSowing"))
+                        metadata.setdefault("originalDaysAfterNft", metadata.get("daysAfterNft"))
+                        metadata.update({
+                            "cropDisplayName": effective_context.get("cropDisplayName", ""),
+                            "captureLocalDate": effective_context.get("localDate"),
+                            "sowingDate": effective_context.get("sowingDate"),
+                            "nftStartDate": effective_context.get("nftStartDate"),
+                            "daysAfterSowing": effective_context.get("daysAfterSowing"),
+                            "daysAfterNft": effective_context.get("daysAfterNft"),
+                            "timezone": effective_context.get("timezone"),
+                            "cropContextCorrectionIds": correction_ids,
+                        })
+                        capture_metadata_changed = capture_metadata_changed or metadata != before_metadata
+                    if capture_metadata_changed:
+                        metadata_updated_capture_ids.append(capture_id)
                 skipped_capture_ids.append(capture_id)
                 continue
             duplicate = next(
@@ -676,15 +753,27 @@ def import_capture_dataset_archive(
         imported = 0
         slot_images = 0
         for manifest_path in to_import:
-            added, _skipped = import_capture_manifest(store, project, manifest_path)
+            manifest = next(item for item, path in manifests if path == manifest_path)
+            row = rows_by_capture[manifest["captureId"]]
+            added, _skipped = import_capture_manifest(
+                store,
+                project,
+                manifest_path,
+                effective_crop_context=row.get("effectiveCropContext"),
+                crop_context_correction_ids=row.get("cropContextCorrectionIds"),
+            )
             imported += 1
             slot_images += added
+        if metadata_updated_capture_ids:
+            store.save(project)
         return {
             "datasetExportId": index["datasetExportId"],
             "capturesImported": imported,
             "capturesSkipped": len(skipped_capture_ids),
             "slotImagesImported": slot_images,
             "skippedCaptureIds": skipped_capture_ids,
+            "capturesMetadataUpdated": len(metadata_updated_capture_ids),
+            "metadataUpdatedCaptureIds": metadata_updated_capture_ids,
         }
 
 

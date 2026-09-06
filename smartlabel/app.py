@@ -4641,7 +4641,8 @@ class SmartLabelApp(ctk.CTk):
                         (
                             f"Capture mới: {result['capturesImported']}\n"
                             f"Capture đã có, bỏ qua: {result['capturesSkipped']}\n"
-                            f"Ảnh slot mới: {result['slotImagesImported']}"
+                            f"Ảnh slot mới: {result['slotImagesImported']}\n"
+                            f"Capture cập nhật tuổi cây có kiểm chứng: {result.get('capturesMetadataUpdated', 0)}"
                         ),
                     )
                 elif kind == "auto_progress":

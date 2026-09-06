@@ -90,7 +90,7 @@ class HydroponicMvpTests(unittest.TestCase):
         data_root = self.root / "camera_data"
         capture_dir = data_root / "captures" / "2026" / "08" / "20" / capture_id
         slot_dir = capture_dir / "slots"
-        slot_dir.mkdir(parents=True)
+        slot_dir.mkdir(parents=True, exist_ok=True)
         Image.new("RGB", (1920, 1080), "green").save(capture_dir / "full.jpg")
         Image.new("RGB", (1000, 400), "darkgreen").save(capture_dir / "upper_roi.jpg")
         Image.new("RGB", (1000, 400), "olive").save(capture_dir / "lower_roi.jpg")
@@ -139,7 +139,14 @@ class HydroponicMvpTests(unittest.TestCase):
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
         return manifest_path
 
-    def create_dataset_archive(self, capture_ids: list[str], *, extra_file: bool = False, review_status: str = "approved") -> Path:
+    def create_dataset_archive(
+        self,
+        capture_ids: list[str],
+        *,
+        extra_file: bool = False,
+        review_status: str = "approved",
+        corrected_sowing_date: str | None = None,
+    ) -> Path:
         manifests = [self.create_manifest(capture_id) for capture_id in capture_ids]
         if review_status != "approved":
             for manifest_path in manifests:
@@ -162,6 +169,13 @@ class HydroponicMvpTests(unittest.TestCase):
                 "manifestSha256": sha256(manifest_path),
                 "slotCount": 10,
             })
+            if corrected_sowing_date:
+                rows[-1]["effectiveCropContext"] = {
+                    **manifest["cropContext"],
+                    "sowingDate": corrected_sowing_date,
+                    "daysAfterSowing": 18,
+                }
+                rows[-1]["cropContextCorrectionIds"] = ["crop_cycle_correction_test"]
             crop_cycles.add(manifest["cropCycleId"])
             camera_profiles.add(manifest["cameraProfileId"])
             geometry_profiles.add(manifest["geometryProfileId"])
@@ -180,6 +194,20 @@ class HydroponicMvpTests(unittest.TestCase):
             "geometryProfileIds": sorted(geometry_profiles),
             "captures": rows,
         }
+        if corrected_sowing_date:
+            index["cropCycle"] = {
+                "cropCycleId": "cai_ngot_2026-08-03",
+                "cropCode": "cai_ngot",
+                "cropDisplayName": "Cải ngọt cọng xanh",
+                "sowingDate": corrected_sowing_date,
+                "nftStartDate": "2026-08-19",
+            }
+            index["cropCycleCorrections"] = [{
+                "correctionId": "crop_cycle_correction_test",
+                "cropCycleId": "cai_ngot_2026-08-03",
+                "kind": "sowing_date_shift",
+                "correctedAt": "2026-08-27T00:00:00Z",
+            }]
         archive_path = self.root / "hydro_dataset.zip"
         with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_STORED) as package:
             package.writestr("dataset-export.json", json.dumps(index))
@@ -250,6 +278,33 @@ class HydroponicMvpTests(unittest.TestCase):
         self.assertEqual(repeated["capturesSkipped"], 2)
         self.assertEqual(repeated["slotImagesImported"], 0)
         self.assertEqual(len(self.project.images), 20)
+
+    def test_dataset_archive_applies_audited_crop_context_correction_without_rewriting_manifest(self) -> None:
+        initial_archive = self.create_dataset_archive(["cap_archive_corrected"])
+        initial_result = import_capture_dataset_archive(self.store, self.project, initial_archive)
+        self.assertEqual(initial_result["capturesImported"], 1)
+        self.assertTrue(all(record.metadata["sowingDate"] == "2026-08-03" for record in self.project.images))
+
+        archive_path = self.create_dataset_archive(["cap_archive_corrected"], corrected_sowing_date="2026-08-02")
+
+        result = import_capture_dataset_archive(self.store, self.project, archive_path)
+
+        self.assertEqual(result["capturesImported"], 0)
+        self.assertEqual(result["capturesSkipped"], 1)
+        self.assertEqual(result["capturesMetadataUpdated"], 1)
+        self.assertTrue(all(record.metadata["sowingDate"] == "2026-08-02" for record in self.project.images))
+        self.assertTrue(all(record.metadata["daysAfterSowing"] == 18 for record in self.project.images))
+        self.assertTrue(all(record.metadata["originalSowingDate"] == "2026-08-03" for record in self.project.images))
+        self.assertTrue(all(record.metadata["cropContextCorrectionIds"] == ["crop_cycle_correction_test"] for record in self.project.images))
+
+        with zipfile.ZipFile(archive_path) as package:
+            index = json.loads(package.read("dataset-export.json"))
+            original_manifest = json.loads(package.read(index["captures"][0]["manifestPath"]))
+        self.assertEqual(original_manifest["cropContext"]["sowingDate"], "2026-08-03")
+
+        repeated = import_capture_dataset_archive(self.store, self.project, archive_path)
+        self.assertEqual(repeated["capturesImported"], 0)
+        self.assertEqual(repeated["capturesMetadataUpdated"], 0)
 
     def test_dataset_archive_rejects_unapproved_unsafe_or_unexpected_content_before_import(self) -> None:
         pending_archive = self.create_dataset_archive(["cap_archive_pending"], review_status="pending")
