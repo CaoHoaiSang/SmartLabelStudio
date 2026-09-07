@@ -5,6 +5,7 @@
 ## Chức năng đã triển khai
 
 - Dự án riêng, quản lý class và thuộc tính mở rộng.
+- Chuyển dự án Hydro/thường đồng bộ cả ảnh, nhãn và model; nhớ bộ lọc/trang/ảnh riêng trong phiên. Không đổi dự án khi nhập, Auto-Label, train, đánh giá hoặc xuất RKNN chưa kết thúc. Lỗi giao diện được ghi tại `workspace/logs/smartlabel.log` (xoay vòng dung lượng).
 - Nhập ảnh/thư mục, sao chép ảnh vào workspace và bỏ qua file trùng SHA-256.
 - Tính nhanh độ sáng/độ tương phản khi nhập.
 - Trình duyệt ảnh phân trang 50 thumbnail/lần, tự cuộn và làm nổi ảnh đang chọn khi dùng ảnh trước/sau; dự án video hàng nghìn ảnh không còn dựng toàn bộ widget lúc khởi động.

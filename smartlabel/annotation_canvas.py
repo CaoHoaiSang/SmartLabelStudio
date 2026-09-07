@@ -26,7 +26,7 @@ class AnnotationCanvas(tk.Canvas):
         self.offset_y = 0.0
         self.mode = "select"
         self.geometry_mode = "rect"
-        self.active_class_id = 0
+        self.active_class_id: int | None = None
         self.default_attributes: dict[str, str] = {}
         self.selected_id: str | None = None
         self.drag_start: tuple[float, float] | None = None
@@ -56,6 +56,7 @@ class AnnotationCanvas(tk.Canvas):
         self.bind("<ButtonRelease-2>", self._pan_release)
 
     def load(self, project: Project, record: ImageRecord, image_path: str) -> None:
+        self.clear_image()
         self.project = project
         self.record = record
         with Image.open(image_path) as source:
@@ -69,6 +70,11 @@ class AnnotationCanvas(tk.Canvas):
 
     def clear_image(self) -> None:
         """Reset the canvas after the last image is removed from a project."""
+        self.cancel_action()
+        self.pan_start = None
+        self.pan_origin = None
+        self.space_pressed = False
+        self.project = None
         self.record = None
         self.image = None
         self.photo = None
@@ -381,7 +387,7 @@ class AnnotationCanvas(tk.Canvas):
         w, h = abs(x2 - x1), abs(y2 - y1)
         self.drag_start = None
         self.preview_item = None
-        if w >= 3 and h >= 3:
+        if w >= 3 and h >= 3 and self.project and self.active_class_id in {item.id for item in self.project.classes}:
             self.checkpoint()
             ann = Annotation.create_box(self.active_class_id, [x, y, w, h])
             ann.attributes.update(self.default_attributes)
@@ -465,6 +471,9 @@ class AnnotationCanvas(tk.Canvas):
 
     def _double_click(self, _event) -> None:
         if self.mode != "polygon" or not self.record or len(self.polygon_points) < 3:
+            return
+        if not self.project or self.active_class_id not in {item.id for item in self.project.classes}:
+            self.cancel_action()
             return
         xs = [point[0] for point in self.polygon_points]
         ys = [point[1] for point in self.polygon_points]

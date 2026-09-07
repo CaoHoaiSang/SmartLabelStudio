@@ -5,6 +5,8 @@ from queue import Empty, Queue
 from threading import Event, Lock, Thread
 from datetime import datetime
 import json
+import logging
+from logging.handlers import RotatingFileHandler
 import os
 import shutil
 import subprocess
@@ -47,6 +49,10 @@ from .ui_components import (
     ask_new_project,
 )
 from .version_dialog import ask_dataset_version_name
+from .ui_layout import pack_before
+
+
+logger = logging.getLogger(__name__)
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -218,10 +224,12 @@ class SmartLabelApp(ctk.CTk):
         self.current_index = -1
         self.image_page_size = 50
         self.image_page = 0
+        self.project_views: dict[str, dict] = {}
+        self.auto_label_running = False
         self.paged_images = []
         self.selected_annotation_id: str | None = None
         self.last_selected_by_image: dict[str, str] = {}
-        self.model_path = tk.StringVar(value=str(DEMO_MODEL) if DEMO_MODEL.exists() else "")
+        self.model_path = tk.StringVar(value="")
         self.event_queue: Queue[tuple[str, object]] = Queue()
         self.cancel_event = Event()
         self.training_job: TrainingJob | None = None
@@ -256,6 +264,7 @@ class SmartLabelApp(ctk.CTk):
         self.sam_adapter: Sam2Adapter | None = None
         self.sam_lock = Lock()
         self.sam_request_versions: dict[str, int] = {}
+        self.sam_request_serial = 0
         self.sam_click_enabled = tk.BooleanVar(value=False)
         self.sam_click_request_version = 0
         self.sam_click_busy = False
@@ -275,6 +284,10 @@ class SmartLabelApp(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # ---------- shell ----------
+    def report_callback_exception(self, exc_type, exc, traceback) -> None:
+        logger.error("Tk callback failed", exc_info=(exc_type, exc, traceback))
+        self._set_status("Thao tác chưa hoàn tất. Xem workspace/logs/smartlabel.log để kiểm tra lỗi.", COLORS["bad"])
+
     def _load_app_settings(self) -> dict:
         try:
             return json.loads(self.settings_path.read_text(encoding="utf-8"))
@@ -588,6 +601,8 @@ class SmartLabelApp(ctk.CTk):
         self.project_guidance_label.pack(padx=14, pady=10)
 
     def _new_project(self, default_template: str = "deltax_bottle") -> None:
+        if not self._can_change_project():
+            return
         selection = ask_new_project(self, default_template)
         if not selection:
             return
@@ -616,10 +631,7 @@ class SmartLabelApp(ctk.CTk):
                 "cap": {"title": "Nắp chai", "default": "khong_xac_dinh", "required": False, "role": "metadata", "scope": "annotation_crop"},
             }
         self.store.save(project)
-        self.project = project
-        self.current_index = -1
-        self.show_attribute_panel.set(is_hydroponic_project(project))
-        self._refresh_everything()
+        self._change_project_context(project)
 
     def _new_hydro_project(self) -> None:
         """Compatibility entry point for old shortcuts; creation now uses one template dialog."""
@@ -745,14 +757,14 @@ class SmartLabelApp(ctk.CTk):
 
     def _load_initial_project(self) -> None:
         projects = self.store.list_projects()
-        if projects:
-            self.project = self.store.load(projects[0])
-            if self.project.active_model and Path(self.project.active_model).exists():
-                self.model_path.set(self.project.active_model)
-                if Path(self.project.active_model).suffix.lower() == ".pt":
-                    self.deploy_model_path.set(self.project.active_model)
-            self._recover_latest_trained_model()
-            self._refresh_evaluation_defaults(force=True)
+        for path in projects:
+            try:
+                project = self.store.load(path)
+            except Exception:
+                logger.exception("Skipping unreadable project during startup")
+                continue
+            self._change_project_context(project)
+            return
         self._refresh_everything()
 
     def _recover_latest_trained_model(self) -> None:
@@ -790,16 +802,123 @@ class SmartLabelApp(ctk.CTk):
 
     def _switch_project(self, label: str) -> None:
         path = getattr(self, "project_lookup", {}).get(label)
-        if path:
-            self.project = self.store.load(path)
+        if not path:
+            return
+        if self.project and path.parent.name == self.project.id:
+            return
+        if not self._can_change_project():
+            self._refresh_project_menu()
+            return
+        try:
+            candidate = self.store.load(path)
+        except Exception:
+            logger.exception("Could not load selected project")
+            self._refresh_project_menu()
+            messagebox.showerror("Không mở được dự án", "File dự án không đọc được. Dự án đang mở được giữ nguyên.", parent=self)
+            return
+        self._change_project_context(candidate)
+
+    def _can_change_project(self) -> bool:
+        # Keep ownership through completion callbacks, not just while the
+        # subprocess is alive. Those callbacks register models on self.project.
+        busy = (self.import_in_progress or self.auto_label_running or self.evaluation_running
+                or self.running_training_task or self.batch_training_active
+                or self.running_rknn_task or self.rknn_batch_active)
+        if busy:
+            messagebox.showinfo("Dự án đang xử lý", "Hãy đợi nhập ảnh, Auto-Label, train hoặc xuất/đánh giá model hoàn tất trước khi đổi dự án. Nếu đã nhấn Dừng, hãy đợi thông báo kết thúc.", parent=self)
+        return not busy
+
+    def _remember_project_view(self) -> None:
+        if not self.project:
+            return
+        record = self.project.images[self.current_index] if 0 <= self.current_index < len(self.project.images) else None
+        self.project_views[self.project.id] = {
+            "filter": self.image_filter.get(), "page": self.image_page,
+            "image_id": record.id if record else None,
+            "class_id": self.canvas.active_class_id,
+            "localization_task": self.last_localization_task,
+            "train_model": self.train_model_entry.get(),
+        }
+
+    def _prepare_project_context(self, project: Project) -> None:
+        self.project = project
+        view = self.project_views.get(project.id, {})
+        self.image_filter.set(view.get("filter", "Tất cả"))
+        self.image_page = view.get("page", 0)
+        self.current_index = next((i for i, record in enumerate(project.images)
+                                   if record.id == view.get("image_id")), -1)
+        self.selected_annotation_id = None
+        self.last_selected_by_image.clear()
+        self.sam_request_versions.clear()
+        self.sam_click_request_version += 1
+        self.sam_click_busy = False
+        self.sam_click_enabled.set(False)
+        self.canvas.clear_image()
+        self.canvas.project = project
+        self.canvas.active_class_id = view.get("class_id")
+        self.canvas.set_mode("select")
+        self.class_search_var.set("")
+        self.classification_group_var.set("")
+        self.classification_batch_vars.clear()
+        self.last_localization_task = view.get("localization_task", "detect")
+        for variable in (self.model_path, self.deploy_model_path,
+                         self.evaluation_model_path, self.evaluation_data_path):
+            variable.set("")
+        self.train_data_entry.delete(0, tk.END)
+        self.train_model_entry.delete(0, tk.END)
+        default_model = "yolo11n-cls.pt" if project.attribute_classification_enabled else {
+            "detect": "yolo11n.pt", "segment": "yolo11n-seg.pt",
+            "obb": "yolo11n-obb.pt", "pose": "yolo11n-pose.pt",
+        }.get(self.last_localization_task, "yolo11n.pt")
+        self.train_model_entry.insert(0, view.get("train_model", default_model))
+        for widget in (self.train_log, self.auto_log):
+            self._replace_text(widget, "")
+        self.auto_progress.set(0)
+        self.evaluation_status_label.configure(text="Chưa đánh giá trong phiên này", text_color=COLORS["muted"])
+        self.deploy_status_label.configure(text="Chưa xuất model trong phiên này", text_color=COLORS["muted"])
+
+    def _change_project_context(self, project: Project) -> None:
+        previous = self.project
+        self._remember_project_view()
+        try:
+            self._prepare_project_context(project)
             self._recover_latest_trained_model()
             if self.project.active_model and Path(self.project.active_model).exists():
                 self.model_path.set(self.project.active_model)
                 if Path(self.project.active_model).suffix.lower() == ".pt":
                     self.deploy_model_path.set(self.project.active_model)
-            self.current_index = 0 if self.project.images else -1
             self._refresh_evaluation_defaults(force=True)
             self._refresh_everything()
+        except Exception:
+            logger.exception("Project context refresh failed; restoring previous project")
+            restored = False
+            try:
+                if previous is not None:
+                    self._prepare_project_context(previous)
+                    if previous.active_model and Path(previous.active_model).is_file():
+                        self.model_path.set(previous.active_model)
+                        if Path(previous.active_model).suffix.lower() == ".pt":
+                            self.deploy_model_path.set(previous.active_model)
+                    self._refresh_evaluation_defaults(force=True)
+                    self._refresh_everything()
+                    restored = True
+            except Exception:
+                logger.exception("Previous project cannot be displayed either; clearing editing context")
+            if not restored:
+                self.project = None
+                self.canvas.active_class_id = None
+                self.show_attribute_panel.set(False)
+                self._clear_current_image()
+                self._refresh_image_list()
+                self._refresh_project_menu()
+                self.project_menu.set("Chưa có dự án đang mở")
+                for variable in (self.model_path, self.deploy_model_path, self.evaluation_model_path, self.evaluation_data_path):
+                    variable.set("")
+                self.train_data_entry.delete(0, tk.END)
+                self._replace_text(self.project_summary, "Không mở được dự án. Hãy kiểm tra file ảnh và mở lại dự án.")
+                self._replace_text(self.dataset_info, "Chưa có dự án đang mở.")
+            recovery = "Đã quay lại dự án trước." if restored else "Đã ngừng chỉnh sửa để tránh ghi nhầm dự án; dữ liệu đã lưu vẫn được giữ nguyên."
+            messagebox.showerror("Không mở được dự án", f"Không thể làm mới đầy đủ dự án đã chọn. {recovery}\nXem workspace/logs/smartlabel.log để kiểm tra lỗi.", parent=self)
 
     def save_project(self) -> None:
         if self.project:
@@ -1035,11 +1154,12 @@ class SmartLabelApp(ctk.CTk):
             (getattr(self, "hydro_archive_import_button", None), getattr(self, "hydro_import_button", None)),
             (getattr(self, "hydro_import_button", None), getattr(self, "import_folder_button", None)),
         )
-        for button, before in contextual_buttons:
+        # Restore the stable folder anchor first, then manifest, then archive.
+        for button, before in reversed(contextual_buttons):
             if button is None:
                 continue
             if hydro and not button.winfo_manager():
-                button.pack(fill="x", padx=8, pady=4, before=before)
+                pack_before(button, before, fill="x", padx=8, pady=4)
             elif not hydro:
                 button.pack_forget()
 
@@ -1047,10 +1167,9 @@ class SmartLabelApp(ctk.CTk):
         quality_check_button = getattr(self, "quality_check_button", None)
         if hydro_qa_button is not None:
             if hydro and not hydro_qa_button.winfo_manager():
-                hydro_qa_button.pack(
+                pack_before(hydro_qa_button, quality_check_button,
                     side="left",
                     padx=(0, 8),
-                    before=quality_check_button,
                 )
             elif not hydro:
                 hydro_qa_button.pack_forget()
@@ -1398,6 +1517,11 @@ class SmartLabelApp(ctk.CTk):
     def _change_image_filter(self, _value: str | None = None) -> None:
         self.image_page = 0
         self._refresh_image_list()
+        if self.project and self.paged_images:
+            self.current_index = self.project.images.index(self.paged_images[0])
+            self._load_current_image()
+        else:
+            self._clear_current_image()
 
     def _change_image_page(self, delta: int) -> None:
         total_pages = max(1, (len(getattr(self, "filtered_images", [])) + self.image_page_size - 1) // self.image_page_size)
@@ -1480,6 +1604,20 @@ class SmartLabelApp(ctk.CTk):
         self._sync_image_list_to_current(focus=True)
         self._update_image_status_controls()
         self._set_status(f"Ảnh {self.current_index + 1}/{len(self.project.images)} · {record.width}×{record.height}")
+
+    def _clear_current_image(self) -> None:
+        self.current_index = -1
+        self.sam_click_request_version += 1
+        self.sam_click_busy = False
+        self.canvas.clear_image()
+        self.canvas.project = self.project
+        self.current_image_label.configure(text="Không có ảnh trong bộ lọc này" if self.project and self.project.images else "Chưa có ảnh trong dự án")
+        self._annotation_selected(None)
+        self.image_status_frame.configure(fg_color="#243342", border_color="#3a5368")
+        self.image_status_label.configure(text="CHƯA CHỌN ẢNH", text_color="#a7bac9", fg_color="#243342")
+        for button in (self.approve_image_button, self.unapprove_image_button,
+                       self.reject_image_button, self.restore_image_button):
+            self._set_button_enabled(button, False)
 
     def _sync_image_list_to_current(self, focus: bool = False) -> None:
         if not self.project or not (0 <= self.current_index < len(self.project.images)):
@@ -1790,9 +1928,7 @@ class SmartLabelApp(ctk.CTk):
         if dataset_section is not None:
             if enabled and not dataset_section.winfo_manager():
                 options = {"fill": "x", "padx": 10, "pady": (10, 5)}
-                if hasattr(self, "dataset_coco_button"):
-                    options["before"] = self.dataset_coco_button
-                dataset_section.pack(**options)
+                pack_before(dataset_section, getattr(self, "dataset_coco_button", None), **options)
             elif not enabled:
                 dataset_section.pack_forget()
 
@@ -1800,9 +1936,7 @@ class SmartLabelApp(ctk.CTk):
         if train_section is not None:
             if enabled and not train_section.winfo_manager():
                 options = {"fill": "x", "padx": 14, "pady": (5, 4)}
-                if hasattr(self, "task_model_button"):
-                    options["before"] = self.task_model_button
-                train_section.pack(**options)
+                pack_before(train_section, getattr(self, "task_model_button", None), **options)
             elif not enabled:
                 train_section.pack_forget()
 
@@ -1836,24 +1970,24 @@ class SmartLabelApp(ctk.CTk):
             if enabled:
                 source_row.pack_forget()
             elif not source_row.winfo_manager():
-                source_row.pack(fill="x", padx=14, pady=3, before=self.deploy_action_row)
+                pack_before(source_row, self.deploy_action_row, fill="x", padx=14, pady=3)
         if single_export is not None:
             if enabled:
                 single_export.pack_forget()
             elif not single_export.winfo_manager():
-                single_export.pack(side="left", padx=3, before=stop_button)
+                pack_before(single_export, stop_button, side="left", padx=3)
         for button in (batch_export, bundle_export):
             if button is None:
                 continue
             if enabled and not hydro and not button.winfo_manager():
-                button.pack(side="left", padx=3, before=stop_button)
+                pack_before(button, stop_button, side="left", padx=3)
             elif not enabled or hydro:
                 button.pack_forget()
         for button in (hydro_onnx, hydro_bundle):
             if button is None:
                 continue
             if enabled and hydro and not button.winfo_manager():
-                button.pack(side="left", padx=3, before=stop_button)
+                pack_before(button, stop_button, side="left", padx=3)
             elif not enabled or not hydro:
                 button.pack_forget()
 
@@ -2451,6 +2585,9 @@ class SmartLabelApp(ctk.CTk):
         """Use one positive point to create the first annotation in a project."""
         if not self.sam_click_enabled.get() or not self.project or self.current_index < 0:
             return
+        if self.canvas.active_class_id not in {item.id for item in self.project.classes}:
+            self._set_status("Hãy tạo và chọn Class hợp lệ trước khi tạo nhãn hình học.", COLORS["warn"])
+            return
         if self.sam_click_busy:
             self.canvas.clear_prompts()
             self._set_status("SAM2 đang xử lý điểm trước · vui lòng chờ")
@@ -2519,7 +2656,8 @@ class SmartLabelApp(ctk.CTk):
         record = self.project.images[self.current_index]
         image_path = self.store.image_path(self.project, record)
         ann_id = ann.id
-        request_version = self.sam_request_versions.get(ann_id, 0) + 1
+        self.sam_request_serial += 1
+        request_version = self.sam_request_serial
         self.sam_request_versions[ann_id] = request_version
         bbox = list(ann.bbox)
         prompt_snapshot = list(self.canvas.prompt_points)
@@ -2556,6 +2694,9 @@ class SmartLabelApp(ctk.CTk):
         self.confidence_label.configure(text=f"{float(value):.2f}")
 
     def _start_auto_label(self) -> None:
+        if self.auto_label_running:
+            messagebox.showinfo("Auto-Label đang chạy", "Hãy đợi lượt hiện tại hoàn tất.", parent=self)
+            return
         if not self.project or not self.project.images:
             messagebox.showwarning("Thiếu dữ liệu", "Hãy tạo dự án và nhập ảnh trước.")
             return
@@ -2563,6 +2704,7 @@ class SmartLabelApp(ctk.CTk):
             messagebox.showerror("Thiếu model", "Hãy chọn model YOLO .pt hợp lệ.")
             return
         self.cancel_event.clear()
+        self.auto_label_running = True
         self.auto_log.delete("1.0", tk.END)
         project = self.project
         def progress(index, total, name):
@@ -2582,7 +2724,7 @@ class SmartLabelApp(ctk.CTk):
                 )
                 self.event_queue.put(("auto_done", stats))
             except Exception as exc:
-                self.event_queue.put(("error", str(exc)))
+                self.event_queue.put(("auto_error", str(exc)))
         Thread(target=worker, daemon=True).start()
 
     def _stop_auto_label(self) -> None:
@@ -3139,7 +3281,7 @@ class SmartLabelApp(ctk.CTk):
         self.task_model_button = self._button(settings, "Dùng model khởi tạo phù hợp", self._apply_task_model, width=330, color="#48657a", tooltip="Điền model YOLO11 nano đúng kiến trúc với task RECT/SEG/OBB/ORI/Classification.")
         self.task_model_button.pack(padx=14, pady=4)
         fields = [
-            ("Model khởi tạo", "train_model_entry", str(DEMO_MODEL) if DEMO_MODEL.exists() else "yolo11n.pt"),
+            ("Model khởi tạo", "train_model_entry", "yolo11n.pt"),
             ("Dataset tự tạo · hoặc chọn ngoài để đánh giá", "train_data_entry", ""),
             ("Epoch", "epochs_entry", "50"),
             ("Image size", "imgsz_entry", "640"),
@@ -4523,14 +4665,23 @@ class SmartLabelApp(ctk.CTk):
     def _refresh_everything(self, keep_image: bool = False) -> None:
         self._reset_review_results()
         self._refresh_project_menu()
-        self._apply_project_context_visibility()
+        layout_error = False
+        try:
+            self._apply_project_context_visibility()
+        except tk.TclError:
+            # Optional button layout must not strand old image/project data.
+            # Catch only Tk layout errors, log and expose the failure below.
+            logger.exception("Project action layout failed")
+            layout_error = True
         self._refresh_image_list()
         if self.project:
             if is_hydroponic_project(self.project):
                 self.project.attribute_classification_enabled = True
             self.show_attribute_panel.set(bool(self.project.attribute_classification_enabled))
             class_ids = [item.id for item in sorted(self.project.classes, key=lambda item: item.id)]
-            if class_ids and self.canvas.active_class_id not in class_ids:
+            if not class_ids:
+                self.canvas.active_class_id = None
+            elif self.canvas.active_class_id not in class_ids:
                 self.canvas.active_class_id = class_ids[0]
             self._rebuild_attribute_panel()
             self._apply_attribute_panel_visibility()
@@ -4538,19 +4689,25 @@ class SmartLabelApp(ctk.CTk):
             self._refresh_classification_controls()
             self._refresh_label_choices()
             self._refresh_active_model_status()
-            if self.project.images:
-                if not (0 <= self.current_index < len(self.project.images)):
-                    self.current_index = 0
+            if self.filtered_images:
+                if not (0 <= self.current_index < len(self.project.images)) or self.project.images[self.current_index] not in self.filtered_images:
+                    self.current_index = self.project.images.index(self.paged_images[0])
                 # A refresh rebuilds the thumbnail widgets, so always restore the
                 # active image and its visible selection/focus afterwards.
                 self._load_current_image()
+            else:
+                self._clear_current_image()
             self._refresh_project_statistics()
             self._refresh_split_status()
         else:
+            self.canvas.active_class_id = None
+            self._clear_current_image()
             self._apply_hydro_metadata_visibility()
             self._replace_text(self.project_summary, "Chưa có dự án. Nhấn Dự án mới để bắt đầu.")
             self._replace_text(self.dataset_info, "Chưa có dữ liệu.")
         self._refresh_hardware()
+        if layout_error:
+            self._set_status("Đã nạp dữ liệu dự án, nhưng một số nút chưa hiển thị đúng. Xem workspace/logs/smartlabel.log.", COLORS["bad"])
 
     def _refresh_project_statistics(self) -> None:
         if not self.project or not hasattr(self, "project_summary") or not hasattr(self, "dataset_info"):
@@ -4650,8 +4807,12 @@ class SmartLabelApp(ctk.CTk):
                     self.auto_progress.set(index / max(total, 1))
                     self._append_log(self.auto_log, f"[{index:4}/{total}] {name}")
                 elif kind == "auto_done":
+                    self.auto_label_running = False
                     self._append_log(self.auto_log, f"\nHoàn tất · {payload.processed} ảnh · {payload.detections} vật · task {payload.task} · {payload.elapsed_seconds:.1f}s · {payload.device}")
                     self._refresh_everything(keep_image=True)
+                elif kind == "auto_error":
+                    self.auto_label_running = False
+                    messagebox.showerror("Auto-Label thất bại", str(payload), parent=self)
                 elif kind == "sam_done":
                     image_id, ann_id, request_version, points, score = payload
                     if self.project and self.sam_request_versions.get(ann_id) == request_version:
@@ -4760,6 +4921,8 @@ class SmartLabelApp(ctk.CTk):
                 elif kind == "evaluation_error":
                     self._fail_evaluation(str(payload))
                 elif kind == "train_done":
+                    completed_training_task = self.running_training_task
+                    self.running_training_task = ""
                     self._append_log(self.train_log, "\nTRAIN THÀNH CÔNG" if payload == 0 else f"\nTRAIN DỪNG/LỖI · mã {payload}")
                     if self.batch_training_active:
                         if payload == 0 and not self.batch_training_cancelled:
@@ -4780,7 +4943,7 @@ class SmartLabelApp(ctk.CTk):
                             reason = "Đã dừng theo yêu cầu." if self.batch_training_cancelled else f"Train lỗi với mã {payload}."
                             self._finish_batch_classification_training(cancelled=self.batch_training_cancelled, error=reason)
                     elif payload == 0:
-                        if self.running_training_task == "classify":
+                        if completed_training_task == "classify":
                             self._activate_latest_classification_model()
                         else:
                             self._activate_latest_trained_model()
@@ -4834,7 +4997,9 @@ class SmartLabelApp(ctk.CTk):
                     self.running_rknn_attribute_key = ""
         except Empty:
             pass
-        self.after(100, self._drain_events)
+        finally:
+            # One bad completion callback must not permanently stop the queue.
+            self.after(100, self._drain_events)
 
     def _on_close(self) -> None:
         if self.project:
@@ -4849,6 +5014,10 @@ class SmartLabelApp(ctk.CTk):
 
 
 def main() -> None:
+    log_dir = WORKSPACE / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(log_dir / "smartlabel.log", maxBytes=2_000_000, backupCount=3, encoding="utf-8")
+    logging.basicConfig(level=logging.INFO, handlers=[handler], format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     SmartLabelApp().mainloop()
 
 
