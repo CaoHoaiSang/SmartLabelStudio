@@ -66,4 +66,3 @@ def topology_slot_map(document):
 
 def topology_identity(value):
     return [(v["viewId"], v["rackId"], tuple(v["slotIds"])) for v in validate_topology(value)["views"]]
-
