@@ -160,3 +160,14 @@ dùng lưu. Có thể đặt biến `SMARTLABEL_WORKSPACE` để chạy thử tr
 một project mới, không sửa project cũ; nó sinh các biến thể condition có đánh dấu
 `pipeline_smoke_only`, chạy đúng importer/export/train/ONNX/bundle và chỉ cho phép bundle Windows
 ở chế độ `shadow`.
+# Hydro Geometry V2 — 2026-09-08
+
+SmartLabel nhập cả CaptureManifest/HydroDatasetExport V1 (2×5) và V2 (số ống/rọ theo bố cục).
+Không cần tạo project mới: dùng mẫu **Hydroponic · Classification từng rọ** hoặc project Hydro hiện có.
+Nút nhập ZIP/manifest, đánh nhãn toàn ảnh, kiểm duyệt và train cũ được giữ nguyên.
+QA kiểm tra đủ rọ theo từng capture, không cố định 10; SHA-256, ảnh cha và nhóm cây vẫn được giữ.
+Project/ảnh cũ không bị xóa hoặc tự chuyển sang bố cục mới.
+
+Khi xuất model bundle, chọn các Geometry profile tương thích cùng phiên bản. Profile V2 đã nhập
+sẽ tạo bundle V2 (`fixed_slot_multilabel_v2`); không chọn lẫn profile V1/V2 trong một bundle.
+Chỉ thay phiên bản bundle không chứng minh model đúng với góc nhìn/số rọ mới: vẫn cần validation.

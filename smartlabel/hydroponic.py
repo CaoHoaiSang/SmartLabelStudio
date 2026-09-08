@@ -18,6 +18,7 @@ from PIL import Image
 
 from .models import ImageRecord, Project, new_id
 from .project_store import ProjectStore
+from .hydro_topology import topology_for, topology_slots, topology_slot_map, topology_identity
 
 
 SLOT_IDS = tuple(
@@ -50,7 +51,7 @@ HYDRO_QA_ISSUE_MESSAGES = {
     "sensitive_metadata_reference": "Metadata tham chiếu file nhạy cảm.",
     "image_not_reviewed": "Ảnh chưa được người dùng duyệt.",
     "duplicate_sha256": "Phát hiện ảnh trùng nội dung SHA-256.",
-    "incomplete_capture_slots": "Capture không đủ đúng 10 slot.",
+    "incomplete_capture_slots": "Capture thiếu hoặc trùng rọ so với bố cục đã chụp.",
     "plant_instance_leakage": "Plant instance xuất hiện trong nhiều split.",
     "crop_cycle_holdout_missing": "Chưa có crop cycle độc lập dành riêng cho test holdout.",
 }
@@ -199,7 +200,7 @@ def _safe_relative_path(value: Any) -> Path:
     if not isinstance(value, str) or not value.strip():
         raise CaptureManifestError("asset relativePath is required")
     path = Path(value.replace("\\", "/"))
-    if path.is_absolute() or path.drive or ".." in path.parts:
+    if path.is_absolute() or path.drive or ":" in value or ".." in path.parts:
         raise CaptureManifestError(f"unsafe asset path: {value}")
     return path
 
@@ -219,6 +220,8 @@ def _rect(asset: dict[str, Any]) -> tuple[int, int, int, int]:
     raw = asset.get("rectInFullFrame")
     if not isinstance(raw, dict):
         raise CaptureManifestError(f"asset {asset.get('assetId')} has no full-frame geometry")
+    if any(not isinstance(raw.get(key), int) or isinstance(raw.get(key), bool) for key in ("x", "y", "width", "height")):
+        raise CaptureManifestError("asset geometry must contain integer x/y/width/height")
     try:
         values = tuple(int(raw[key]) for key in ("x", "y", "width", "height"))
     except (KeyError, TypeError, ValueError) as exc:
@@ -235,8 +238,19 @@ def validate_capture_manifest(manifest_path: str | Path) -> tuple[dict[str, Any]
         manifest = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError) as exc:
         raise CaptureManifestError(f"cannot read CaptureManifestV1: {exc}") from exc
-    if not isinstance(manifest, dict) or manifest.get("schemaVersion") != 1:
-        raise CaptureManifestError("CaptureManifestV1.schemaVersion must be 1")
+    if not isinstance(manifest, dict):
+        raise CaptureManifestError("manifest must be an object")
+    geometry_check = manifest.get("geometryCheck")
+    if isinstance(geometry_check, dict) and geometry_check.get("configured") is True and (
+            geometry_check.get("ok") is not True or geometry_check.get("reason") not in ("matched", "partial_visibility")):
+        raise CaptureManifestError("geometry markers are not verified; review the capture before importing")
+    try:
+        topology = topology_for(manifest)
+        expected_slots = topology_slots(manifest)
+        slot_map = topology_slot_map(manifest)
+    except (ValueError, TypeError, KeyError) as exc:
+        raise CaptureManifestError(str(exc)) from exc
+    expected_views = {view["viewId"] for view in topology["views"]}
     for key in ("captureId", "siteId", "deviceId", "cropCycleId", "cropCode", "cameraProfileId", "geometryProfileId"):
         if not isinstance(manifest.get(key), str) or not manifest[key].strip():
             raise CaptureManifestError(f"manifest {key} is required")
@@ -264,33 +278,37 @@ def validate_capture_manifest(manifest_path: str | Path) -> tuple[dict[str, Any]
     full_assets = [asset for asset in assets if asset.get("role") == "full_frame"]
     roi_assets = [asset for asset in assets if asset.get("role") == "roi"]
     slot_assets = [asset for asset in assets if asset.get("role") == "slot"]
-    if len(full_assets) != 1 or len(roi_assets) != 2 or len(slot_assets) != 10:
-        raise CaptureManifestError("manifest requires exactly 1 full frame, 2 ROI and 10 slots")
-    if {asset.get("slotId") for asset in slot_assets} != set(SLOT_IDS):
-        raise CaptureManifestError("manifest does not contain the fixed ten unique slots")
+    if len(full_assets) != 1 or len(roi_assets) != len(expected_views) or len(slot_assets) != len(expected_slots) or len(assets) != 1 + len(expected_views) + len(expected_slots):
+        raise CaptureManifestError(f"manifest requires 1 full frame, {len(expected_views)} ROI and {len(expected_slots)} slots")
+    if {asset.get("slotId") for asset in slot_assets} != set(expected_slots):
+        raise CaptureManifestError("manifest does not contain all unique slots from its topology")
     full_id = full_assets[0]["assetId"]
     if full_assets[0].get("width") != 1920 or full_assets[0].get("height") != 1080:
         raise CaptureManifestError("full frame must be exactly 1920x1080")
     roi_by_rack = {}
     for roi in roi_assets:
         rack_id = roi.get("rackId")
-        if rack_id not in {"upper", "lower"} or rack_id in roi_by_rack:
-            raise CaptureManifestError("ROI rack lineage must be upper/lower and unique")
+        if rack_id not in expected_views or rack_id in roi_by_rack:
+            raise CaptureManifestError("ROI rack lineage must match topology and be unique")
         if roi.get("parentAssetId") != full_id:
             raise CaptureManifestError("ROI parent must be the full frame")
         _rect(roi)
         roi_by_rack[rack_id] = roi
     binding_views: dict[str, str] = {}
+    if manifest["schemaVersion"] == 2 and not manifest.get("bindingId"):
+        raise CaptureManifestError("V2 requires binding lineage")
     if manifest.get("bindingId"):
         raw_views = manifest.get("views")
-        if not isinstance(raw_views, list) or len(raw_views) != 2:
-            raise CaptureManifestError("bound manifest requires two view mappings")
+        if not isinstance(raw_views, list) or len(raw_views) != len(expected_views):
+            raise CaptureManifestError("bound manifest requires one mapping per ROI")
         binding_views = {
             str(view.get("viewId")): str(view.get("rackId"))
             for view in raw_views if isinstance(view, dict)
         }
-        if set(binding_views) != {"upper", "lower"} or len(set(binding_views.values())) != 2:
+        if set(binding_views) != expected_views or len(set(binding_views.values())) != len(expected_views):
             raise CaptureManifestError("bound manifest view mapping is invalid")
+        if manifest["schemaVersion"] == 2 and any(binding_views.get(view["viewId"]) != view["rackId"] for view in topology["views"]):
+            raise CaptureManifestError("binding topology mismatch")
         for asset in roi_assets + slot_assets:
             if asset.get("viewId") != asset.get("rackId") or asset.get("actualRackId") != binding_views.get(asset.get("viewId")):
                 raise CaptureManifestError(f"bound asset lineage mismatch: {asset.get('assetId')}")
@@ -309,9 +327,13 @@ def validate_capture_manifest(manifest_path: str | Path) -> tuple[dict[str, Any]
             raise CaptureManifestError(f"broken image: {asset['assetId']}") from exc
         if width != int(asset.get("width", width)) or height != int(asset.get("height", height)):
             raise CaptureManifestError(f"image dimensions disagree with manifest: {asset['assetId']}")
+        if asset.get("role") == "roi" and (width, height) != _rect(asset)[2:]:
+            raise CaptureManifestError("ROI image dimensions disagree with geometry")
         resolved[asset["assetId"]] = source
     for slot in slot_assets:
         rack_id = slot.get("rackId")
+        if rack_id != slot_map[slot["slotId"]]["viewId"]:
+            raise CaptureManifestError("slot identity belongs to another ROI")
         if rack_id not in roi_by_rack or slot.get("parentAssetId") != roi_by_rack[rack_id]["assetId"]:
             raise CaptureManifestError(f"slot lineage mismatch: {slot.get('slotId')}")
         x, y, width, height = _rect(slot)
@@ -371,7 +393,7 @@ def import_capture_manifest(
     try:
         provenance_dir.mkdir(parents=True, exist_ok=False)
         parent_assets: dict[str, dict[str, str]] = {}
-        for parent in (full_asset, roi_assets["upper"], roi_assets["lower"]):
+        for parent in (full_asset, *roi_assets.values()):
             source = resolved[parent["assetId"]]
             suffix = source.suffix.lower() if source.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"} else ".jpg"
             role_name = "full" if parent["role"] == "full_frame" else f"{parent['rackId']}_roi"
@@ -384,7 +406,9 @@ def import_capture_manifest(
                 "sha256": parent["sha256"],
                 "projectRelativePath": destination.relative_to(store.project_dir(project)).as_posix(),
             }
-        for asset in sorted(slot_assets, key=lambda item: SLOT_IDS.index(item["slotId"])):
+        expected_slots = topology_slots(manifest)
+        slot_map = topology_slot_map(manifest)
+        for asset in sorted(slot_assets, key=lambda item: expected_slots.index(item["slotId"])):
             source = resolved[asset["assetId"]]
             suffix = source.suffix.lower() if source.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"} else ".jpg"
             capture_name_hash = hashlib.sha256(manifest["captureId"].encode("utf-8")).hexdigest()[:8]
@@ -396,7 +420,7 @@ def import_capture_manifest(
             created_files.append(destination)
             rack_id = asset["rackId"]
             actual_rack_id = str(asset.get("actualRackId") or rack_id)
-            position = int(asset["slotId"].split("_")[1])
+            position = slot_map[asset["slotId"]]["position"]
             plant_instance_id = (
                 f"{manifest['cropCycleId']}:{actual_rack_id}:{position}"
                 if manifest.get("bindingId")
@@ -420,6 +444,8 @@ def import_capture_manifest(
                     "wilt": "not_applicable",
                 },
                 metadata={
+                    "captureSchemaVersion": manifest["schemaVersion"],
+                    **({"topology": topology_for(manifest)} if manifest["schemaVersion"] == 2 else {}),
                     "assetId": asset["assetId"],
                     "captureId": manifest["captureId"],
                     "siteId": manifest["siteId"],
@@ -482,6 +508,7 @@ def import_capture_manifest(
         append_unique_string("cropCycleIds", manifest["cropCycleId"])
         append_unique_string("cameraProfileIds", manifest["cameraProfileId"])
         append_unique_string("geometryProfileIds", manifest["geometryProfileId"])
+        project.metadata.setdefault("geometryProfileVersions", {})[manifest["geometryProfileId"]] = manifest["schemaVersion"]
         store.save(project)
     except Exception:
         for target in created_files:
@@ -566,8 +593,8 @@ def _validated_capture_dataset_archive(archive_path: str | Path):
             index = json.loads(index_path.read_text(encoding="utf-8"))
         except (OSError, ValueError, TypeError) as exc:
             raise CaptureManifestError(f"cannot read HydroDatasetExportV1: {exc}") from exc
-        if not isinstance(index, dict) or index.get("kind") != "HydroDatasetExportV1" or index.get("schemaVersion") != 1:
-            raise CaptureManifestError("dataset-export.json must be HydroDatasetExportV1 schemaVersion 1")
+        if not isinstance(index, dict) or index.get("schemaVersion") not in (1, 2) or index.get("kind") != "HydroDatasetExportV%d" % index["schemaVersion"]:
+            raise CaptureManifestError("dataset-export.json requires a supported HydroDatasetExport version")
         for field in ("datasetExportId", "createdAt", "deviceId", "siteId", "cropCode"):
             _required_archive_text(index.get(field), field)
         capture_rows = index.get("captures")
@@ -575,7 +602,7 @@ def _validated_capture_dataset_archive(archive_path: str | Path):
             raise CaptureManifestError("HydroDatasetExportV1 must contain at least one capture")
         if len(capture_rows) > DATASET_ARCHIVE_MAX_CAPTURES:
             raise CaptureManifestError("HydroDatasetExportV1 contains too many captures")
-        if index.get("captureCount") != len(capture_rows) or index.get("slotImageCount") != len(capture_rows) * 10:
+        if index.get("captureCount") != len(capture_rows):
             raise CaptureManifestError("dataset export capture or slot count is inconsistent")
         capture_ids: set[str] = set()
         manifest_paths: set[str] = set()
@@ -642,8 +669,8 @@ def _validated_capture_dataset_archive(archive_path: str | Path):
                         raise CaptureManifestError(f"capture {capture_id} effective crop context does not match cropCycle {field}")
             elif correction_ids is not None:
                 raise CaptureManifestError(f"capture {capture_id} correction IDs require effectiveCropContext")
-            if row.get("slotCount") != 10:
-                raise CaptureManifestError(f"capture {capture_id} slot count must be 10")
+            if row.get("slotCount") != len(topology_slots(manifest)) or manifest["schemaVersion"] > index["schemaVersion"]:
+                raise CaptureManifestError(f"capture {capture_id} slot count or version mismatch")
             expected_files.add(manifest_relative)
             for asset in manifest["assets"]:
                 if asset["assetId"] in all_asset_ids:
@@ -655,6 +682,8 @@ def _validated_capture_dataset_archive(archive_path: str | Path):
                 all_asset_paths.add(asset_path.casefold())
                 expected_files.add(asset_path)
             manifests.append((manifest, manifest_path))
+        if index.get("slotImageCount") != sum(len(topology_slots(manifest)) for manifest, _path in manifests):
+            raise CaptureManifestError("dataset export total slot count mismatch")
         profile_fields = {
             "cropCycleIds": "cropCycleId",
             "cameraProfileIds": "cameraProfileId",
@@ -712,7 +741,7 @@ def import_capture_dataset_archive(
             existing = records_by_capture.get(capture_id, [])
             if existing:
                 existing_slot_ids = {record.metadata.get("slotId") for record in existing if record.asset_role == "slot"}
-                if len(existing) != 10 or existing_slot_ids != set(SLOT_IDS):
+                if len(existing) != len(topology_slots(manifest)) or existing_slot_ids != set(topology_slots(manifest)):
                     raise CaptureManifestError(f"project contains an incomplete imported capture: {capture_id}")
                 effective_context = row.get("effectiveCropContext")
                 if isinstance(effective_context, dict):
@@ -873,13 +902,23 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
         if len(image_ids) > 1:
             issues.append({"severity": "error", "imageId": image_ids[0], "code": "duplicate_sha256", "related": image_ids[1:]})
     for capture_id, slot_ids in capture_slots.items():
-        if len(slot_ids) != len(SLOT_IDS) or set(slot_ids) != set(SLOT_IDS):
+        records = [record for record in project.images if record.metadata.get("captureId") == capture_id]
+        expected_slots = set(SLOT_IDS)
+        try:
+            topologies = [topology_for({"schemaVersion": record.metadata.get("captureSchemaVersion", 1),
+                          **({"topology": record.metadata["topology"]} if "topology" in record.metadata else {})}) for record in records]
+            if len({topology_identity(topology).__repr__() for topology in topologies}) != 1:
+                raise ValueError("mixed capture topology")
+            expected_slots = {slot for view in topologies[0]["views"] for slot in view["slotIds"]}
+        except (ValueError, KeyError, IndexError):
+            issues.append({"severity": "error", "imageId": "", "captureId": capture_id, "code": "capture_topology_invalid"})
+        if len(slot_ids) != len(expected_slots) or set(slot_ids) != expected_slots:
             issues.append({
                 "severity": "error",
                 "imageId": "",
                 "code": "incomplete_capture_slots",
                 "captureId": capture_id,
-                "missing": sorted(set(SLOT_IDS) - set(slot_ids)),
+                "missing": sorted(expected_slots - set(slot_ids)),
                 "duplicates": sorted(slot for slot, count in Counter(slot_ids).items() if count > 1),
             })
     for plant_id, splits in plant_splits.items():
@@ -1000,6 +1039,10 @@ def write_hydro_model_bundle(
         raise ValueError("bundle requires independent presence/yellow/wilt models and thresholds")
     if not dataset_version or not source_commit or not camera_profile_ids or not geometry_profile_ids:
         raise ValueError("dataset/source/profile compatibility metadata is required")
+    versions = {project.metadata.get("geometryProfileVersions", {}).get(profile_id, 1) for profile_id in geometry_profile_ids}
+    if len(versions) != 1 or not versions.issubset({1, 2}):
+        raise ValueError("Choose geometry profile IDs from one runtime version (V1 or V2) for each model bundle")
+    bundle_version = next(iter(versions))
     if runtime_target not in RUNTIME_TARGETS:
         raise ValueError(f"unsupported Hydro runtime target: {runtime_target}")
     if deployment_mode not in {"shadow", "operational"}:
@@ -1051,10 +1094,10 @@ def write_hydro_model_bundle(
                 "highThreshold": high,
             }
         manifest = {
-            "schemaVersion": 1,
+            "schemaVersion": bundle_version,
             "bundleId": bundle_id,
             "cropCode": crop_code,
-            "pipeline": "fixed_slot_multilabel_v1",
+            "pipeline": "fixed_slot_multilabel_v%d" % bundle_version,
             "compatibleCameraProfileIds": camera_profile_ids,
             "compatibleGeometryProfileIds": geometry_profile_ids,
             "models": entries,

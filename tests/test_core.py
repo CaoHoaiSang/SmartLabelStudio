@@ -253,7 +253,7 @@ class SmartLabelCoreTests(unittest.TestCase):
             self.assertEqual(set(variants), {"standard", "hydro"})
             self.assertGreater(len(variants["standard"]), 50)
             self.assertGreater(len(variants["hydro"]), 80)
-        self.assertIn("đủ đúng 10 slot", PROJECT_ACTION_TOOLTIPS["capture_manifest"]["hydro"])
+        self.assertIn("đủ rọ theo bố cục", PROJECT_ACTION_TOOLTIPS["capture_manifest"]["hydro"])
         self.assertIn("bỏ qua an toàn", PROJECT_ACTION_TOOLTIPS["capture_dataset_archive"]["hydro"])
         self.assertIn("trang Kiểm duyệt", PROJECT_ACTION_TOOLTIPS["hydro_qa"]["hydro"])
         self.assertIn("hiện kết quả trực tiếp bên dưới", PROJECT_ACTION_TOOLTIPS["hydro_qa"]["hydro"])

@@ -14,7 +14,7 @@ from .models import LabelClass, Project
 
 PROJECT_TEMPLATE_LABELS = {
     "DeltaX chai · mẫu Detection + Classification": "deltax_bottle",
-    "Hydroponic · mẫu Classification 10 slot": "hydroponic_slot",
+    "Hydroponic · Classification từng rọ": "hydroponic_slot",
     "Dự án trống · không tạo nhãn mẫu": "blank",
 }
 

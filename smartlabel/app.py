@@ -119,8 +119,8 @@ PROJECT_ACTION_TOOLTIPS = {
         ),
         "hydro": (
             "Nhập các ảnh slot đã crop thủ công từ một thư mục. Ảnh được dùng như Classification toàn ảnh, "
-            "nhưng không có kiểm chứng đủ 10 slot và không giữ lineage tới full frame/ROI. Với dữ liệu do Camera "
-            "Service tạo, nên dùng Nhập CaptureManifestV1."
+            "nhưng không kiểm chứng số rọ theo bố cục và không giữ lineage tới full frame/ROI. Với dữ liệu do Camera "
+            "Service tạo, nên dùng Nhập CaptureManifest (V1/V2)."
         ),
     },
     "import_files": {
@@ -130,15 +130,15 @@ PROJECT_ACTION_TOOLTIPS = {
         ),
         "hydro": (
             "Nhập một số ảnh slot rời để thử nghiệm hoặc bổ sung thủ công. Cách này không xác nhận cấu trúc "
-            "2 ROI/10 slot và không giữ liên kết full frame. Dataset camera Hydro chính thức nên nhập bằng "
-            "CaptureManifestV1."
+            "ROI/slot theo bố cục và không giữ liên kết full frame. Dataset camera Hydro chính thức nên nhập bằng "
+            "CaptureManifest (V1/V2)."
         ),
     },
     "capture_manifest": {
         "standard": "Chức năng này chỉ hiện trong project dùng mẫu Hydroponic Slot Condition.",
         "hydro": (
             "Cách nhập khuyến nghị cho dữ liệu từ AI Camera. Ứng dụng kiểm tra schema, checksum, ID trùng, "
-            "lineage, hình học ROI/slot và đủ đúng 10 slot trước khi nhập; ảnh slot được dùng để gán nhãn và "
+            "lineage, hình học ROI/slot và đủ rọ theo bố cục của từng capture trước khi nhập; ảnh slot được dùng để gán nhãn và "
             "vẫn giữ liên kết tới full frame/ROI. Nút này không chụp ảnh và không chạy inference."
         ),
     },
@@ -146,7 +146,7 @@ PROJECT_ACTION_TOOLTIPS = {
         "standard": "Chức năng này chỉ hiện trong project dùng mẫu Hydroponic Slot Condition.",
         "hydro": (
             "Nhập gói ZIP do Thư viện AI Camera của HydroFlow xuất. SmartLabel kiểm tra toàn bộ danh sách capture, "
-            "trạng thái Đạt dataset, checksum, lineage, 1 full frame, 2 ROI và đủ 10 slot trước khi thêm bất kỳ ảnh nào. "
+            "trạng thái Đạt dataset, checksum, lineage, full frame và đủ ROI/rọ theo bố cục trước khi thêm bất kỳ ảnh nào. "
             "Capture đã nhập được bỏ qua an toàn khi nạp lại cùng gói; project hiện có không bị xóa hoặc ghi đè."
         ),
     },
@@ -156,7 +156,7 @@ PROJECT_ACTION_TOOLTIPS = {
             "frame dự kiến quá lớn. Video gốc không bị xóa hoặc chỉnh sửa."
         ),
         "hydro": (
-            "Tách frame video thành ảnh thường để thử nghiệm. Frame không tự chia thành 2 ROI/10 slot, không có "
+            "Tách frame video thành ảnh thường để thử nghiệm. Frame không tự chia thành ROI/slot, không có "
             "slot ID và timestamp capture chuẩn. Với camera cố định Hydro, nên dùng lịch chụp và CaptureManifestV1."
         ),
     },
@@ -175,7 +175,7 @@ PROJECT_ACTION_TOOLTIPS = {
         ),
         "hydro": (
             "Phân tích chất lượng hình ảnh của lượt nhập mới nhất: gần trùng, trống, mờ hoặc ánh sáng kém. "
-            "Chức năng này bổ sung cho Dataset QA, không kiểm tra lineage/10 slot. Ứng dụng chỉ đề xuất và luôn "
+            "Chức năng này bổ sung cho Dataset QA, không kiểm tra lineage/số rọ. Ứng dụng chỉ đề xuất và luôn "
             "yêu cầu xác nhận trước khi xóa."
         ),
     },
@@ -4714,7 +4714,7 @@ class SmartLabelApp(ctk.CTk):
             return
         summary = self.datasets.summary(self.project)
         hydro = is_hydroponic_project(self.project)
-        task_text = "Classification toàn ảnh · 10 slot cố định" if hydro else "đa hình học · RECT / SEG / OBB / ORI"
+        task_text = "Classification toàn ảnh · từng rọ theo bố cục" if hydro else "đa hình học · RECT / SEG / OBB / ORI"
         text = [
             f"Dự án       : {self.project.name}",
             f"ID           : {self.project.id}",

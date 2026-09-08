@@ -386,7 +386,7 @@ class HydroponicMvpTests(unittest.TestCase):
             "duplicates": ["upper_01"],
         })
 
-        self.assertIn("không đủ đúng 10 slot", detail)
+        self.assertIn("thiếu hoặc trùng rọ", detail)
         self.assertIn("capture capture-01", detail)
         self.assertIn("thiếu upper_05, lower_05", detail)
         self.assertIn("slot trùng upper_01", detail)
