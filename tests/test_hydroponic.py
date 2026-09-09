@@ -271,13 +271,50 @@ class HydroponicMvpTests(unittest.TestCase):
         self.assertEqual(result["capturesSkipped"], 0)
         self.assertEqual(result["slotImagesImported"], 20)
         self.assertEqual(len(self.project.images), 20)
+        self.assertEqual({r.import_batch for r in self.project.images}, {self.project.last_import_batch})
+        original_batch = self.project.last_import_batch
         self.assertEqual({record.metadata["captureId"] for record in self.project.images}, {"cap_archive_01", "cap_archive_02"})
         self.assertTrue(all(record.metadata["datasetReviewStatus"] == "approved" for record in self.project.images))
         repeated = import_capture_dataset_archive(self.store, self.project, archive_path)
         self.assertEqual(repeated["capturesImported"], 0)
         self.assertEqual(repeated["capturesSkipped"], 2)
         self.assertEqual(repeated["slotImagesImported"], 0)
+        self.assertEqual(self.project.last_import_batch, original_batch)
         self.assertEqual(len(self.project.images), 20)
+
+    def test_archive_delete_all_and_reimport_keeps_parent_evidence(self):
+        archive = self.create_dataset_archive(["cap_restore_1", "cap_restore_2"])
+        import_capture_dataset_archive(self.store, self.project, archive)
+        parents = {p: p.read_bytes() for p in (self.store.project_dir(self.project) / "assets").rglob("*") if p.is_file()}
+        from smartlabel.frame_filter import latest_import_records
+        removed, _ = self.store.delete_images(self.project, latest_import_records(self.project))
+        self.assertEqual(removed, 20)
+        self.assertEqual(len(self.project.images), 0)
+        result = import_capture_dataset_archive(self.store, self.project, archive)
+        self.assertEqual(result["slotImagesImported"], 20)
+        self.assertTrue(all(p.read_bytes() == data for p, data in parents.items()))
+
+    def test_reimport_rejects_changed_parent_and_does_not_remove_evidence(self):
+        archive = self.create_dataset_archive(["cap_conflict"])
+        import_capture_dataset_archive(self.store, self.project, archive)
+        self.store.delete_images(self.project, list(self.project.images))
+        parent = self.store.project_dir(self.project) / "assets" / "cap_conflict" / "full.jpg"
+        parent.write_bytes(b"different old evidence")
+        with self.assertRaisesRegex(CaptureManifestError, "differs; kept unchanged"):
+            import_capture_dataset_archive(self.store, self.project, archive)
+        self.assertEqual(parent.read_bytes(), b"different old evidence")
+        self.assertEqual(self.project.images, [])
+
+    def test_last_archive_batch_excludes_preexisting_capture(self):
+        first = self.create_dataset_archive(["cap_preexisting"])
+        import_capture_dataset_archive(self.store, self.project, first)
+        old_ids = {r.id for r in self.project.images}
+        second = self.create_dataset_archive(["cap_preexisting", "cap_new"])
+        import_capture_dataset_archive(self.store, self.project, second)
+        from smartlabel.frame_filter import latest_import_records
+        latest = latest_import_records(self.project)
+        self.assertEqual(len(latest), 10)
+        self.assertFalse(old_ids.intersection(r.id for r in latest))
 
     def test_dataset_archive_applies_audited_crop_context_correction_without_rewriting_manifest(self) -> None:
         initial_archive = self.create_dataset_archive(["cap_archive_corrected"])

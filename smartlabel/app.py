@@ -16,6 +16,7 @@ from tkinter import filedialog, messagebox, simpledialog
 import customtkinter as ctk
 
 from .annotation_canvas import AnnotationCanvas
+from .attribute_labels import HYDRO_VALUE_LABELS
 from .auto_label import Sam2Adapter, auto_label_project, mask_to_geometry
 from .dataset_manager import DatasetManager
 from .deployment import build_vision_bundle_manifest, classifier_manifest_entry, write_classifier_pt_bundle
@@ -49,7 +50,7 @@ from .ui_components import (
     ask_new_project,
 )
 from .version_dialog import ask_dataset_version_name
-from .ui_layout import pack_before
+from .ui_layout import pack_before, center_dialog
 
 
 logger = logging.getLogger(__name__)
@@ -82,15 +83,7 @@ ATTRIBUTE_DISPLAY = {
     },
     "occlusion": {"none": "Không che", "partial": "Che một phần", "heavy": "Che nhiều"},
     "cap": {"co_nap": "Có nắp", "mat_nap": "Mất nắp", "khong_xac_dinh": "Chưa rõ"},
-    "plant_presence": {"present": "Có cây", "absent": "Không có cây", "uncertain": "Chưa chắc chắn"},
-    "yellow_leaf": {
-        "present": "Có lá vàng", "absent": "Không có lá vàng", "uncertain": "Chưa chắc chắn",
-        "not_applicable": "Không áp dụng",
-    },
-    "wilt": {
-        "present": "Có héo", "absent": "Không héo", "uncertain": "Chưa chắc chắn",
-        "not_applicable": "Không áp dụng",
-    },
+    **HYDRO_VALUE_LABELS,
 }
 
 SPLIT_STRATEGY_LABELS = {
@@ -103,6 +96,7 @@ PROJECT_ACTION_GROUPS = {
     "import": ("1 · NHẬP DỮ LIỆU", "Đưa ảnh, capture hoặc frame video vào project"),
     "cleanup": ("2 · DỌN DỮ LIỆU NHẬP", "Lọc hoặc hoàn tác lượt nhập ảnh gần nhất"),
     "settings": ("3 · CẤU HÌNH NHÃN", "Quản lý Class và thuộc tính của project"),
+    "lifecycle": ("4 · QUẢN LÝ DỰ ÁN", "Xóa có thể khôi phục; không đụng ảnh gốc"),
 }
 
 REVIEW_ACTION_GROUPS = {
@@ -580,6 +574,12 @@ class SmartLabelApp(ctk.CTk):
             tooltip=self._project_action_tooltip("project_settings", False),
         )
         self.project_settings_button.pack(fill="x", padx=8, pady=(4, 8))
+        lifecycle_group = self._project_action_group(project_tools, "lifecycle")
+        self._button(lifecycle_group, "Xóa dự án…", self._trash_current_project,
+                     width=220, color="#a94747",
+                     tooltip="Đưa toàn bộ dự án vào thùng rác; có thể khôi phục. Không xóa ảnh gốc bên ngoài.").pack(fill="x", padx=8, pady=4)
+        self._button(lifecycle_group, "Dự án đã xóa / Khôi phục…", self._restore_trashed_project,
+                     width=220, color="#415466").pack(fill="x", padx=8, pady=(4, 8))
 
         center = self._card(tab, "TỔNG QUAN")
         center.pack(side="left", fill="both", expand=True, padx=5, pady=8)
@@ -925,6 +925,72 @@ class SmartLabelApp(ctk.CTk):
             self.store.save(self.project)
             self._set_status("Đã lưu dự án", COLORS["good"])
 
+    def _trash_current_project(self) -> None:
+        if not self.project or not self._can_change_project():
+            return
+        project = self.project
+        if not messagebox.askyesno("Xóa dự án?",
+                f"Đưa “{project.name}” ({len(project.images)} ảnh) vào thùng rác?\n\n"
+                "Ảnh, nhãn và kết quả train trong dự án được giữ để khôi phục. "
+                "Không xóa ảnh gốc ở thư mục đã nhập.", parent=self):
+            return
+        try:
+            self.store.trash_project(project)
+        except Exception as exc:
+            logger.exception("Cannot trash project")
+            messagebox.showerror("Chưa xóa dự án", str(exc), parent=self)
+            return
+        # Detach before any callbacks/refresh: never autosave and recreate the
+        # deleted project, including when it was the final project.
+        self.project = None
+        self.project_views.pop(project.id, None)
+        self.current_index = -1
+        self.canvas.project = None
+        self._clear_current_image()
+        for variable in (self.model_path, self.deploy_model_path, self.evaluation_model_path, self.evaluation_data_path):
+            variable.set("")
+        self._refresh_everything()
+        self.project_menu.set("Chưa có dự án đang mở")
+        self._load_initial_project()
+        self._set_status("Đã đưa dự án vào thùng rác. Có thể khôi phục tại trang Dự án.")
+
+    def _restore_trashed_project(self) -> None:
+        if not self._can_change_project():
+            return
+        projects = []
+        for path in self.store.list_trashed_projects():
+            try:
+                projects.append(self.store.load(path))
+            except Exception:
+                logger.exception("Unreadable trashed project")
+        if not projects:
+            messagebox.showinfo("Thùng rác dự án", "Chưa có dự án nào trong thùng rác.", parent=self)
+            return
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Khôi phục dự án")
+        dialog.transient(self)
+        dialog.grab_set()
+        container = ctk.CTkScrollableFrame(dialog, label_text="DỰ ÁN ĐÃ XÓA")
+        container.pack(fill="both", expand=True, padx=16, pady=16)
+        def restore(project):
+            try:
+                restored = self.store.restore_project(project.id)
+            except Exception as exc:
+                messagebox.showerror("Chưa khôi phục", str(exc), parent=dialog)
+                return
+            dialog.destroy()
+            self._change_project_context(restored)
+            self._set_status("Đã khôi phục dự án và toàn bộ dữ liệu.")
+        for project in projects:
+            row = ctk.CTkFrame(container)
+            row.pack(fill="x", pady=5)
+            ctk.CTkButton(row, text="Khôi phục", width=110,
+                          command=lambda p=project: restore(p)).pack(side="right", padx=10, pady=10)
+            ctk.CTkLabel(row, text=f"{project.name}\n{len(project.images)} ảnh", anchor="w",
+                         wraplength=350).pack(side="left", padx=12, pady=8)
+        ctk.CTkButton(dialog, text="Đóng", command=dialog.destroy).pack(pady=(0, 12))
+        center_dialog(dialog, self, 620, 460)
+
     def _import_folder(self) -> None:
         folder = filedialog.askdirectory(title="Chọn thư mục ảnh")
         if folder:
@@ -996,6 +1062,8 @@ class SmartLabelApp(ctk.CTk):
         Thread(target=worker, daemon=True).start()
 
     def _open_frame_filter(self) -> None:
+        if not self._can_change_project():
+            return
         if self.import_in_progress:
             messagebox.showinfo(
                 "Đang nhập dữ liệu",
@@ -1055,6 +1123,8 @@ class SmartLabelApp(ctk.CTk):
         return max(timestamps).astimezone().strftime("%d/%m/%Y %H:%M:%S")
 
     def _delete_latest_import(self) -> None:
+        if not self._can_change_project():
+            return
         if self.import_in_progress:
             messagebox.showinfo(
                 "Đang nhập dữ liệu",

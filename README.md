@@ -171,3 +171,20 @@ Project/ảnh cũ không bị xóa hoặc tự chuyển sang bố cục mới.
 Khi xuất model bundle, chọn các Geometry profile tương thích cùng phiên bản. Profile V2 đã nhập
 sẽ tạo bundle V2 (`fixed_slot_multilabel_v2`); không chọn lẫn profile V1/V2 trong một bundle.
 Chỉ thay phiên bản bundle không chứng minh model đúng với góc nhìn/số rọ mới: vẫn cần validation.
+
+## Quản lý dự án, lượt nhập và xem trước — 2026-09-09
+
+- Trang **Dự án → Quản lý dự án**: **Xóa dự án…** đưa cả thư mục dự án vào
+  `workspace/project_trash`; **Dự án đã xóa / Khôi phục…** đưa về đúng vị trí cũ.
+  Có xác nhận, chặn khi tác vụ đang xử lý. Không xóa ảnh nguồn bên ngoài hoặc model dùng chung.
+  Đây là xóa có thể khôi phục, chưa phải chức năng giải phóng dung lượng vĩnh viễn.
+- Một lần **Nhập gói HydroFlow (.zip)** là một lượt nhập cho tất cả ảnh mới trong gói,
+  không giới hạn 10 ảnh. Capture đã có được bỏ qua; không đưa ảnh cũ vào lượt nhập mới.
+  Các lượt cũ không tự gộp theo thời gian vì không có đủ bằng chứng chúng thuộc cùng ZIP.
+- Nhập lại capture đã xóa hết ảnh rọ: xác minh checksum rồi dùng lại ảnh cha còn giữ.
+  Không ghi đè dữ liệu khác checksum. Capture chỉ bị xóa một phần vẫn được chặn để giữ nhãn còn lại.
+- **Lọc ảnh thông minh** căn giữa, giới hạn trong vùng làm việc màn hình có tính DPI;
+  ảnh xem trước giữ đủ khung, co theo diện tích và giữ tham chiếu ảnh khi chuyển dòng.
+- Thuộc tính dự án thường có thể đặt tiếng Việt. Không đổi/xóa mã giá trị đang được ảnh sử dụng.
+  Mẫu Hydro hiện tại hiển thị tiếng Việt nhưng giữ mã model V1/V2 (`present`, `absent`, ...).
+  Thêm bệnh mới chạy trên Hydro cần contract mở rộng đồng bộ, không chỉ đổi chuỗi nhãn.

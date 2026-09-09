@@ -352,6 +352,8 @@ def import_capture_manifest(
     *,
     effective_crop_context: dict[str, Any] | None = None,
     crop_context_correction_ids: list[str] | None = None,
+    import_batch: str | None = None,
+    dataset_export_id: str | None = None,
 ) -> tuple[int, int]:
     manifest, resolved = validate_capture_manifest(manifest_path)
     if effective_crop_context is not None:
@@ -381,25 +383,39 @@ def import_capture_manifest(
     images_dir = store.project_dir(project) / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
     provenance_dir = store.project_dir(project) / "assets" / manifest["captureId"]
-    if provenance_dir.exists():
-        raise CaptureManifestError(f"capture provenance already exists: {manifest['captureId']}")
+    # Removing slot images deliberately keeps parent evidence. Reuse it only
+    # after checking every existing file; never overwrite an earlier capture.
+    provenance_existed = provenance_dir.exists()
+    project_root = store.project_dir(project).resolve()
+    if not provenance_dir.resolve().is_relative_to(project_root) or provenance_dir.is_symlink():
+        raise CaptureManifestError("unsafe capture provenance path")
+    if any(record.metadata.get("captureId") == manifest["captureId"] for record in project.images):
+        raise CaptureManifestError(f"capture already has project records: {manifest['captureId']}")
     created_files = []
     created_records = []
     metadata_before = json.loads(json.dumps(project.metadata))
     last_import_batch_before = project.last_import_batch
     full_asset = next(asset for asset in manifest["assets"] if asset.get("role") == "full_frame")
     roi_assets = {asset["rackId"]: asset for asset in manifest["assets"] if asset.get("role") == "roi"}
-    import_batch = f"capture_{manifest['captureId']}"
+    import_batch = import_batch or new_id("import")
+    def copy_or_verify(source: Path, destination: Path, checksum: str) -> None:
+        if not destination.resolve().is_relative_to(project_root) or destination.is_symlink():
+            raise CaptureManifestError("unsafe recovered asset path")
+        if destination.exists():
+            if not destination.is_file() or hashlib.sha256(destination.read_bytes()).hexdigest() != checksum:
+                raise CaptureManifestError(f"existing capture asset differs; kept unchanged: {destination.name}")
+            return
+        created_files.append(destination)
+        shutil.copy2(source, destination)
     try:
-        provenance_dir.mkdir(parents=True, exist_ok=False)
+        provenance_dir.mkdir(parents=True, exist_ok=True)
         parent_assets: dict[str, dict[str, str]] = {}
         for parent in (full_asset, *roi_assets.values()):
             source = resolved[parent["assetId"]]
             suffix = source.suffix.lower() if source.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"} else ".jpg"
             role_name = "full" if parent["role"] == "full_frame" else f"{parent['rackId']}_roi"
             destination = provenance_dir / f"{role_name}{suffix}"
-            shutil.copy2(source, destination)
-            created_files.append(destination)
+            copy_or_verify(source, destination, parent["sha256"])
             parent_assets[parent["assetId"]] = {
                 "assetId": parent["assetId"],
                 "role": parent["role"],
@@ -414,10 +430,9 @@ def import_capture_manifest(
             capture_name_hash = hashlib.sha256(manifest["captureId"].encode("utf-8")).hexdigest()[:8]
             file_name = f"{asset['sha256'][:12]}_{capture_name_hash}_{asset['slotId']}{suffix}"
             destination = images_dir / file_name
-            if destination.exists():
+            if any(record.file_name == file_name for record in project.images):
                 raise CaptureManifestError(f"project image collision: {file_name}")
-            shutil.copy2(source, destination)
-            created_files.append(destination)
+            copy_or_verify(source, destination, asset["sha256"])
             rack_id = asset["rackId"]
             actual_rack_id = str(asset.get("actualRackId") or rack_id)
             position = slot_map[asset["slotId"]]["position"]
@@ -444,6 +459,7 @@ def import_capture_manifest(
                     "wilt": "not_applicable",
                 },
                 metadata={
+                    **({"datasetExportId": dataset_export_id} if dataset_export_id else {}),
                     "captureSchemaVersion": manifest["schemaVersion"],
                     **({"topology": topology_for(manifest)} if manifest["schemaVersion"] == 2 else {}),
                     "assetId": asset["assetId"],
@@ -521,7 +537,7 @@ def import_capture_manifest(
                 project.images.remove(record)
         project.metadata = metadata_before
         project.last_import_batch = last_import_batch_before
-        if provenance_dir.exists():
+        if not provenance_existed and provenance_dir.exists():
             shutil.rmtree(provenance_dir, ignore_errors=True)
         raise
     return len(created_records), 0
@@ -775,12 +791,10 @@ def import_capture_dataset_archive(
             )
             if duplicate:
                 raise CaptureManifestError(f"capture asset was already imported under another capture: {duplicate}")
-            provenance_dir = store.project_dir(project) / "assets" / capture_id
-            if provenance_dir.exists():
-                raise CaptureManifestError(f"capture provenance exists without a complete import: {capture_id}")
             to_import.append(manifest_path)
         imported = 0
         slot_images = 0
+        import_batch = new_id("import")
         for manifest_path in to_import:
             manifest = next(item for item, path in manifests if path == manifest_path)
             row = rows_by_capture[manifest["captureId"]]
@@ -790,6 +804,8 @@ def import_capture_dataset_archive(
                 manifest_path,
                 effective_crop_context=row.get("effectiveCropContext"),
                 crop_context_correction_ids=row.get("cropContextCorrectionIds"),
+                import_batch=import_batch,
+                dataset_export_id=index["datasetExportId"],
             )
             imported += 1
             slot_images += added

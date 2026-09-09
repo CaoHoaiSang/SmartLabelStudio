@@ -10,6 +10,7 @@ import customtkinter as ctk
 from PIL import Image
 
 from .models import LabelClass, Project
+from .attribute_labels import HYDRO_VALUE_LABELS, is_hydro_attribute
 
 
 PROJECT_TEMPLATE_LABELS = {
@@ -860,6 +861,11 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         add_button = ctk.CTkButton(option_header, text="+ Thêm lựa chọn", width=130, command=lambda: self._add_attribute_option(key))
         add_button.pack(side="right")
         ToolTip(add_button, f"Thêm một giá trị mới cho nhóm {title_var.get()}.")
+        if is_hydro_attribute(self.project, key):
+            for widget in (delete_group, add_button, role_menu):
+                widget.configure(state="disabled")
+            ctk.CTkLabel(group, text="Tên tiếng Việt dùng để gắn nhãn. Mã bên phải được giữ ổn định để train và chạy trên HydroFlow.",
+                         text_color="#8298aa", wraplength=650, anchor="w").pack(fill="x", padx=12, pady=4)
         options = ctk.CTkFrame(group, fg_color="transparent")
         options.pack(fill="x", padx=10, pady=(2, 10))
         self.attribute_groups[key] = {
@@ -886,11 +892,18 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         row = ctk.CTkFrame(parent, fg_color="#0c1721", corner_radius=7)
         row.pack(fill="x", pady=3)
         variable = tk.StringVar(value=value)
-        ctk.CTkEntry(row, textvariable=variable, width=520).pack(side="left", padx=8, pady=5)
+        if is_hydro_attribute(self.project, key):
+            ctk.CTkLabel(row, text=HYDRO_VALUE_LABELS[key].get(value, value), anchor="w",
+                         width=260).pack(side="left", padx=10, pady=5)
+            ctk.CTkLabel(row, text=value, text_color="#8298aa", anchor="w").pack(side="left", padx=8)
+        else:
+            ctk.CTkEntry(row, textvariable=variable, width=520).pack(side="left", padx=8, pady=5)
         delete = ctk.CTkButton(row, text="Xóa", width=70, fg_color="#a94747")
         delete.pack(side="right", padx=8, pady=5)
         data = {"value": variable, "frame": row}
         delete.configure(command=lambda: self._delete_attribute_row(key, data))
+        if is_hydro_attribute(self.project, key):
+            delete.configure(state="disabled")
         ToolTip(delete, "Xóa lựa chọn này nếu chưa có nhãn nào đang sử dụng.")
         self.attribute_groups[key]["rows"].append(data)
         variable.trace_add("write", lambda *_args, attr=key: self._refresh_default_menu(attr))
@@ -964,6 +977,17 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
                 return
             if len(set(values)) != len(values):
                 messagebox.showerror("Trùng lựa chọn", f"{title} có giá trị trùng.", parent=self)
+                return
+            used_values = {image.attributes[key] for image in self.project.images if key in image.attributes}
+            used_values.update(ann.attributes[key] for image in self.project.images
+                               for ann in image.annotations if key in ann.attributes)
+            if used_values - set(values):
+                messagebox.showerror("Giá trị đang được sử dụng",
+                    f"{title}: không đổi hoặc bỏ giá trị đã được ảnh sử dụng. "
+                    "Có thể đổi tên nhóm; đổi mã nhãn cần chuyển đổi dataset và train lại.", parent=self)
+                return
+            if is_hydro_attribute(self.project, key) and values != self.project.attribute_schema[key]:
+                messagebox.showerror("Giữ mã Hydro", "Các giá trị Hydro phải giữ nguyên để tương thích model.", parent=self)
                 return
             default = group["default"].get()
             default = "" if default == self.NO_DEFAULT else default

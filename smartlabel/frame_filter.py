@@ -107,7 +107,8 @@ def _frame_number(record: ImageRecord) -> int:
 
 
 def _load_preview(path: Path, settings: FrameFilterSettings) -> np.ndarray:
-    image = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
+    # imread on Windows cannot reliably open Vietnamese file/folder names.
+    image = cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
     if image is None:
         raise RuntimeError(f"Không đọc được ảnh: {path}")
     image = cv2.resize(image, (settings.preview_width, settings.preview_height), interpolation=cv2.INTER_AREA)
@@ -159,6 +160,8 @@ def _run_yolo(
     from ultralytics import YOLO
 
     model = YOLO(str(model_path))
+    if getattr(model, "task", None) == "classify":
+        raise ValueError("Model Classification không dùng để xác định ảnh trống. Bỏ chọn Dùng model để lọc bằng OpenCV.")
     metrics: dict[str, dict[str, float]] = {}
     chunk_size = 24
     total = len(paths)
@@ -173,17 +176,20 @@ def _run_yolo(
             conf=0.05,
             verbose=False,
         )
+        if len(results) != len(chunk):
+            raise ValueError("Model không trả đủ kết quả; chưa tạo đề xuất xóa ảnh.")
         for offset, (path, result) in enumerate(zip(chunk, results), start=1):
             shape = getattr(result, "orig_shape", None) or (1, 1)
             height, width = int(shape[0]), int(shape[1])
             metrics[str(path)] = _detection_metrics(result, width, height, settings.model_confidence)
             if progress:
-                progress(start + offset, total, "AI đang kiểm tra chai")
+                progress(start + offset, total, "AI đang kiểm tra đối tượng")
     return metrics
 
 
 def _is_protected(record: ImageRecord) -> bool:
-    return bool(record.annotations) or record.review_status == "reviewed"
+    return (bool(record.annotations) or record.review_status == "reviewed"
+            or (record.review_status == "draft" and bool(record.attributes)))
 
 
 def _duplicate_clusters(

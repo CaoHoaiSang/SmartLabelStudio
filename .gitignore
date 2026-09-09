@@ -11,6 +11,7 @@ credentials*.json
 *.pfx
 *.log
 workspace/projects/
+workspace/project_trash/
 workspace/projects/*/images/
 workspace/projects/*/assets/
 workspace/projects/*/project.json

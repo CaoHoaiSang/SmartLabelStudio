@@ -4,11 +4,12 @@ from pathlib import Path
 from queue import Empty, Queue
 from threading import Event, Thread
 import textwrap
+import logging
 import tkinter as tk
 from tkinter import messagebox, ttk
 
 import customtkinter as ctk
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageTk
 
 from .frame_filter import (
     SOURCE_ALL,
@@ -22,6 +23,9 @@ from .frame_filter import (
 from .models import Project
 from .project_store import ProjectStore
 from .ui_components import ToolTip
+from .ui_layout import center_dialog
+
+logger = logging.getLogger(__name__)
 
 
 PREVIEW_SIZE = (430, 320)
@@ -72,18 +76,15 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
         self.queue: Queue = Queue()
         self.cancel_event = Event()
         self.preview_photo = None
+        self.preview_source = None
         self.title("Lọc ảnh thông minh")
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
-        window_width = min(1450, max(1120, screen_width - 100))
-        window_height = min(860, max(700, screen_height - 140))
-        self.geometry(f"{window_width}x{window_height}")
-        self.minsize(1120, 700)
         self.transient(parent)
         self.configure(fg_color="#081019")
         self.protocol("WM_DELETE_WINDOW", self._close)
         self._build()
-        self.after(120, self._poll)
+        center_dialog(self, parent, 1380, 850)
+        self.grab_set()
+        self.poll_job = self.after(120, self._poll)
 
     def _build(self):
         title = ctk.CTkLabel(self, text="LỌC ẢNH THÔNG MINH", font=("Segoe UI Semibold", 20), text_color="#22b9ee")
@@ -96,14 +97,18 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
 
         settings = ctk.CTkFrame(self, corner_radius=10, fg_color="#142333")
         settings.pack(fill="x", padx=18, pady=5)
+        settings_top = ctk.CTkFrame(settings, fg_color="transparent")
+        settings_top.pack(fill="x")
+        settings_bottom = ctk.CTkFrame(settings, fg_color="transparent")
+        settings_bottom.pack(fill="x")
         self.similarity_var = tk.StringVar(value="99.0")
         self.confidence_var = tk.StringVar(value="0.20")
         self.negative_var = tk.StringVar(value="10")
         self.source_var = tk.StringVar(value="Tất cả ảnh")
         self.include_existing_var = tk.BooleanVar(value=False)
-        ctk.CTkLabel(settings, text="Nguồn", text_color="#a9bdcc").pack(side="left", padx=(12, 4), pady=10)
+        ctk.CTkLabel(settings_top, text="Nguồn", text_color="#a9bdcc").pack(side="left", padx=(12, 4), pady=6)
         self.source_menu = ctk.CTkOptionMenu(
-            settings,
+            settings_top,
             values=list(self.SOURCE_LABELS),
             variable=self.source_var,
             width=160,
@@ -115,16 +120,18 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
             ("Confidence", self.confidence_var, 64),
             ("Giữ nền (%)", self.negative_var, 58),
         ):
-            ctk.CTkLabel(settings, text=label, text_color="#a9bdcc").pack(side="left", padx=(12, 4), pady=10)
-            ctk.CTkEntry(settings, width=width, textvariable=variable).pack(side="left", padx=(0, 8), pady=8)
-        model_exists = bool(self.project.active_model and Path(self.project.active_model).exists())
-        self.use_model = ctk.CTkCheckBox(settings, text="Dùng model", width=125)
+            ctk.CTkLabel(settings_bottom, text=label, text_color="#a9bdcc").pack(side="left", padx=(12, 4), pady=5)
+            ctk.CTkEntry(settings_bottom, width=width, textvariable=variable).pack(side="left", padx=(0, 8), pady=5)
+        model_exists = bool(self.project.active_model and Path(self.project.active_model).exists()
+                            and self.project.metadata.get("template") != "Hydroponic Slot Condition")
+        self.use_model = ctk.CTkCheckBox(settings_top, text="Dùng model", width=125)
         self.use_model.pack(side="left", padx=10)
         if model_exists:
             self.use_model.select()
         else:
             self.use_model.configure(state="disabled")
-        self.analyze_button = ctk.CTkButton(settings, text="PHÂN TÍCH", width=130, command=self._start_analysis)
+        ToolTip(self.use_model, "Chỉ dùng model định vị đối tượng. Classifier từng rọ Hydro không dùng để suy ra ảnh trống; vẫn lọc được ảnh gần trùng và chất lượng bằng OpenCV.")
+        self.analyze_button = ctk.CTkButton(settings_top, text="PHÂN TÍCH", width=130, command=self._start_analysis)
         self.analyze_button.pack(side="right", padx=10, pady=8)
         ToolTip(self.analyze_button, "Phân tích nguồn đã chọn; không thay đổi dữ liệu khi chưa xác nhận xóa.")
 
@@ -144,7 +151,7 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
         )
         ctk.CTkLabel(
             scope_row,
-            text="Mặc định chỉ lọc lượt nhập mới nhất để thao tác nhanh trên dự án lớn.",
+            text="Tắt: chỉ lượt nhập gần nhất.",
             text_color="#8298aa",
         ).pack(side="left", padx=14)
 
@@ -155,8 +162,8 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
         body = ctk.CTkFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=18, pady=5)
         body.grid_rowconfigure(0, weight=1)
-        body.grid_columnconfigure(0, weight=1, minsize=620)
-        body.grid_columnconfigure(1, weight=0, minsize=480)
+        body.grid_columnconfigure(0, weight=3, minsize=350)
+        body.grid_columnconfigure(1, weight=2, minsize=290)
         table_card = ctk.CTkFrame(body, corner_radius=10, fg_color="#101b27")
         table_card.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
         self.tree_style = ttk.Style(self)
@@ -196,9 +203,9 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
         self.tree.tag_configure("delete", foreground="#ff9ba2", background="#15151d")
         self.tree.tag_configure("keep", foreground="#8ee6b5", background="#0d1920")
 
-        preview_card = ctk.CTkFrame(body, width=480, corner_radius=10, fg_color="#101b27")
+        preview_card = ctk.CTkFrame(body, width=360, corner_radius=10, fg_color="#101b27")
         preview_card.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        preview_card.grid_propagate(False)
+        preview_card.pack_propagate(False)
         preview_header = ctk.CTkFrame(preview_card, fg_color="transparent")
         preview_header.pack(fill="x", padx=12, pady=(12, 5))
         ctk.CTkLabel(
@@ -218,28 +225,26 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
             font=("Segoe UI Semibold", 10),
         )
         self.preview_status_label.pack(side="right")
-        self.preview_label = ctk.CTkLabel(
+        self.preview_label = tk.Label(
             preview_card,
             text="Chọn một dòng",
-            width=450,
-            height=340,
-            fg_color="#071019",
-            corner_radius=8,
+            bg="#071019", fg="#dcecf6", borderwidth=0,
         )
-        self.preview_label.pack(padx=12, pady=5)
+        self.preview_label.pack(fill="both", expand=True, padx=12, pady=5)
+        self.preview_label.bind("<Configure>", self._render_preview)
         self.preview_info = ctk.CTkTextbox(
             preview_card,
-            width=450,
-            height=165,
+            width=250,
+            height=110,
             fg_color="#0b151f",
             font=("Consolas", 11),
             wrap="word",
         )
-        self.preview_info.pack(fill="both", expand=True, padx=12, pady=8)
+        self.preview_info.pack(fill="x", padx=12, pady=8)
         self.preview_info.configure(state="disabled")
 
         footer = ctk.CTkFrame(self, fg_color="transparent")
-        footer.pack(fill="x", padx=18, pady=(3, 14))
+        footer.pack(side="bottom", fill="x", padx=18, pady=(3, 14), before=body)
         self.summary_label = ctk.CTkLabel(footer, text="Chưa phân tích", text_color="#a9bdcc")
         self.summary_label.pack(side="left")
         close = ctk.CTkButton(footer, text="Đóng", width=95, fg_color="#415466", command=self._close)
@@ -326,7 +331,7 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
         except Empty:
             pass
         if self.winfo_exists():
-            self.after(120, self._poll)
+            self.poll_job = self.after(120, self._poll)
 
     def _populate(self, results: list[FrameDecision]):
         self.results = results
@@ -337,6 +342,9 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
         self._update_summary()
         self.status_label.configure(text="Phân tích xong. Double-click để sửa quyết định trước khi xóa.", text_color="#43d17d")
         self.delete_button.configure(state="normal")
+        if results:
+            self.tree.selection_set(results[0].image_id)
+            self._show_selected()
 
     def _insert_or_update(self, item: FrameDecision):
         source_text = "VIDEO" if item.source_kind == SOURCE_VIDEO else "ẢNH NHẬP"
@@ -379,7 +387,10 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
         selected = self.tree.selection()
         if not selected:
             return
-        item = self.result_by_id[selected[0]]
+        item = self.result_by_id.get(selected[0])
+        if item is None:
+            self._clear_preview()
+            return
         item.suggested_delete = not item.suggested_delete
         self._insert_or_update(item)
         self._update_summary()
@@ -388,24 +399,24 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
     def _show_selected(self, _event=None):
         selected = self.tree.selection()
         if not selected:
+            self._clear_preview()
             return
-        item = self.result_by_id[selected[0]]
+        item = self.result_by_id.get(selected[0])
+        if item is None:
+            self._clear_preview()
+            return
         self._apply_selection_state(item)
         record = self.project.image_by_id(item.image_id)
         if record is None:
+            self._clear_preview("Ảnh không còn trong dự án")
             return
         try:
             with Image.open(self.store.image_path(self.project, record)) as source:
-                preview, _content_box = build_contained_preview(source)
-            self.preview_photo = ctk.CTkImage(
-                light_image=preview,
-                dark_image=preview,
-                size=PREVIEW_SIZE,
-            )
-            self.preview_label.configure(image=self.preview_photo, text="")
+                self.preview_source = ImageOps.exif_transpose(source).convert("RGB")
+            self._render_preview()
         except Exception:
-            self.preview_photo = None
-            self.preview_label.configure(image=None, text="Không đọc được ảnh")
+            logger.exception("Cannot preview project %s image %s", self.project.id, record.id)
+            self._clear_preview("Không đọc được ảnh. Kiểm tra file trong dự án.")
         info = (
             f"Quyết định : {'XÓA' if item.suggested_delete else 'GIỮ'}\n"
             f"Nhóm       : {self.CATEGORY_LABELS.get(item.category, item.category)}\n"
@@ -422,6 +433,24 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
         self.preview_info.delete("1.0", tk.END)
         self.preview_info.insert("1.0", info)
         self.preview_info.configure(state="disabled")
+
+    def _render_preview(self, _event=None):
+        if self.preview_source is None:
+            return
+        size = (max(1, self.preview_label.winfo_width() - 16),
+                max(1, self.preview_label.winfo_height() - 16))
+        preview = ImageOps.contain(self.preview_source, size, Image.Resampling.LANCZOS)
+        # Bind to this interpreter and keep the old reference until Tcl has
+        # switched images. CTkLabel.configure(text=..., image=...) could release
+        # the previous image before updating its underlying Tk label.
+        photo = ImageTk.PhotoImage(preview, master=self.preview_label)
+        self.preview_label.configure(image=photo, text="")
+        self.preview_photo = photo
+
+    def _clear_preview(self, text="Chọn một dòng"):
+        self.preview_label.configure(image="", text=text)
+        self.preview_photo = None
+        self.preview_source = None
 
     def _apply_selection_state(self, item: FrameDecision) -> None:
         if item.suggested_delete:
@@ -481,8 +510,7 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
         if hasattr(self, "summary_label"):
             self.summary_label.configure(text="Chưa phân tích")
         if hasattr(self, "preview_label"):
-            self.preview_photo = None
-            self.preview_label.configure(image=None, text="Chọn một dòng")
+            self._clear_preview()
             self.preview_status_label.configure(text="CHƯA CHỌN", fg_color="#314252", text_color="#d7e3ec")
             self.tree_style.map(
                 "Frame.Treeview",
@@ -501,4 +529,7 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
 
     def _close(self):
         self.cancel_event.set()
+        if getattr(self, "poll_job", None):
+            self.after_cancel(self.poll_job)
+        self._clear_preview()
         self.destroy()

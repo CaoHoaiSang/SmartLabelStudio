@@ -307,5 +307,37 @@ class ProjectSwitchingTests(unittest.TestCase):
         self.assertEqual(record.annotations, [])
 
 
+    def test_20_trash_last_project_detaches_and_does_not_recreate_on_save(self):
+        disposable = self.store.create_project("Disposable GUI test", classes=["test"])
+        self.app._change_project_context(disposable)
+        with patch.object(app_module.messagebox, "askyesno", return_value=True), \
+                patch.object(self.store, "list_projects", return_value=[]), \
+                patch.object(self.app.store, "list_projects", return_value=[]):
+            self.app._trash_current_project()
+            self.assertIsNone(self.app.project)
+            self.app.save_project()
+        self.assertFalse(self.store.project_dir(disposable).exists())
+        restored = self.store.restore_project(disposable.id)
+        self.app._change_project_context(restored)
+        self.assertEqual(self.app.project.id, disposable.id)
+        self.switch(self.bottle)
+
+    def test_21_trash_cancel_and_busy_preserve_project(self):
+        self.switch(self.bottle)
+        path = self.store.project_dir(self.bottle) / "project.json"
+        before = path.read_bytes()
+        with patch.object(app_module.messagebox, "askyesno", return_value=False):
+            self.app._trash_current_project()
+        self.assertEqual(path.read_bytes(), before)
+        self.app.import_in_progress = True
+        try:
+            with patch.object(app_module.messagebox, "askyesno") as confirmation:
+                self.app._trash_current_project()
+                confirmation.assert_not_called()
+        finally:
+            self.app.import_in_progress = False
+        self.assertEqual(path.read_bytes(), before)
+
+
 if __name__ == "__main__":
     unittest.main()

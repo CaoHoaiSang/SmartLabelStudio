@@ -34,6 +34,46 @@ class ProjectStore:
     def image_path(self, project: Project, record: ImageRecord) -> Path:
         return self.project_dir(project) / "images" / record.file_name
 
+    def _managed_project_path(self, folder: Path, name: str) -> Path:
+        if not re.fullmatch(r"project_[a-zA-Z0-9_-]+", name):
+            raise ValueError("Mã dự án không hợp lệ.")
+        target = folder / name
+        if folder.resolve().parent != self.workspace or target.resolve().parent != folder.resolve():
+            raise ValueError("Đường dẫn dự án nằm ngoài kho của ứng dụng.")
+        if target.is_symlink():
+            raise ValueError("Không thao tác trên liên kết thư mục dự án.")
+        return target
+
+    def trash_project(self, project: Project) -> Path:
+        """Recoverable deletion: move the complete local project, not sources."""
+        source = self._managed_project_path(self.projects_dir, project.id)
+        if not (source / "project.json").is_file() or self.load(source).id != project.id:
+            raise ValueError("Không tìm thấy đúng dự án cần xóa.")
+        trash = self.workspace / "project_trash"
+        destination = self._managed_project_path(trash, project.id)
+        if destination.exists():
+            raise ValueError("Dự án cùng mã đã có trong thùng rác; hãy khôi phục trước.")
+        trash.mkdir(exist_ok=True)
+        # Save unsaved labels before the atomic same-volume move.
+        self.save(project)
+        source.rename(destination)
+        return destination
+
+    def list_trashed_projects(self) -> list[Path]:
+        trash = self.workspace / "project_trash"
+        if trash.resolve().parent != self.workspace:
+            return []
+        return sorted(trash.glob("*/project.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+
+    def restore_project(self, project_id: str) -> Project:
+        source = self._managed_project_path(self.workspace / "project_trash", project_id)
+        destination = self._managed_project_path(self.projects_dir, project_id)
+        project = self.load(source)
+        if project.id != project_id or destination.exists():
+            raise ValueError("Không khôi phục vì mã dự án không khớp hoặc dự án đã tồn tại.")
+        source.rename(destination)
+        return project
+
     def create_project(
         self,
         name: str,
