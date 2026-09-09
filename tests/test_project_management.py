@@ -141,6 +141,8 @@ class FilterDialogTests(unittest.TestCase):
         self.root.update()
 
     def test_centered_fits_screen_and_footer_visible(self):
+        if not self.root.winfo_ismapped():
+            self.skipTest("Window station cannot map Tk windows (SSH); geometry requires an interactive display")
         self.assertGreaterEqual(self.dialog.winfo_rootx(), 0)
         self.assertGreaterEqual(self.dialog.winfo_rooty(), 0)
         self.assertLessEqual(self.dialog.winfo_rooty() + self.dialog.winfo_height(), self.dialog.winfo_screenheight())
@@ -152,6 +154,8 @@ class FilterDialogTests(unittest.TestCase):
                                  self.dialog.winfo_rooty() + self.dialog.winfo_height())
 
     def test_compact_window_keeps_preview_and_actions_visible(self):
+        if not self.root.winfo_ismapped():
+            self.skipTest("Window station cannot map Tk windows (SSH); geometry requires an interactive display")
         for geometry in ("1000x640+20+20", "900x600+20+20"):
             self.dialog.geometry(geometry)
             self.root.update()
