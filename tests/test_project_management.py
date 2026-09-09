@@ -16,6 +16,15 @@ from smartlabel.project_store import ProjectStore
 from smartlabel.ui_components import ProjectSettingsDialog
 
 
+def settle_window(root):
+    # CTk temporarily withdraws windows while repainting Windows titlebars and
+    # remaps them with after(). update() alone does not wait for these timers.
+    settled = tk.BooleanVar(master=root, value=False)
+    root.after(250, lambda: settled.set(True))
+    root.wait_variable(settled)
+    root.update_idletasks()
+
+
 class ProjectTrashTests(unittest.TestCase):
     def setUp(self):
         self.tmp = TemporaryDirectory()
@@ -78,6 +87,7 @@ class FilterDialogTests(unittest.TestCase):
         cls.root.geometry("1000x650+20+20")
         cls.root.deiconify()
         cls.root.update()
+        settle_window(cls.root)
 
     @classmethod
     def tearDownClass(cls):
@@ -100,6 +110,7 @@ class FilterDialogTests(unittest.TestCase):
         self.dialog._populate([FrameDecision(r.id, r.file_name, "positive", "Giữ", False) for r in self.project.images])
         self.dialog.deiconify()
         self.root.update()
+        settle_window(self.root)
 
     def tearDown(self):
         self.dialog._close()
@@ -144,6 +155,7 @@ class FilterDialogTests(unittest.TestCase):
         for geometry in ("1000x640+20+20", "900x600+20+20"):
             self.dialog.geometry(geometry)
             self.root.update()
+            settle_window(self.root)
             for control in (self.dialog.preview_label, self.dialog.delete_button, self.dialog.analyze_button):
                 self.assertGreater(control.winfo_height(), 20,
                     f"{control}: dialog={self.dialog.geometry()}, state={self.dialog.state()}, parent={control.master.winfo_geometry()}")
