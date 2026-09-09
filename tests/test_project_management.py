@@ -76,6 +76,7 @@ class FilterDialogTests(unittest.TestCase):
         except tk.TclError as exc:
             raise unittest.SkipTest(str(exc))
         cls.root.geometry("1000x650+20+20")
+        cls.root.deiconify()
         cls.root.update()
 
     @classmethod
@@ -97,6 +98,7 @@ class FilterDialogTests(unittest.TestCase):
         self.root.report_callback_exception = lambda *args: self.errors.append(args)
         self.dialog = SmartFrameFilterDialog(self.root, self.project, self.store, lambda *_: None)
         self.dialog._populate([FrameDecision(r.id, r.file_name, "positive", "Giữ", False) for r in self.project.images])
+        self.dialog.deiconify()
         self.root.update()
 
     def tearDown(self):
@@ -106,6 +108,11 @@ class FilterDialogTests(unittest.TestCase):
         self.assertEqual(self.errors, [])
 
     def test_repeated_selection_resize_and_missing_image_clear_preview(self):
+        # Reproduce an unmapped 1px viewport, independent of installed Pillow.
+        with patch.object(self.dialog.preview_label, "winfo_width", return_value=1), \
+                patch.object(self.dialog.preview_label, "winfo_height", return_value=1):
+            self.dialog._render_preview()
+        self.assertIsNotNone(self.dialog.preview_source)
         for _ in range(8):
             for record in self.project.images:
                 self.dialog.tree.selection_set(record.id)
@@ -127,7 +134,9 @@ class FilterDialogTests(unittest.TestCase):
         self.assertGreaterEqual(self.dialog.winfo_rooty(), 0)
         self.assertLessEqual(self.dialog.winfo_rooty() + self.dialog.winfo_height(), self.dialog.winfo_screenheight())
         for control in [self.dialog.delete_button, self.dialog.preview_label]:
-            self.assertGreater(control.winfo_height(), 20)
+            self.assertGreater(control.winfo_height(), 20,
+                f"{control}: dialog={self.dialog.geometry()}, screen={self.dialog.winfo_screenwidth()}x{self.dialog.winfo_screenheight()}, "
+                f"state={self.dialog.state()}, parent={control.master.winfo_geometry()}, scale={self.dialog._get_window_scaling()}")
             self.assertLessEqual(control.winfo_rooty() + control.winfo_height(),
                                  self.dialog.winfo_rooty() + self.dialog.winfo_height())
 
@@ -136,7 +145,8 @@ class FilterDialogTests(unittest.TestCase):
             self.dialog.geometry(geometry)
             self.root.update()
             for control in (self.dialog.preview_label, self.dialog.delete_button, self.dialog.analyze_button):
-                self.assertGreater(control.winfo_height(), 20)
+                self.assertGreater(control.winfo_height(), 20,
+                    f"{control}: dialog={self.dialog.geometry()}, state={self.dialog.state()}, parent={control.master.winfo_geometry()}")
                 self.assertLessEqual(control.winfo_rooty() + control.winfo_height(),
                                      self.dialog.winfo_rooty() + self.dialog.winfo_height())
                 self.assertLessEqual(control.winfo_rootx() + control.winfo_width(),

@@ -439,7 +439,12 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
             return
         size = (max(1, self.preview_label.winfo_width() - 16),
                 max(1, self.preview_label.winfo_height() - 16))
-        preview = ImageOps.contain(self.preview_source, size, Image.Resampling.LANCZOS)
+        # Before geometry settles (or while minimized), older Pillow versions
+        # round one dimension of contain(..., (1, 1)) down to zero.
+        ratio = min(size[0] / self.preview_source.width, size[1] / self.preview_source.height)
+        fitted = (max(1, round(self.preview_source.width * ratio)),
+                  max(1, round(self.preview_source.height * ratio)))
+        preview = self.preview_source.resize(fitted, Image.Resampling.LANCZOS)
         # Bind to this interpreter and keep the old reference until Tcl has
         # switched images. CTkLabel.configure(text=..., image=...) could release
         # the previous image before updating its underlying Tk label.
