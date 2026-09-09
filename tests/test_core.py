@@ -231,7 +231,8 @@ class SmartLabelCoreTests(unittest.TestCase):
         self.assertEqual(ThumbnailList.status_style("unknown"), IMAGE_REVIEW_STATUS_STYLE["unlabeled"])
 
     def test_project_page_actions_have_groups_and_detailed_hydro_help(self):
-        self.assertEqual(set(PROJECT_ACTION_GROUPS), {"import", "cleanup", "settings"})
+        self.assertEqual(set(PROJECT_ACTION_GROUPS), {"import", "cleanup", "settings", "lifecycle"})
+        self.assertIn("QUẢN LÝ DỰ ÁN", PROJECT_ACTION_GROUPS["lifecycle"][0])
         self.assertIn("DỌN DỮ LIỆU NHẬP", PROJECT_ACTION_GROUPS["cleanup"][0])
         self.assertEqual(set(REVIEW_ACTION_GROUPS), {"checks", "triage"})
         self.assertIn("KIỂM TRA DATASET", REVIEW_ACTION_GROUPS["checks"][0])
