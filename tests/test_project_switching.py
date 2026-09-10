@@ -366,5 +366,33 @@ class ProjectSwitchingTests(unittest.TestCase):
         self.assertEqual(path.read_bytes(), before)
 
 
+    def test_22_repair_preview_cancel_does_not_import_or_change_projects(self):
+        self.switch(self.hydro)
+        project = self.app.project
+        before = project.to_dict()
+        plan = {"slotImages": 3, "captures": 1, "keptImages": 7, "digest": "fixture"}
+        self.app.import_in_progress = True
+        self.app.event_queue.put(("hydro_archive_repair_confirmation", (project, "fixture.zip", plan)))
+        with patch.object(app_module.messagebox, "askyesno", return_value=False) as confirm, \
+                patch.object(self.app, "_start_hydro_archive_import") as start:
+            self.app._drain_events()
+            confirm.assert_called_once()
+            start.assert_not_called()
+        self.assertFalse(self.app.import_in_progress)
+        self.assertEqual(project.to_dict(), before)
+
+    def test_23_repair_preview_confirm_forwards_digest_to_same_project(self):
+        self.switch(self.hydro)
+        project = self.app.project
+        plan = {"slotImages": 2, "captures": 1, "keptImages": 8, "digest": "verified-plan"}
+        self.app.import_in_progress = True
+        self.app.event_queue.put(("hydro_archive_repair_confirmation", (project, "fixture.zip", plan)))
+        with patch.object(app_module.messagebox, "askyesno", return_value=True), \
+                patch.object(self.app, "_start_hydro_archive_import") as start:
+            self.app._drain_events()
+            start.assert_called_once_with(project, "fixture.zip", "verified-plan")
+        self.app.import_in_progress = False
+
+
 if __name__ == "__main__":
     unittest.main()

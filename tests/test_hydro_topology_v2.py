@@ -8,7 +8,7 @@ from pathlib import Path
 from PIL import Image
 from smartlabel.hydroponic import (apply_hydroponic_slot_template, import_capture_manifest,
     import_capture_dataset_archive, validate_capture_manifest, hydro_dataset_qa,
-    write_hydro_model_bundle, CaptureManifestError)
+    write_hydro_model_bundle, CaptureManifestError, CaptureRepairConfirmationRequired)
 from smartlabel.project_store import ProjectStore
 from smartlabel.hydro_topology import topology_slots
 
@@ -94,3 +94,14 @@ class HydroTopologyV2Tests(unittest.TestCase):
             import_capture_dataset_archive(store, project, archive_path)
             self.assertEqual(len(project.images), 18)
             self.assertTrue(all(not record.source_path for record in project.images))
+            # Three unequal tubes (5/7/6), not a fixed ten-slot repair path.
+            kept_before = [r.to_dict() for r in project.images if r not in (project.images[4], project.images[11], project.images[17])]
+            store.delete_images(project, [project.images[4], project.images[11], project.images[17]])
+            with self.assertRaises(CaptureRepairConfirmationRequired) as pending:
+                import_capture_dataset_archive(store, project, archive_path)
+            self.assertEqual(pending.exception.plan["slotImages"], 3)
+            result = import_capture_dataset_archive(store, project, archive_path,
+                confirmed_repair_digest=pending.exception.plan["digest"])
+            self.assertEqual(result["slotImagesImported"], 3)
+            self.assertEqual([r.to_dict() for r in project.images[:15]], kept_before)
+            self.assertEqual({r.metadata["slotId"] for r in project.images}, set(topology_slots(manifest)))

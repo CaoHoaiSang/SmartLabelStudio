@@ -24,6 +24,7 @@ from .deployment import build_vision_bundle_manifest, classifier_manifest_entry,
 from .evaluation import evaluate_yolo_model
 from .hardware import inspect_hardware
 from .hydroponic import (
+    CaptureRepairConfirmationRequired,
     apply_hydroponic_slot_template,
     describe_hydro_qa_issue,
     export_jetson_onnx,
@@ -669,14 +670,21 @@ class SmartLabelApp(ctk.CTk):
         if not path:
             return
         project = self.project
+        self._start_hydro_archive_import(project, path)
+
+    def _start_hydro_archive_import(self, project: Project, path: str, confirmed_repair_digest: str | None = None) -> None:
+        if self.project is not project:
+            return
         self.import_in_progress = True
         self._apply_project_context_visibility()
         self._set_status("Đang kiểm tra gói HydroFlow…")
 
         def worker() -> None:
             try:
-                result = import_capture_dataset_archive(self.store, project, path)
+                result = import_capture_dataset_archive(self.store, project, path, confirmed_repair_digest=confirmed_repair_digest)
                 self.event_queue.put(("hydro_archive_done", result))
+            except CaptureRepairConfirmationRequired as exc:
+                self.event_queue.put(("hydro_archive_repair_confirmation", (project, path, exc.plan)))
             except Exception as exc:
                 self.event_queue.put(("hydro_archive_error", str(exc)))
 
@@ -4882,6 +4890,26 @@ class SmartLabelApp(ctk.CTk):
                     added, skipped = payload
                     self._refresh_everything()
                     messagebox.showinfo("Nhập hoàn tất", f"Đã thêm: {added}\nBỏ qua ảnh trùng: {skipped}")
+                elif kind == "hydro_archive_repair_confirmation":
+                    project, archive_path, plan = payload
+                    if self.project is not project:
+                        self.import_in_progress = False
+                        self._apply_project_context_visibility()
+                        continue
+                    confirmed = messagebox.askyesno(
+                        "Bổ sung ảnh rọ đã xóa?",
+                        f"Gói này có thể bổ sung {plan['slotImages']} ảnh rọ còn thiếu trong {plan['captures']} lần chụp.\n\n"
+                        f"Giữ nguyên {plan['keptImages']} ảnh đã có cùng toàn bộ nhãn và trạng thái duyệt. "
+                        "Ảnh được bổ sung sẽ ở trạng thái chưa duyệt.\n\n"
+                        "Bạn muốn bổ sung các ảnh còn thiếu và tiếp tục nhập gói?",
+                        parent=self,
+                    )
+                    if confirmed:
+                        self._start_hydro_archive_import(project, archive_path, plan["digest"])
+                    else:
+                        self.import_in_progress = False
+                        self._apply_project_context_visibility()
+                        self._set_status("Đã hủy nhập gói; dữ liệu và nhãn được giữ nguyên")
                 elif kind == "hydro_archive_error":
                     self.import_in_progress = False
                     self._apply_project_context_visibility()
@@ -4897,7 +4925,8 @@ class SmartLabelApp(ctk.CTk):
                     messagebox.showinfo(
                         "Nhập gói HydroFlow hoàn tất",
                         (
-                            f"Capture mới: {result['capturesImported']}\n"
+                            f"Lần chụp mới: {result['capturesImported'] - result.get('capturesRepaired', 0)}\n"
+                            f"Lần chụp được bổ sung: {result.get('capturesRepaired', 0)} · {result.get('slotImagesRepaired', 0)} ảnh\n"
                             f"Capture đã có, bỏ qua: {result['capturesSkipped']}\n"
                             f"Ảnh slot mới: {result['slotImagesImported']}\n"
                             f"Capture cập nhật tuổi cây có kiểm chứng: {result.get('capturesMetadataUpdated', 0)}"

@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 import unittest
+from unittest.mock import patch
 import zipfile
 
 from PIL import Image
@@ -14,6 +15,7 @@ from PIL import Image
 from smartlabel.dataset_manager import DatasetManager
 from smartlabel.hydroponic import (
     CaptureManifestError,
+    CaptureRepairConfirmationRequired,
     SLOT_IDS,
     apply_hydroponic_slot_template,
     describe_hydro_qa_issue,
@@ -315,6 +317,77 @@ class HydroponicMvpTests(unittest.TestCase):
         latest = latest_import_records(self.project)
         self.assertEqual(len(latest), 10)
         self.assertFalse(old_ids.intersection(r.id for r in latest))
+
+    def test_partial_capture_requires_confirmation_then_preserves_existing_labels(self):
+        archive = self.create_dataset_archive(["cap_repair"])
+        import_capture_dataset_archive(self.store, self.project, archive)
+        kept = self.project.images[0]
+        kept.attributes = {"plant_presence": "present", "yellow_leaf": "present", "wilt": "absent"}
+        kept.review_status = "reviewed"
+        self.store.delete_images(self.project, self.project.images[-3:])
+        before = [record.to_dict() for record in self.project.images]
+        project_file = self.store.project_dir(self.project) / "project.json"
+        disk_before = project_file.read_bytes()
+        with self.assertRaises(CaptureRepairConfirmationRequired) as pending:
+            import_capture_dataset_archive(self.store, self.project, archive)
+        self.assertEqual(pending.exception.plan["slotImages"], 3)
+        self.assertEqual(project_file.read_bytes(), disk_before)
+        self.assertEqual([r.to_dict() for r in self.project.images], before)
+        result = import_capture_dataset_archive(self.store, self.project, archive,
+            confirmed_repair_digest=pending.exception.plan["digest"])
+        self.assertEqual(result["capturesRepaired"], 1)
+        self.assertEqual(result["slotImagesImported"], 3)
+        self.assertEqual([r.to_dict() for r in self.project.images[:7]], before)
+        self.assertTrue(all(r.review_status == "unlabeled" for r in self.project.images[7:]))
+        self.assertEqual(len({r.metadata["assetId"] for r in self.project.images}), 10)
+        from smartlabel.frame_filter import latest_import_records
+        self.assertEqual(len(latest_import_records(self.project)), 3)
+        self.assertEqual(import_capture_dataset_archive(self.store, self.project, archive)["slotImagesImported"], 0)
+
+    def test_stale_repair_confirmation_requires_new_preview_before_importing_anything(self):
+        archive = self.create_dataset_archive(["cap_stale_plan", "cap_other"])
+        import_capture_dataset_archive(self.store, self.project, archive)
+        self.store.delete_images(self.project, [self.project.images[0]])
+        with self.assertRaises(CaptureRepairConfirmationRequired) as pending:
+            import_capture_dataset_archive(self.store, self.project, archive)
+        self.store.delete_images(self.project, [self.project.images[0]])
+        with self.assertRaises(CaptureRepairConfirmationRequired) as updated:
+            import_capture_dataset_archive(self.store, self.project, archive,
+                confirmed_repair_digest=pending.exception.plan["digest"])
+        self.assertEqual(updated.exception.plan["slotImages"], 2)
+        self.assertEqual(len(self.project.images), 18)
+
+    def test_repair_save_failure_rolls_back_new_files_and_keeps_existing_records(self):
+        archive = self.create_dataset_archive(["cap_io_failure"])
+        import_capture_dataset_archive(self.store, self.project, archive)
+        self.store.delete_images(self.project, self.project.images[-2:])
+        before = self.project.to_dict()
+        folder = self.store.project_dir(self.project)
+        before_files = {p.relative_to(folder): p.read_bytes() for p in folder.rglob("*") if p.is_file()}
+        with self.assertRaises(CaptureRepairConfirmationRequired) as pending:
+            import_capture_dataset_archive(self.store, self.project, archive)
+        with patch.object(self.store, "save", side_effect=OSError("simulated disk failure")):
+            with self.assertRaises(OSError):
+                import_capture_dataset_archive(self.store, self.project, archive,
+                    confirmed_repair_digest=pending.exception.plan["digest"])
+        self.assertEqual(self.project.to_dict(), before)
+        self.assertEqual({p.relative_to(folder): p.read_bytes() for p in folder.rglob("*") if p.is_file()}, before_files)
+
+    def test_repair_never_overwrites_corrupt_existing_image_or_geometry(self):
+        archive = self.create_dataset_archive(["cap_tampered"])
+        import_capture_dataset_archive(self.store, self.project, archive)
+        self.store.delete_images(self.project, self.project.images[-1:])
+        kept = self.project.images[0]
+        kept.lineage["rectInFullFrame"]["x"] += 1
+        with self.assertRaisesRegex(CaptureManifestError, "Geometry"):
+            import_capture_dataset_archive(self.store, self.project, archive)
+        kept.lineage["rectInFullFrame"]["x"] -= 1
+        image = self.store.image_path(self.project, kept)
+        image.write_bytes(b"existing corrupt evidence")
+        with self.assertRaisesRegex(CaptureManifestError, "file"):
+            import_capture_dataset_archive(self.store, self.project, archive)
+        self.assertEqual(image.read_bytes(), b"existing corrupt evidence")
+        self.assertEqual(len(self.project.images), 9)
 
     def test_dataset_archive_applies_audited_crop_context_correction_without_rewriting_manifest(self) -> None:
         initial_archive = self.create_dataset_archive(["cap_archive_corrected"])

@@ -84,6 +84,49 @@ class CaptureManifestError(ValueError):
     pass
 
 
+class CaptureRepairConfirmationRequired(CaptureManifestError):
+    def __init__(self, plan: dict[str, Any]):
+        self.plan = plan
+        super().__init__("Cần xác nhận trước khi bổ sung những ảnh rọ đã xóa.")
+
+
+def _verified_existing_slots(store: ProjectStore, project: Project, manifest: dict[str, Any]) -> list[ImageRecord]:
+    """Only reuse records whose image, identity and geometry match the incoming evidence."""
+    existing = [r for r in project.images if r.metadata.get("captureId") == manifest["captureId"]]
+    assets = {a["assetId"]: a for a in manifest["assets"]}
+    root = store.project_dir(project).resolve()
+    seen: set[str] = set()
+    for record in existing:
+        asset_id = record.metadata.get("assetId")
+        asset = assets.get(asset_id, {})
+        if record.asset_role != "slot" or asset.get("role") != "slot" or asset_id in seen:
+            raise CaptureManifestError("Capture có rọ trùng hoặc khác định danh; giữ nguyên dữ liệu để kiểm tra.")
+        seen.add(asset_id)
+        if (record.sha256 != asset["sha256"] or record.width != asset["width"] or record.height != asset["height"]
+                or record.parent_asset_id != asset["parentAssetId"]
+                or record.lineage.get("roiAssetId") != asset["parentAssetId"]
+                or record.lineage.get("rectInFullFrame") != asset["rectInFullFrame"]
+                or record.metadata.get("slotId") != asset["slotId"]):
+            raise CaptureManifestError("Ảnh rọ đã có khác checksum hoặc Geometry; không ghi đè ảnh và nhãn.")
+        for field in ("cropCode", "cropCycleId", "siteId", "deviceId", "cameraProfileId", "geometryProfileId", "capturedAt", "bindingId", "bindingRevision"):
+            if record.metadata.get(field) != manifest.get(field):
+                raise CaptureManifestError(f"Capture đã có khác thông tin {field}; không tự ghép dữ liệu.")
+        if record.metadata.get("rackId") != str(asset.get("actualRackId") or asset["rackId"]):
+            raise CaptureManifestError("Capture đã có thuộc ống NFT khác; không tự ghép dữ liệu.")
+        image_path = store.image_path(project, record)
+        if not image_path.resolve().is_relative_to(root) or image_path.is_symlink():
+            raise CaptureManifestError("Đường dẫn ảnh rọ không an toàn.")
+        if not image_path.is_file() or _sha256(image_path) != asset["sha256"]:
+            raise CaptureManifestError("Ảnh rọ còn trong danh sách nhưng file bị thiếu/hỏng; không tự ghi đè nhãn, hãy kiểm tra bản sao lưu.")
+        for key, asset_key in (("fullFrameRelativePath", "fullFrameAssetId"), ("roiRelativePath", "roiAssetId")):
+            parent = assets.get(record.lineage.get(asset_key), {})
+            parent_path = root / _safe_relative_path(record.lineage.get(key))
+            if (parent.get("role") not in {"full_frame", "roi"} or not parent_path.resolve().is_relative_to(root)
+                    or parent_path.is_symlink() or not parent_path.is_file() or _sha256(parent_path) != parent.get("sha256")):
+                raise CaptureManifestError("Ảnh cha của capture không khớp; giữ nguyên dữ liệu để kiểm tra.")
+    return existing
+
+
 def is_hydroponic_project(project: Project | None) -> bool:
     return bool(project and project.metadata.get("template") == HYDROPONIC_TEMPLATE)
 
@@ -356,6 +399,7 @@ def import_capture_manifest(
     crop_context_correction_ids: list[str] | None = None,
     import_batch: str | None = None,
     dataset_export_id: str | None = None,
+    allow_existing_slots: bool = False,
 ) -> tuple[int, int]:
     manifest, resolved = validate_capture_manifest(manifest_path)
     if effective_crop_context is not None:
@@ -377,7 +421,9 @@ def import_capture_manifest(
             raise CaptureManifestError(
                 f"manifest {field} {manifest[field]} does not match project {field} {configured}"
             )
-    known_asset_ids = {record.metadata.get("assetId") for record in project.images}
+    existing = _verified_existing_slots(store, project, manifest) if allow_existing_slots else []
+    existing_ids = {record.metadata.get("assetId") for record in existing}
+    known_asset_ids = {record.metadata.get("assetId") for record in project.images if record not in existing}
     slot_assets = [asset for asset in manifest["assets"] if asset.get("role") == "slot"]
     duplicate_ids = [asset["assetId"] for asset in slot_assets if asset["assetId"] in known_asset_ids]
     if duplicate_ids:
@@ -391,12 +437,13 @@ def import_capture_manifest(
     project_root = store.project_dir(project).resolve()
     if not provenance_dir.resolve().is_relative_to(project_root) or provenance_dir.is_symlink():
         raise CaptureManifestError("unsafe capture provenance path")
-    if any(record.metadata.get("captureId") == manifest["captureId"] for record in project.images):
+    if not allow_existing_slots and any(record.metadata.get("captureId") == manifest["captureId"] for record in project.images):
         raise CaptureManifestError(f"capture already has project records: {manifest['captureId']}")
     created_files = []
     created_records = []
     metadata_before = json.loads(json.dumps(project.metadata))
     last_import_batch_before = project.last_import_batch
+    updated_at_before = project.updated_at
     full_asset = next(asset for asset in manifest["assets"] if asset.get("role") == "full_frame")
     roi_assets = {asset["rackId"]: asset for asset in manifest["assets"] if asset.get("role") == "roi"}
     import_batch = import_batch or new_id("import")
@@ -427,6 +474,8 @@ def import_capture_manifest(
         expected_slots = topology_slots(manifest)
         slot_map = topology_slot_map(manifest)
         for asset in sorted(slot_assets, key=lambda item: expected_slots.index(item["slotId"])):
+            if asset["assetId"] in existing_ids:
+                continue
             source = resolved[asset["assetId"]]
             suffix = source.suffix.lower() if source.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"} else ".jpg"
             capture_name_hash = hashlib.sha256(manifest["captureId"].encode("utf-8")).hexdigest()[:8]
@@ -536,10 +585,11 @@ def import_capture_manifest(
                 project.images.remove(record)
         project.metadata = metadata_before
         project.last_import_batch = last_import_batch_before
+        project.updated_at = updated_at_before
         if not provenance_existed and provenance_dir.exists():
             shutil.rmtree(provenance_dir, ignore_errors=True)
         raise
-    return len(created_records), 0
+    return len(created_records), len(existing)
 
 
 DATASET_ARCHIVE_MAX_FILES = 10_000
@@ -722,6 +772,8 @@ def import_capture_dataset_archive(
     store: ProjectStore,
     project: Project,
     archive_path: str | Path,
+    *,
+    confirmed_repair_digest: str | None = None,
 ) -> dict[str, Any]:
     if not is_hydroponic_project(project):
         raise CaptureManifestError("project must use the Hydroponic Slot Condition template")
@@ -738,6 +790,20 @@ def import_capture_dataset_archive(
                     f"dataset {field} {index[field]} does not match project {field} {configured}"
                 )
         records_by_capture: dict[str, list[ImageRecord]] = defaultdict(list)
+        repairs = []
+        # Validate all reused records before any metadata update or capture import.
+        for manifest, _path in manifests:
+            existing = _verified_existing_slots(store, project, manifest)
+            if existing and len(existing) < len(topology_slots(manifest)):
+                known = {r.metadata["assetId"] for r in existing}
+                missing = [{"assetId": a["assetId"], "slotId": a["slotId"], "sha256": a["sha256"]}
+                           for a in manifest["assets"] if a["role"] == "slot" and a["assetId"] not in known]
+                repairs.append({"captureId": manifest["captureId"], "keptImages": len(existing), "missing": missing,
+                                "manifestSha256": _sha256(_path), "keptRecordIds": sorted(r.id for r in existing)})
+        repair_digest = hashlib.sha256(json.dumps({"projectId": project.id, "repairs": repairs}, sort_keys=True).encode()).hexdigest()
+        if repairs and confirmed_repair_digest != repair_digest:
+            raise CaptureRepairConfirmationRequired({"digest": repair_digest, "captures": len(repairs),
+                "slotImages": sum(len(r["missing"]) for r in repairs), "keptImages": sum(r["keptImages"] for r in repairs)})
         rows_by_capture = {
             row["captureId"]: row
             for row in index["captures"] if isinstance(row, dict) and isinstance(row.get("captureId"), str)
@@ -750,20 +816,22 @@ def import_capture_dataset_archive(
         to_import: list[Path] = []
         skipped_capture_ids: list[str] = []
         metadata_updated_capture_ids: list[str] = []
+        pending_metadata: list[tuple[ImageRecord, dict[str, Any]]] = []
         for manifest, manifest_path in manifests:
             capture_id = manifest["captureId"]
             row = rows_by_capture[capture_id]
             existing = records_by_capture.get(capture_id, [])
             if existing:
                 existing_slot_ids = {record.metadata.get("slotId") for record in existing if record.asset_role == "slot"}
-                if len(existing) != len(topology_slots(manifest)) or existing_slot_ids != set(topology_slots(manifest)):
-                    raise CaptureManifestError(f"project contains an incomplete imported capture: {capture_id}")
+                partial = len(existing) < len(topology_slots(manifest))
+                if not existing_slot_ids.issubset(set(topology_slots(manifest))):
+                    raise CaptureManifestError(f"project capture topology mismatch: {capture_id}")
                 effective_context = row.get("effectiveCropContext")
                 if isinstance(effective_context, dict):
                     correction_ids = list(row.get("cropContextCorrectionIds") or [])
                     capture_metadata_changed = False
                     for record in existing:
-                        metadata = record.metadata
+                        metadata = dict(record.metadata)
                         before_metadata = dict(metadata)
                         metadata.setdefault("originalSowingDate", metadata.get("sowingDate"))
                         metadata.setdefault("originalNftStartDate", metadata.get("nftStartDate"))
@@ -780,9 +848,14 @@ def import_capture_dataset_archive(
                             "cropContextCorrectionIds": correction_ids,
                         })
                         capture_metadata_changed = capture_metadata_changed or metadata != before_metadata
+                        if metadata != before_metadata:
+                            pending_metadata.append((record, metadata))
                     if capture_metadata_changed:
                         metadata_updated_capture_ids.append(capture_id)
-                skipped_capture_ids.append(capture_id)
+                if partial:
+                    to_import.append(manifest_path)
+                else:
+                    skipped_capture_ids.append(capture_id)
                 continue
             duplicate = next(
                 (asset["assetId"] for asset in manifest["assets"] if asset.get("role") == "slot" and asset["assetId"] in known_asset_ids),
@@ -805,16 +878,27 @@ def import_capture_dataset_archive(
                 crop_context_correction_ids=row.get("cropContextCorrectionIds"),
                 import_batch=import_batch,
                 dataset_export_id=index["datasetExportId"],
+                allow_existing_slots=True,
             )
             imported += 1
             slot_images += added
         if metadata_updated_capture_ids:
-            store.save(project)
+            original_metadata = [(record, record.metadata) for record, _ in pending_metadata]
+            try:
+                for record, metadata in pending_metadata:
+                    record.metadata = metadata
+                store.save(project)
+            except Exception:
+                for record, metadata in original_metadata:
+                    record.metadata = metadata
+                raise
         return {
             "datasetExportId": index["datasetExportId"],
             "capturesImported": imported,
             "capturesSkipped": len(skipped_capture_ids),
             "slotImagesImported": slot_images,
+            "capturesRepaired": len(repairs),
+            "slotImagesRepaired": sum(len(r["missing"]) for r in repairs),
             "skippedCaptureIds": skipped_capture_ids,
             "capturesMetadataUpdated": len(metadata_updated_capture_ids),
             "metadataUpdatedCaptureIds": metadata_updated_capture_ids,
