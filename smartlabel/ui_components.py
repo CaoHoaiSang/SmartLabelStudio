@@ -4,13 +4,16 @@ import tkinter as tk
 from tkinter import colorchooser, messagebox, simpledialog
 from typing import Callable
 import re
+import copy
 import unicodedata
 
 import customtkinter as ctk
 from PIL import Image
 
 from .models import LabelClass, Project
-from .attribute_labels import HYDRO_VALUE_LABELS, is_hydro_attribute
+from .attribute_labels import HYDRO_VALUE_LABELS
+from .hydro_labels import model_attributes, install_label_schema
+from .label_schema import make_label_schema
 
 
 PROJECT_TEMPLATE_LABELS = {
@@ -192,7 +195,7 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
     def __init__(self, parent, defaults: dict):
         super().__init__(parent)
         self.result: dict | None = None
-        self.title("Cấu hình HydroModelBundleV1")
+        self.title("Cấu hình gói model Hydro")
         self.geometry("720x715")
         self.minsize(650, 650)
         self.transient(parent)
@@ -247,8 +250,12 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
         ctk.CTkLabel(self, text="NGƯỠNG TỪNG CLASSIFIER", text_color="#22b9ee", font=("Segoe UI Semibold", 12)).pack(anchor="w", padx=22, pady=(14, 4))
         thresholds = defaults.get("thresholds", {})
         crop_display_name = str(defaults.get("cropDisplayName") or "cây mục tiêu").strip()
-        for key, title in (("plant_presence", f"Có {crop_display_name} trong rọ"), ("yellow_leaf", "Lá vàng"), ("wilt", "Héo")):
-            row = ctk.CTkFrame(self, fg_color="#142333", corner_radius=8)
+        self.model_titles = defaults.get("modelTitles") or {
+            "plant_presence": f"Có {crop_display_name} trong rọ", "yellow_leaf": "Lá vàng", "wilt": "Héo"}
+        threshold_area = ctk.CTkScrollableFrame(self, fg_color="transparent", height=160)
+        threshold_area.pack(fill="both", expand=True, padx=12)
+        for key, title in self.model_titles.items():
+            row = ctk.CTkFrame(threshold_area, fg_color="#142333", corner_radius=8)
             row.pack(fill="x", padx=22, pady=4)
             ctk.CTkLabel(row, text=title, width=190, anchor="w").pack(side="left", padx=10, pady=8)
             for bound, label in (("lowThreshold", "Low"), ("highThreshold", "High")):
@@ -268,7 +275,7 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
             return
         thresholds = {}
         try:
-            for key in ("plant_presence", "yellow_leaf", "wilt"):
+            for key in self.model_titles:
                 low = float(self.variables[f"{key}.lowThreshold"].get())
                 high = float(self.variables[f"{key}.highThreshold"].get())
                 if not 0 <= low < high <= 1:
@@ -669,6 +676,8 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         self.configure(fg_color="#0b151f")
         self.class_rows: list[dict] = []
         self.attribute_groups: dict[str, dict] = {}
+        self.hydro_attributes = ({a["id"]: a for a in model_attributes(project)}
+                                 if project.metadata.get("template") == "Hydroponic Slot Condition" else {})
 
         ctk.CTkLabel(
             self,
@@ -763,7 +772,7 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
     def _build_attributes(self, parent):
         toolbar = ctk.CTkFrame(parent, fg_color="transparent")
         toolbar.pack(fill="x", padx=8, pady=8)
-        add_group = ctk.CTkButton(toolbar, text="+ Thêm nhóm thuộc tính", width=180, command=self._add_attribute_group)
+        add_group = ctk.CTkButton(toolbar, text="+ Thêm tình trạng" if self.hydro_attributes else "+ Thêm nhóm thuộc tính", width=180, command=self._add_attribute_group)
         add_group.pack(side="left")
         ToolTip(add_group, "Tạo nhóm tùy chọn mới, ví dụ: Tình trạng, Màu sắc, Nắp chai hoặc Mức che khuất.")
         ctk.CTkLabel(
@@ -807,11 +816,25 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         while key in self.attribute_groups:
             key = f"{base}_{index}"
             index += 1
-        self._append_attribute_group(
-            key,
-            ["chua_xac_dinh"],
-            {"title": title.strip(), "default": "", "required": False, "role": "metadata"},
-        )
+        if self.hydro_attributes:
+            if len(self.hydro_attributes) >= 16:
+                messagebox.showwarning("Đủ số tình trạng", "Tối đa 15 tình trạng và một model cây hiện diện.", parent=self)
+                return
+            presence = next(a["id"] for a in self.hydro_attributes.values() if a["role"] == "presence")
+            attr = {"id": key, "displayName": title.strip(), "role": "condition", "requires": presence,
+                    "values": [
+                        {"id": "absent", "displayName": "Không có dấu hiệu", "meaning": "negative"},
+                        {"id": "present", "displayName": "Có dấu hiệu", "meaning": "positive"},
+                        {"id": "uncertain", "displayName": "Chưa chắc chắn", "meaning": "uncertain"},
+                        {"id": "not_applicable", "displayName": "Không áp dụng", "meaning": "not_applicable"}]}
+            self.hydro_attributes[key] = attr
+            self._append_attribute_group(key, [v["id"] for v in attr["values"]],
+                {"title": title.strip(), "default": "", "required": True, "role": "classification", "scope": "image"})
+        else:
+            self._append_attribute_group(
+                key, ["chua_xac_dinh"],
+                {"title": title.strip(), "default": "", "required": False, "role": "metadata"},
+            )
         self.attribute_container._parent_canvas.yview_moveto(1.0)
 
     def _append_attribute_group(self, key: str, values: list[str], config: dict):
@@ -851,7 +874,7 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         ctk.CTkLabel(scope_row, text="Phạm vi nhãn", text_color="#8298aa").pack(side="left")
         scope_menu = ctk.CTkOptionMenu(scope_row, width=230, values=list(self.SCOPE_LABELS.values()), variable=scope_var)
         scope_menu.pack(side="left", padx=8)
-        if self.project.metadata.get("template") == "Hydroponic Slot Condition" and key in {"plant_presence", "yellow_leaf", "wilt"}:
+        if key in self.hydro_attributes:
             scope_menu.configure(state="disabled")
         ToolTip(scope_menu, "Crop theo nhãn dùng sau Detection/SEG; toàn ảnh dùng trực tiếp ảnh Classification như slot Hydro.")
 
@@ -861,9 +884,11 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         add_button = ctk.CTkButton(option_header, text="+ Thêm lựa chọn", width=130, command=lambda: self._add_attribute_option(key))
         add_button.pack(side="right")
         ToolTip(add_button, f"Thêm một giá trị mới cho nhóm {title_var.get()}.")
-        if is_hydro_attribute(self.project, key):
-            for widget in (delete_group, add_button, role_menu):
+        if key in self.hydro_attributes:
+            for widget in (add_button, role_menu):
                 widget.configure(state="disabled")
+            if self.hydro_attributes[key]["role"] == "presence":
+                delete_group.configure(state="disabled")
             ctk.CTkLabel(group, text="Tên tiếng Việt dùng để gắn nhãn. Mã bên phải được giữ ổn định để train và chạy trên HydroFlow.",
                          text_color="#8298aa", wraplength=650, anchor="w").pack(fill="x", padx=12, pady=4)
         options = ctk.CTkFrame(group, fg_color="transparent")
@@ -892,17 +917,22 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         row = ctk.CTkFrame(parent, fg_color="#0c1721", corner_radius=7)
         row.pack(fill="x", pady=3)
         variable = tk.StringVar(value=value)
-        if is_hydro_attribute(self.project, key):
-            ctk.CTkLabel(row, text=HYDRO_VALUE_LABELS[key].get(value, value), anchor="w",
-                         width=260).pack(side="left", padx=10, pady=5)
-            ctk.CTkLabel(row, text=value, text_color="#8298aa", anchor="w").pack(side="left", padx=8)
+        if key in self.hydro_attributes:
+            label = next(v for v in self.hydro_attributes[key]["values"] if v["id"] == value)
+            display_var = tk.StringVar(value=label["displayName"])
+            ctk.CTkEntry(row, textvariable=display_var, width=300).pack(side="left", padx=10, pady=5)
+            meaning_text = {"positive": "Có dấu hiệu", "negative": "Không có dấu hiệu",
+                            "uncertain": "Chưa chắc chắn", "not_applicable": "Không áp dụng"}[label["meaning"]]
+            ctk.CTkLabel(row, text=f"{meaning_text} · {value}", text_color="#8298aa", anchor="w").pack(side="left", padx=8)
         else:
             ctk.CTkEntry(row, textvariable=variable, width=520).pack(side="left", padx=8, pady=5)
         delete = ctk.CTkButton(row, text="Xóa", width=70, fg_color="#a94747")
         delete.pack(side="right", padx=8, pady=5)
         data = {"value": variable, "frame": row}
+        if key in self.hydro_attributes:
+            data["display"] = display_var
         delete.configure(command=lambda: self._delete_attribute_row(key, data))
-        if is_hydro_attribute(self.project, key):
+        if key in self.hydro_attributes:
             delete.configure(state="disabled")
         ToolTip(delete, "Xóa lựa chọn này nếu chưa có nhãn nào đang sử dụng.")
         self.attribute_groups[key]["rows"].append(data)
@@ -937,6 +967,10 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         self._refresh_default_menu(key)
 
     def _delete_attribute_group(self, key: str):
+        if key in self.hydro_attributes and (self.hydro_attributes[key]["role"] == "presence"
+                                               or key in self.project.attribute_models):
+            messagebox.showwarning("Không thể xóa", "Nhóm bắt buộc hoặc đã có model; hãy giữ để không mất ánh xạ.", parent=self)
+            return
         used = sum(1 for image in self.project.images for ann in image.annotations if key in ann.attributes)
         used += sum(1 for image in self.project.images if key in image.attributes)
         if used:
@@ -947,6 +981,7 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
             )
             return
         group = self.attribute_groups.pop(key)
+        self.hydro_attributes.pop(key, None)
         group["frame"].destroy()
 
     def _save(self):
@@ -986,7 +1021,7 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
                     f"{title}: không đổi hoặc bỏ giá trị đã được ảnh sử dụng. "
                     "Có thể đổi tên nhóm; đổi mã nhãn cần chuyển đổi dataset và train lại.", parent=self)
                 return
-            if is_hydro_attribute(self.project, key) and values != self.project.attribute_schema[key]:
+            if key in self.hydro_attributes and key in self.project.attribute_schema and values != self.project.attribute_schema[key]:
                 messagebox.showerror("Giữ mã Hydro", "Các giá trị Hydro phải giữ nguyên để tương thích model.", parent=self)
                 return
             default = group["default"].get()
@@ -1010,11 +1045,28 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         if len(set(titles)) != len(titles):
             messagebox.showerror("Trùng tên nhóm", "Tên nhóm thuộc tính không được trùng nhau.", parent=self)
             return
+        candidate = copy.deepcopy(self.project)
+        candidate.attribute_schema = schema
+        candidate.attribute_settings = attribute_settings
+        if self.hydro_attributes:
+            try:
+                attrs = copy.deepcopy(list(self.hydro_attributes.values()))
+                for attr in attrs:
+                    group = self.attribute_groups[attr["id"]]
+                    attr["displayName"] = group["title"].get().strip()
+                    labels = {row["value"].get(): row["display"].get().strip() for row in group["rows"]}
+                    for value in attr["values"]:
+                        value["displayName"] = labels[value["id"]]
+                install_label_schema(candidate, make_label_schema(attrs))
+            except ValueError as exc:
+                messagebox.showerror("Cấu hình nhãn không hợp lệ", str(exc), parent=self)
+                return
+        self.project.metadata = candidate.metadata
         self.project.classes = [
             LabelClass(row["id"], row["name"].get().strip(), row["color"].get())
             for row in sorted(self.class_rows, key=lambda value: value["id"])
         ]
-        self.project.attribute_schema = schema
-        self.project.attribute_settings = attribute_settings
+        self.project.attribute_schema = candidate.attribute_schema
+        self.project.attribute_settings = candidate.attribute_settings
         self.on_save()
         self.destroy()

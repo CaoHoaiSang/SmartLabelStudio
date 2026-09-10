@@ -17,13 +17,13 @@ import customtkinter as ctk
 
 from .annotation_canvas import AnnotationCanvas
 from .attribute_labels import HYDRO_VALUE_LABELS
+from .hydro_labels import model_attributes, model_keys, display_values as hydro_display_values, enforce_presence
 from .auto_label import Sam2Adapter, auto_label_project, mask_to_geometry
 from .dataset_manager import DatasetManager
 from .deployment import build_vision_bundle_manifest, classifier_manifest_entry, write_classifier_pt_bundle
 from .evaluation import evaluate_yolo_model
 from .hardware import inspect_hardware
 from .hydroponic import (
-    MODEL_KEYS as HYDRO_MODEL_KEYS,
     apply_hydroponic_slot_template,
     describe_hydro_qa_issue,
     export_jetson_onnx,
@@ -717,10 +717,10 @@ class SmartLabelApp(ctk.CTk):
             f"đã duyệt {readiness.get('reviewedImages', 0)}/{report.get('images', 0)} ảnh · "
             f"bundle shadow: {'sẵn sàng' if readiness.get('shadowBundleReady') else 'chưa sẵn sàng'}"
         )
-        for key in HYDRO_MODEL_KEYS:
+        for key in model_keys(self.project):
             title = self.project.attribute_settings.get(key, {}).get("title", key)
             counts = distributions.get(key, {})
-            values = ATTRIBUTE_DISPLAY.get(key, {})
+            values = hydro_display_values(self.project, key) or ATTRIBUTE_DISPLAY.get(key, {})
             parts = [f"{values.get(value, value)}: {counts.get(value, 0)}" for value in values]
             self._append_review_result(f"[PHÂN BỐ] {title} · " + " · ".join(parts))
             model_gate = readiness.get("models", {}).get(key, {})
@@ -1426,12 +1426,14 @@ class SmartLabelApp(ctk.CTk):
             text_color=COLORS["muted"],
         )
         self.image_status_label.pack(fill="x", padx=1, pady=1)
-        ctk.CTkLabel(right, text="CLASS · chọn nhanh", text_color=COLORS["muted"]).pack(anchor="w", padx=12)
+        self.class_quick_frame = ctk.CTkFrame(right, fg_color="transparent")
+        self.class_quick_frame.pack(fill="x")
+        ctk.CTkLabel(self.class_quick_frame, text="CLASS · chọn nhanh", text_color=COLORS["muted"]).pack(anchor="w", padx=12)
         self.class_search_var = tk.StringVar()
         self.class_search_var.trace_add("write", lambda *_args: self._refresh_label_choices())
-        self.class_search_entry = ctk.CTkEntry(right, width=240, textvariable=self.class_search_var, placeholder_text="Tìm class…")
+        self.class_search_entry = ctk.CTkEntry(self.class_quick_frame, width=240, textvariable=self.class_search_var, placeholder_text="Tìm class…")
         self.class_search_entry.pack(padx=12, pady=(3, 5))
-        self.class_choices = ctk.CTkFrame(right, width=240, fg_color="transparent")
+        self.class_choices = ctk.CTkFrame(self.class_quick_frame, width=240, fg_color="transparent")
         self.class_choices.pack(fill="x", padx=12, pady=(0, 10))
         self.class_buttons: dict[int, ctk.CTkButton] = {}
 
@@ -1484,7 +1486,7 @@ class SmartLabelApp(ctk.CTk):
             self.approve_switch,
             "Đánh dấu riêng nhãn đang chọn đã được người kiểm tra. Trạng thái này được lưu; nút Duyệt ảnh sẽ đánh dấu toàn bộ nhãn trong ảnh.",
         )
-        review_actions = ctk.CTkFrame(right, fg_color="transparent")
+        self.review_actions = review_actions = ctk.CTkFrame(right, fg_color="transparent")
         review_actions.pack(fill="x", padx=12, pady=(12, 3))
         self.approve_image_button = self._button(review_actions, "Duyệt & tiếp", self._approve_image_next, width=112, color=COLORS["good"])
         self.approve_image_button.pack(side="left", padx=(0, 4))
@@ -1867,13 +1869,15 @@ class SmartLabelApp(ctk.CTk):
             config = self._attribute_config(key)
             heading = f"{config['title'].upper()}{'  *' if config['required'] else ''}"
             ctk.CTkLabel(self.attribute_panel, text=heading, text_color=COLORS["muted"]).pack(anchor="w", padx=10, pady=(8, 0))
-            ctk.CTkLabel(
-                self.attribute_panel,
-                text=("Ảnh slot · " if config["scope"] == "image" else "") + role_names.get(config["role"], config["role"]),
-                text_color="#61798d",
-                font=("Segoe UI", 9),
-            ).pack(anchor="w", padx=10, pady=(0, 2))
-            display_values = [ATTRIBUTE_DISPLAY.get(key, {}).get(value, value) for value in raw_values]
+            if config["scope"] != "image":
+                ctk.CTkLabel(
+                    self.attribute_panel,
+                    text=role_names.get(config["role"], config["role"]),
+                    text_color="#61798d",
+                    font=("Segoe UI", 9),
+                ).pack(anchor="w", padx=10, pady=(0, 2))
+            labels = hydro_display_values(self.project, key) or ATTRIBUTE_DISPLAY.get(key, {})
+            display_values = [labels.get(value, value) for value in raw_values]
             choices = ["— Chưa gán —", *display_values]
             self.attribute_display_to_value[key] = {
                 **dict(zip(display_values, raw_values)),
@@ -1899,9 +1903,8 @@ class SmartLabelApp(ctk.CTk):
                 pack_options = {"fill": "x", "padx": 12, "pady": (0, 8)}
                 # Re-packing a hidden widget normally sends it to the bottom.
                 # Keep attributes directly below the Classification switch.
-                if hasattr(self, "annotation_info"):
-                    pack_options["before"] = self.annotation_info
-                self.attribute_panel.pack(**pack_options)
+                anchor = self._label_detail_anchor("hydro_metadata_frame", "annotation_info", "review_actions")
+                pack_before(self.attribute_panel, anchor, **pack_options)
         else:
             self.attribute_panel.pack_forget()
 
@@ -1912,11 +1915,37 @@ class SmartLabelApp(ctk.CTk):
         if is_hydroponic_project(self.project):
             if not frame.winfo_manager():
                 options = {"fill": "x", "padx": 12, "pady": (0, 8)}
-                if hasattr(self, "annotation_info"):
-                    options["before"] = self.annotation_info
-                frame.pack(**options)
+                anchor = self._label_detail_anchor("annotation_info", "review_actions")
+                pack_before(frame, anchor, **options)
         else:
             frame.pack_forget()
+
+    def _label_detail_anchor(self, *names):
+        return next((widget for name in names
+                     if (widget := getattr(self, name, None)) is not None
+                     and widget.winfo_manager() == "pack"), None)
+
+    def _apply_label_detail_visibility(self) -> None:
+        """Show controls for the current workflow, without changing image review state."""
+        frame = getattr(self, "class_quick_frame", None)
+        if frame is not None:
+            if self.project and self.project.classes:
+                if not frame.winfo_manager():
+                    pack_before(frame, self.show_attribute_checkbox, fill="x")
+            else:
+                frame.pack_forget()
+        # Hydro labels describe the whole slot; there is no box to select or approve.
+        # Keep box details for legacy detection projects, including empty projects.
+        if not hasattr(self, "review_actions"):
+            return
+        if is_hydroponic_project(self.project):
+            self.annotation_info.pack_forget()
+            self.approve_switch.pack_forget()
+        else:
+            if not self.annotation_info.winfo_manager():
+                pack_before(self.annotation_info, self.review_actions, padx=12, pady=8)
+            if not self.approve_switch.winfo_manager():
+                self.approve_switch.pack(before=self.review_actions, anchor="w", padx=12, pady=6)
 
     def _toggle_attribute_panel(self) -> None:
         if is_hydroponic_project(self.project) and not self.show_attribute_panel.get():
@@ -2021,7 +2050,7 @@ class SmartLabelApp(ctk.CTk):
         help_label = getattr(self, "deploy_help_label", None)
         if help_label is not None:
             if is_hydroponic_project(self.project):
-                help_text = "Xuất ba classifier toàn ảnh slot sang ONNX tĩnh dùng chung; có thể thử shadow bằng ONNX Runtime trên Windows hoặc build TensorRT trực tiếp trên Jetson."
+                help_text = "Xuất các classifier toàn ảnh slot sang ONNX tĩnh dùng chung; có thể thử shadow bằng ONNX Runtime trên Windows hoặc build TensorRT trực tiếp trên Jetson."
             elif enabled:
                 help_text = "Xuất lần lượt các classifier đã tick sang RKNN, sau đó tạo gói triển khai cùng model định vị."
             else:
@@ -2139,6 +2168,7 @@ class SmartLabelApp(ctk.CTk):
         return missing
 
     def _annotation_selected(self, annotation_id: str | None) -> None:
+        self._apply_label_detail_visibility()
         self.selected_annotation_id = annotation_id
         if annotation_id and self.project and 0 <= self.current_index < len(self.project.images):
             self.last_selected_by_image[self.project.images[self.current_index].id] = annotation_id
@@ -2154,7 +2184,7 @@ class SmartLabelApp(ctk.CTk):
                 values = self.project.attribute_schema.get(key, [])
                 value = record.attributes.get(key, "") if record and self._attribute_config(key)["scope"] == "image" else ann.attributes.get(key, "")
                 if value in values:
-                    widget.set(ATTRIBUTE_DISPLAY.get(key, {}).get(value, value))
+                    widget.set((hydro_display_values(self.project, key) or ATTRIBUTE_DISPLAY.get(key, {})).get(value, value))
                 else:
                     widget.set("— Chưa gán —")
             if ann.approved:
@@ -2176,7 +2206,7 @@ class SmartLabelApp(ctk.CTk):
         else:
             for key, widget in getattr(self, "attribute_widgets", {}).items():
                 value = record.attributes.get(key, "") if record and self._attribute_config(key)["scope"] == "image" else ""
-                widget.set(ATTRIBUTE_DISPLAY.get(key, {}).get(value, value) if value else "— Chưa gán —")
+                widget.set((hydro_display_values(self.project, key) or ATTRIBUTE_DISPLAY.get(key, {})).get(value, value) if value else "— Chưa gán —")
             self.approve_switch.deselect()
             self.approve_switch.configure(state="disabled")
             self._highlight_class(self.canvas.active_class_id if hasattr(self, "canvas") else -1)
@@ -2239,6 +2269,7 @@ class SmartLabelApp(ctk.CTk):
             self.canvas.redraw()
 
     def _refresh_label_choices(self) -> None:
+        self._apply_label_detail_visibility()
         if not self.project or not hasattr(self, "class_choices"):
             return
         for child in self.class_choices.winfo_children():
@@ -2278,9 +2309,8 @@ class SmartLabelApp(ctk.CTk):
                 record.attributes[key] = value
             else:
                 record.attributes.pop(key, None)
-            if key == "plant_presence" and value != "present":
-                record.attributes["yellow_leaf"] = "not_applicable"
-                record.attributes["wilt"] = "not_applicable"
+            if is_hydroponic_project(self.project):
+                enforce_presence(self.project, record.attributes)
             if record.review_status == "reviewed":
                 record.review_status = "draft"
             record.updated_at = datetime.now().astimezone().isoformat(timespec="seconds")
@@ -3479,7 +3509,7 @@ class SmartLabelApp(ctk.CTk):
             self._export_hydro_onnx_models,
             width=205,
             color=COLORS["good"],
-            tooltip="Xuất tĩnh batch-1 ba classifier Hydro sang ONNX dùng chung cho Windows shadow và Jetson TensorRT.",
+            tooltip="Xuất tĩnh batch-1 các classifier Hydro sang ONNX dùng chung cho Windows shadow và Jetson TensorRT.",
         )
         self.hydro_onnx_export_button.pack(side="left", padx=3)
         self.hydro_bundle_export_button = self._button(
@@ -3903,7 +3933,7 @@ class SmartLabelApp(ctk.CTk):
         if not is_hydroponic_project(self.project):
             raise ValueError("Chức năng này chỉ dùng cho Hydroponic Slot Condition.")
         source = self.project.attribute_models if suffix == ".pt" else self.project.metadata.get("hydroOnnxModels", {})
-        paths = {key: Path(str(source.get(key, ""))) for key in HYDRO_MODEL_KEYS}
+        paths = {key: Path(str(source.get(key, ""))) for key in model_keys(self.project)}
         missing = [key for key, path in paths.items() if not path.is_file() or path.suffix.lower() != suffix]
         if missing:
             raise FileNotFoundError("Thiếu model " + suffix + " cho: " + ", ".join(missing))
@@ -3927,7 +3957,7 @@ class SmartLabelApp(ctk.CTk):
         output.mkdir(parents=True)
         exported: dict[str, str] = {}
         try:
-            for key in HYDRO_MODEL_KEYS:
+            for key in model_keys(self.project):
                 target = export_jetson_onnx(models[key], output / f"{key}.onnx", input_size=224, opset=12)
                 exported[key] = str(target.resolve())
             self.project.metadata["hydroOnnxModels"] = exported
@@ -3939,7 +3969,7 @@ class SmartLabelApp(ctk.CTk):
             return
         messagebox.showinfo(
             "Đã xuất ONNX Hydro",
-            "Đã xuất ba classifier batch-1 tĩnh. Windows có thể chạy ONNX ở shadow; TensorRT engine chỉ build trên Jetson.\n\n" + str(output),
+            f"Đã xuất {len(exported)} classifier batch-1 tĩnh. Windows chạy shadow; TensorRT engine chỉ build trên Jetson.\n\n" + str(output),
             parent=self,
         )
 
@@ -3971,6 +4001,7 @@ class SmartLabelApp(ctk.CTk):
             )
             return
         defaults = {
+            "modelTitles": {attr["id"]: attr["displayName"] for attr in model_attributes(self.project)},
             "datasetVersion": self.project.metadata.get("datasetVersion", f"dataset_{datetime.now():%Y%m%d}"),
             "sourceCommit": self.project.metadata.get("sourceCommit", self._source_commit()),
             "cameraProfileIds": self.project.metadata.get("cameraProfileIds", []),
@@ -3982,7 +4013,7 @@ class SmartLabelApp(ctk.CTk):
         config = ask_hydro_bundle_config(self, defaults)
         if not config:
             return
-        parent = filedialog.askdirectory(title="Chọn nơi lưu HydroModelBundleV1")
+        parent = filedialog.askdirectory(title="Chọn nơi lưu gói model Hydro")
         if not parent:
             return
         output = Path(parent) / f"hydro_model_bundle_{datetime.now():%Y%m%d_%H%M%S}"
@@ -4008,10 +4039,10 @@ class SmartLabelApp(ctk.CTk):
             self.project.metadata["lastHydroBundle"] = str(bundle.resolve())
             self.store.save(self.project)
         except Exception as exc:
-            messagebox.showerror("Tạo HydroModelBundleV1 lỗi", str(exc), parent=self)
+            messagebox.showerror("Tạo gói model Hydro lỗi", str(exc), parent=self)
             return
         messagebox.showinfo(
-            "HydroModelBundleV1 hoàn tất",
+            "Gói model Hydro hoàn tất",
             (
                 f"Validation: {report['validationStatus']}\nRuntime: {config['runtimeTarget']}\n"
             f"Mode: {config['deploymentMode']}\nBundle: {bundle}\nZIP để tải lên HydroFlow: {bundle.with_suffix('.zip')}\n\n"

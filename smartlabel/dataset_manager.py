@@ -389,6 +389,15 @@ class DatasetManager:
         if scope == "image" and not reviewed_only:
             raise ValueError("Image-level Classification chỉ được export từ ảnh đã Duyệt.")
         excluded_values = set(settings.get("train_exclude", [])) | {"uncertain", "not_applicable"}
+        hydro_attribute = None
+        if project.metadata.get("template") == "Hydroponic Slot Condition":
+            from .hydro_labels import model_attributes
+            from .label_schema import meaning_for
+            attrs = model_attributes(project)
+            hydro_attribute = next((a for a in attrs if a["id"] == attribute_key), None)
+            if hydro_attribute:
+                excluded_values.update(v["id"] for v in hydro_attribute["values"]
+                                       if v["meaning"] in {"uncertain", "not_applicable"})
         train_values = [value for value in values if value not in excluded_values]
         if not train_values:
             raise ValueError("Nhóm Classification không còn nhãn train sau khi loại uncertain/not_applicable.")
@@ -432,6 +441,11 @@ class DatasetManager:
                         image = opened.convert("RGB")
                         if scope == "image":
                             value = record.attributes.get(attribute_key, "")
+                            if hydro_attribute and hydro_attribute["role"] == "condition":
+                                presence = next(a for a in attrs if a["role"] == "presence")
+                                if meaning_for(presence, record.attributes.get(presence["id"])) != "positive":
+                                    skipped_missing += 1
+                                    continue
                             if value not in class_folders:
                                 skipped_missing += 1
                                 continue
@@ -478,6 +492,7 @@ class DatasetManager:
             "attribute_title": title,
             "classification_scope": scope,
             "excluded_labels": sorted(excluded_values),
+            **({"label_attribute": hydro_attribute} if hydro_attribute else {}),
             "reviewed_only": reviewed_only,
             "padding_ratio": padding_ratio,
             "classes": class_folders,

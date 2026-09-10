@@ -4,6 +4,11 @@
 
 ## Chức năng đã triển khai
 
+- Hydro: tại **Dự án → Quản lý nhãn dự án**, dùng **+ Thêm tình trạng** để thêm dấu hiệu nhị phân mới (ví dụ Đốm lá). Đổi tên hiển thị/giá trị sang tiếng Việt mà không đổi mã định danh hay ý nghĩa nhãn đã dùng. Khi lưu quản lý nhãn, schema được ghi vào project và đi cùng gói model V3; mở project cũ không tự đổi dữ liệu.
+- Gói V3 chứa classifier cho cây hiện diện và từng tình trạng, tên hiển thị, thứ tự đầu ra, ngưỡng và checksum. Mỗi tình trạng mới cần ảnh đã duyệt có đủ hai nhãn và model tương ứng; không thể chỉ đổi tên model để nhận bệnh mới. Ngưỡng cần được hiệu chỉnh bằng validation set.
+- Project Hydro không có Class sẽ ẩn **Class · chọn nhanh**. Chi tiết/duyệt bounding box chỉ hiện ở luồng có bounding box; Hydro vẫn có thuộc tính ảnh, **Duyệt & tiếp** và **Bỏ duyệt**. Không đổi trạng thái ảnh chỉ vì dự án không có Class.
+- Kiểm thử liên ứng dụng bằng dữ liệu tổng hợp, không dùng dataset cá nhân: `python tools/extensible_ai_smoke.py --hydro-root <đường-dẫn-repo-Hydro>`. Đây là kiểm thử pipeline, không chứng minh độ chính xác nhận bệnh.
+
 - Dự án riêng, quản lý class và thuộc tính mở rộng.
 - Chuyển dự án Hydro/thường đồng bộ cả ảnh, nhãn và model; nhớ bộ lọc/trang/ảnh riêng trong phiên. Không đổi dự án khi nhập, Auto-Label, train, đánh giá hoặc xuất RKNN chưa kết thúc. Lỗi giao diện được ghi tại `workspace/logs/smartlabel.log` (xoay vòng dung lượng).
 - Nhập ảnh/thư mục, sao chép ảnh vào workspace và bỏ qua file trùng SHA-256.

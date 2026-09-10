@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "attributes": [
+    {
+      "id": "plant_presence",
+      "displayName": "Cây hiện diện",
+      "role": "presence",
+      "values": [
+        {
+          "id": "absent",
+          "displayName": "Không có cây",
+          "meaning": "negative"
+        },
+        {
+          "id": "present",
+          "displayName": "Có cây",
+          "meaning": "positive"
+        },
+        {
+          "id": "uncertain",
+          "displayName": "Chưa chắc chắn",
+          "meaning": "uncertain"
+        }
+      ]
+    },
+    {
+      "id": "yellow_leaf",
+      "displayName": "Lá vàng",
+      "role": "condition",
+      "values": [
+        {
+          "id": "absent",
+          "displayName": "Không có lá vàng",
+          "meaning": "negative"
+        },
+        {
+          "id": "present",
+          "displayName": "Có lá vàng",
+          "meaning": "positive"
+        },
+        {
+          "id": "uncertain",
+          "displayName": "Chưa chắc chắn",
+          "meaning": "uncertain"
+        },
+        {
+          "id": "not_applicable",
+          "displayName": "Không áp dụng",
+          "meaning": "not_applicable"
+        }
+      ],
+      "requires": "plant_presence"
+    },
+    {
+      "id": "wilt",
+      "displayName": "Héo",
+      "role": "condition",
+      "values": [
+        {
+          "id": "absent",
+          "displayName": "Không héo",
+          "meaning": "negative"
+        },
+        {
+          "id": "present",
+          "displayName": "Có héo",
+          "meaning": "positive"
+        },
+        {
+          "id": "uncertain",
+          "displayName": "Chưa chắc chắn",
+          "meaning": "uncertain"
+        },
+        {
+          "id": "not_applicable",
+          "displayName": "Không áp dụng",
+          "meaning": "not_applicable"
+        }
+      ],
+      "requires": "plant_presence"
+    },
+    {
+      "id": "dom_la",
+      "displayName": "Đốm lá",
+      "role": "condition",
+      "requires": "plant_presence",
+      "values": [
+        {
+          "id": "co_dom",
+          "displayName": "Có đốm lá",
+          "meaning": "positive"
+        },
+        {
+          "id": "khong_dom",
+          "displayName": "Không đốm",
+          "meaning": "negative"
+        },
+        {
+          "id": "chua_chac",
+          "displayName": "Chưa chắc",
+          "meaning": "uncertain"
+        },
+        {
+          "id": "bo_qua",
+          "displayName": "Không áp dụng",
+          "meaning": "not_applicable"
+        }
+      ]
+    }
+  ],
+  "schemaId": "labels_6895430d0119e5b9e7d0a88b6e1db518d80a798f866e5584f7fc7933f36c9295"
+}

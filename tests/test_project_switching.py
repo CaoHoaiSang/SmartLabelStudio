@@ -98,6 +98,33 @@ class ProjectSwitchingTests(unittest.TestCase):
         self.assertEqual(self.app.current_index, -1)
         self.assertFalse(self.app.canvas.history)
 
+    def test_label_details_follow_project_workflow_without_losing_review_controls(self):
+        for _ in range(2):
+            self.switch(self.hydro)
+            self.assertFalse(self.app.class_quick_frame.winfo_manager())
+            self.assertFalse(self.app.annotation_info.winfo_manager())
+            self.assertFalse(self.app.approve_switch.winfo_manager())
+            self.assertEqual(self.app.approve_image_button.winfo_manager(), "pack")
+            self.assertEqual(self.app.unapprove_image_button.winfo_manager(), "pack")
+            self.assertEqual(self.app.attribute_panel.winfo_manager(), "pack")
+            labels = [child.cget("text") for child in self.app.attribute_panel.winfo_children()
+                      if isinstance(child, app_module.ctk.CTkLabel)]
+            self.assertFalse(any("Ảnh slot" in label or "hai giai đoạn" in label for label in labels))
+            # Repacking attributes while the box panel is hidden must stay above review.
+            self.app.attribute_panel.pack_forget()
+            self.app._apply_attribute_panel_visibility()
+            children = self.app.review_actions.master.pack_slaves()
+            self.assertLess(children.index(self.app.attribute_panel), children.index(self.app.hydro_metadata_frame))
+            self.assertLess(children.index(self.app.hydro_metadata_frame), children.index(self.app.review_actions))
+            self.switch(self.bottle)
+            self.assertEqual(self.app.class_quick_frame.winfo_manager(), "pack")
+            self.assertEqual(self.app.annotation_info.winfo_manager(), "pack")
+            self.assertEqual(self.app.approve_switch.winfo_manager(), "pack")
+            self.assertEqual(len(self.app.class_buttons), 2)
+            children = self.app.review_actions.master.pack_slaves()
+            self.assertLess(children.index(self.app.annotation_info), children.index(self.app.approve_switch))
+            self.assertLess(children.index(self.app.approve_switch), children.index(self.app.review_actions))
+
     def test_03_model_and_dataset_paths_do_not_leak(self):
         self.switch(self.bottle)
         for variable in (self.app.model_path, self.app.deploy_model_path,

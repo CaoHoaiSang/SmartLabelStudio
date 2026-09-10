@@ -10,4 +10,5 @@ HYDRO_VALUE_LABELS = {
 
 
 def is_hydro_attribute(project, key):
-    return project.metadata.get("template") == "Hydroponic Slot Condition" and key in HYDRO_VALUE_LABELS
+    from .hydro_labels import model_keys
+    return project.metadata.get("template") == "Hydroponic Slot Condition" and key in model_keys(project)

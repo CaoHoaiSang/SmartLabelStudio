@@ -18,6 +18,8 @@ from PIL import Image
 
 from .models import ImageRecord, Project, new_id
 from .project_store import ProjectStore
+from .hydro_labels import model_attributes, model_keys, project_label_schema
+from .label_schema import label_for, meaning_for, validate_model_labels
 from .hydro_topology import topology_for, topology_slots, topology_slot_map, topology_identity
 
 
@@ -453,11 +455,8 @@ def import_capture_manifest(
                 import_batch=import_batch,
                 review_status="unlabeled",
                 quality=dict(asset.get("quality", {})),
-                attributes={
-                    "plant_presence": "uncertain",
-                    "yellow_leaf": "not_applicable",
-                    "wilt": "not_applicable",
-                },
+                attributes={attr["id"]: label_for(attr, "uncertain" if attr["role"] == "presence" else "not_applicable")
+                            for attr in model_attributes(project)},
                 metadata={
                     **({"datasetExportId": dataset_export_id} if dataset_export_id else {}),
                     "captureSchemaVersion": manifest["schemaVersion"],
@@ -831,16 +830,18 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
             "code": "empty_dataset",
             "message": "Dataset chưa có ảnh để kiểm tra.",
         })
-    distributions = {key: Counter() for key in MODEL_KEYS}
+    attrs = {a["id"]: a for a in model_attributes(project)}
+    keys = tuple(attrs)
+    distributions = {key: Counter() for key in keys}
     digests = defaultdict(list)
     plant_splits = defaultdict(set)
     cycle_splits = defaultdict(set)
     capture_slots = defaultdict(list)
     assignments = dict((split_assignment or {}).get("groups", {}))
     reviewed_images = 0
-    trainable_labels = {key: Counter() for key in MODEL_KEYS}
-    validation_labels = {key: Counter() for key in MODEL_KEYS}
-    excluded_labels = {key: Counter() for key in MODEL_KEYS}
+    trainable_labels = {key: Counter() for key in model_keys(project)}
+    validation_labels = {key: Counter() for key in model_keys(project)}
+    excluded_labels = {key: Counter() for key in model_keys(project)}
     for record in project.images:
         path = store.image_path(project, record)
         if not path.is_file():
@@ -855,7 +856,7 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
             digests[digest].append(record.id)
             if record.sha256 and digest != record.sha256:
                 issues.append({"severity": "error", "imageId": record.id, "code": "checksum_mismatch"})
-        for key in MODEL_KEYS:
+        for key in model_keys(project):
             distributions[key][record.attributes.get(key, "missing")] += 1
         capture_id = str(record.metadata.get("captureId", ""))
         slot_id = str(record.metadata.get("slotId", ""))
@@ -884,8 +885,10 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
                 issues.append({"severity": "error", "imageId": record.id, "code": "unsafe_lineage_path"})
             elif not (store.project_dir(project) / lineage_path).is_file():
                 issues.append({"severity": "error", "imageId": record.id, "code": "missing_parent_asset"})
-        presence = record.attributes.get("plant_presence")
-        if presence != "present" and any(record.attributes.get(key) != "not_applicable" for key in ("yellow_leaf", "wilt")):
+        presence_attr = next(a for a in attrs.values() if a["role"] == "presence")
+        presence = meaning_for(presence_attr, record.attributes.get(presence_attr["id"]))
+        if presence != "positive" and any(meaning_for(a, record.attributes.get(a["id"])) != "not_applicable"
+                                         for a in attrs.values() if a["role"] == "condition"):
             issues.append({"severity": "error", "imageId": record.id, "code": "contradictory_condition_label"})
         if record.source_path and Path(record.source_path).is_absolute():
             issues.append({"severity": "error", "imageId": record.id, "code": "absolute_source_path"})
@@ -903,9 +906,11 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
         split = assignments.get(group)
         if record.review_status == "reviewed":
             reviewed_images += 1
-            for key in MODEL_KEYS:
-                label = record.attributes.get(key, "missing")
-                if label in {"present", "absent"}:
+            for key in model_keys(project):
+                raw_label = record.attributes.get(key, "missing")
+                semantic = meaning_for(attrs[key], raw_label)
+                label = {"positive": "present", "negative": "absent"}.get(semantic, raw_label)
+                if semantic in {"positive", "negative"}:
                     trainable_labels[key][label] += 1
                     if split == "val":
                         validation_labels[key][label] += 1
@@ -951,7 +956,7 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
         else "pilot_unvalidated"
     )
     model_readiness = {}
-    for key in MODEL_KEYS:
+    for key in model_keys(project):
         train_counts = trainable_labels[key]
         val_counts = validation_labels[key]
         model_readiness[key] = {
@@ -1030,6 +1035,27 @@ def export_jetson_onnx(model_path: str | Path, output: str | Path, input_size: i
     return target
 
 
+def read_onnx_label_contract(path, attribute):
+    """Ultralytics stores actual class index → label in ONNX metadata."""
+    import ast
+    import onnx
+    artifact = onnx.load(str(path), load_external_data=False)
+    metadata = {item.key: item.value for item in artifact.metadata_props}
+    try:
+        names = ast.literal_eval(metadata.get("names", ""))
+        labels = [names[i] if i in names else names[str(i)] for i in range(2)]
+    except (ValueError, SyntaxError, KeyError, TypeError) as exc:
+        raise ValueError("ONNX thiếu metadata thứ tự hai nhãn; hãy xuất lại từ classifier đã train.") from exc
+    if len(names) != 2:
+        raise ValueError("Hydro chỉ nhận classifier nhị phân độc lập.")
+    contract = {"attributeId": attribute["id"], "outputLabels": labels,
+                "positiveIndex": labels.index(label_for(attribute, "positive")),
+                "negativeIndex": labels.index(label_for(attribute, "negative")),
+                "labels": labels}
+    validate_model_labels(attribute, contract)
+    return contract
+
+
 def write_hydro_model_bundle(
     project: Project,
     output_dir: str | Path,
@@ -1051,14 +1077,17 @@ def write_hydro_model_bundle(
     )
     if output.exists():
         raise FileExistsError(f"bundle output already exists: {output}")
-    if set(models) != set(MODEL_KEYS) or set(thresholds) != set(MODEL_KEYS):
+    attrs = {a["id"]: a for a in model_attributes(project)}
+    extended = "labelSchema" in project.metadata
+    if set(models) != set(attrs) or set(thresholds) != set(attrs):
         raise ValueError("bundle requires independent presence/yellow/wilt models and thresholds")
     if not dataset_version or not source_commit or not camera_profile_ids or not geometry_profile_ids:
         raise ValueError("dataset/source/profile compatibility metadata is required")
     versions = {project.metadata.get("geometryProfileVersions", {}).get(profile_id, 1) for profile_id in geometry_profile_ids}
     if len(versions) != 1 or not versions.issubset({1, 2}):
         raise ValueError("Choose geometry profile IDs from one runtime version (V1 or V2) for each model bundle")
-    bundle_version = next(iter(versions))
+    geometry_version = next(iter(versions))
+    bundle_version = 3 if extended else geometry_version
     if runtime_target not in RUNTIME_TARGETS:
         raise ValueError(f"unsupported Hydro runtime target: {runtime_target}")
     if deployment_mode not in {"shadow", "operational"}:
@@ -1069,9 +1098,9 @@ def write_hydro_model_bundle(
     if deployment_mode == "operational" and validation_status != "validated_holdout":
         raise ValueError("operational deployment requires an independent validated holdout")
     label_distribution = {}
-    for key in MODEL_KEYS:
+    for key in model_keys(project):
         counts = Counter(
-            record.attributes.get(key)
+            {"positive": "present", "negative": "absent"}.get(meaning_for(attrs[key], record.attributes.get(key)), "excluded")
             for record in project.images
             if record.review_status == "reviewed"
         )
@@ -1083,7 +1112,7 @@ def write_hydro_model_bundle(
     temporary.mkdir(parents=True)
     try:
         entries = {}
-        for key in MODEL_KEYS:
+        for key in model_keys(project):
             source = Path(models[key]).resolve()
             if not source.is_file() or source.suffix.lower() != ".onnx":
                 raise FileNotFoundError(f"missing ONNX model for {key}: {source}")
@@ -1091,6 +1120,10 @@ def write_hydro_model_bundle(
             high = float(thresholds[key].get("highThreshold", -1))
             if not 0 <= low < high <= 1:
                 raise ValueError(f"invalid calibrated thresholds for {key}")
+            model_contract = {}
+            if extended:
+                # Read the output ordering embedded in the exported ONNX, not a user-entered list.
+                model_contract = read_onnx_label_contract(source, attrs[key])
             relative = Path("models") / f"{key}.onnx"
             target = temporary / relative
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -1108,6 +1141,7 @@ def write_hydro_model_bundle(
                 "normalization": {"scale": 1 / 255, "mean": [0, 0, 0], "std": [1, 1, 1]},
                 "lowThreshold": low,
                 "highThreshold": high,
+                **model_contract,
             }
         manifest = {
             "schemaVersion": bundle_version,
@@ -1126,6 +1160,9 @@ def write_hydro_model_bundle(
             "labelDistribution": label_distribution,
             "createdAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
+        if extended:
+            manifest["geometrySchemaVersion"] = geometry_version
+            manifest["labelSchema"] = project_label_schema(project)
         if runtime_target == "jetson_nano_tensorrt_fp16":
             manifest["minimumTensorRTVersion"] = "8.2"
         (temporary / "bundle.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
