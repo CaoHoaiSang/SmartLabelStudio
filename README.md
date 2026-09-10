@@ -4,6 +4,12 @@
 
 ## Chức năng đã triển khai
 
+Cập nhật tài liệu 10/09/2026. Baseline chức năng SmartLabel `0533740`, Hydro `2f3d2171`.
+Hydro đã có hộp xem trước/chọn vụ, ngày, từng capture trước xuất ZIP; mỗi gói vẫn một vụ
+và nhập bằng nút hiện có. Xem [trạng thái tích hợp](docs/CURRENT_INTEGRATION_STATUS.md)
+để phân biệt chức năng đã có với nghiệm thu còn thiếu. Báo cáo QA/review từ SmartLabel
+về readiness Hydro chưa triển khai; duyệt ảnh ở Hydro không thay duyệt nhãn ở đây.
+
 - **Nhập gói HydroFlow (.zip)**: nếu trước đó đã xóa một phần ảnh rọ của capture, chương trình kiểm tra ảnh/Geometry/lineage còn lại và hỏi trước khi bổ sung đúng các rọ thiếu. Giữ nguyên ID, nhãn, trạng thái duyệt và batch của ảnh cũ; ảnh bổ sung chưa được duyệt. Hủy xác nhận không nhập thêm gì. Hỗ trợ bố cục nhiều ống/rọ, không chỉ 2×5. File còn trong danh sách nhưng bị xóa/hỏng bên ngoài vẫn bị chặn để tránh ghi đè bằng chứng; hãy kiểm tra bản sao lưu. Nếu lỗi giữa gói nhiều capture, các capture đã nhập thành công trước đó được giữ; nhập lại gói sẽ bỏ qua chúng.
 - Hydro: tại **Dự án → Quản lý nhãn dự án**, dùng **+ Thêm tình trạng** để thêm dấu hiệu nhị phân mới (ví dụ Đốm lá). Đổi tên hiển thị/giá trị sang tiếng Việt mà không đổi mã định danh hay ý nghĩa nhãn đã dùng. Khi lưu quản lý nhãn, schema được ghi vào project và đi cùng gói model V3; mở project cũ không tự đổi dữ liệu.
 - Gói V3 chứa classifier cho cây hiện diện và từng tình trạng, tên hiển thị, thứ tự đầu ra, ngưỡng và checksum. Mỗi tình trạng mới cần ảnh đã duyệt có đủ hai nhãn và model tương ứng; không thể chỉ đổi tên model để nhận bệnh mới. Ngưỡng cần được hiệu chỉnh bằng validation set.
@@ -54,7 +60,7 @@
 
 ## Khởi động nhanh
 
-Máy hiện tại đã có các thư viện chính:
+Đường dẫn triển khai hiện dùng trên máy đích (không giả định máy mới đã cài thư viện):
 
 ```bat
 cd /d D:\DeltaX\SmartLabelStudio
