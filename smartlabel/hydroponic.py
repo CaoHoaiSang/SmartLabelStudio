@@ -995,8 +995,9 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
                 semantic = meaning_for(attrs[key], raw_label)
                 label = {"positive": "present", "negative": "absent"}.get(semantic, raw_label)
                 if semantic in {"positive", "negative"}:
-                    trainable_labels[key][label] += 1
-                    if split == "val":
+                    if split == "train":
+                        trainable_labels[key][label] += 1
+                    elif split == "val":
                         validation_labels[key][label] += 1
                 else:
                     excluded_labels[key][label] += 1

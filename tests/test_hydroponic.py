@@ -501,6 +501,28 @@ class HydroponicMvpTests(unittest.TestCase):
         self.assertIn("thiếu upper_05, lower_05", detail)
         self.assertIn("slot trùng upper_01", detail)
 
+    def test_hydro_training_readiness_does_not_count_validation_or_test_labels(self) -> None:
+        import_capture_manifest(self.store, self.project, self.create_manifest())
+        for index, record in enumerate(self.project.images):
+            record.review_status = "reviewed"
+            record.attributes["plant_presence"] = "absent" if index == 0 else "present"
+            for key in ("yellow_leaf", "wilt"):
+                record.attributes[key] = "not_applicable" if index == 0 else ("present" if index % 2 else "absent")
+        # Both classes exist globally and in validation, but the one training
+        # plant has only positive labels. Holdout/unassigned rows cannot fix it.
+        groups = [str(record.metadata["plant_instance_id"]) for record in self.project.images]
+        for other_split in ("val", "test", None):
+            with self.subTest(other_split=other_split):
+                assignment = {group: other_split for group in groups}
+                assignment[groups[1]] = "train"
+                report = hydro_dataset_qa(self.project, self.store, {"groups": assignment})
+                readiness = report["pilotReadiness"]
+                self.assertEqual(readiness["status"], "class_pair_incomplete")
+                self.assertFalse(readiness["shadowBundleReady"])
+                for model in readiness["models"].values():
+                    self.assertEqual(model["reviewedTrainable"], {"present": 1, "absent": 0})
+                    self.assertFalse(model["workflowTrainable"])
+
     def test_hydro_qa_and_bundle_are_portable_and_checksum_bound(self) -> None:
         import_capture_manifest(self.store, self.project, self.create_manifest())
         for index, record in enumerate(self.project.images):
