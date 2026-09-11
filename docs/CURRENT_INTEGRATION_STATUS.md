@@ -1,5 +1,27 @@
 # Trạng thái tích hợp HydroFlow ngày 10 tháng 9 năm 2026
 
+## Ý nghĩa nhãn Hydro — 12/09/2026
+
+Nhánh `fix/hydro-label-semantics-ui` sửa luồng Quản lý nhãn và các lựa chọn gán
+nhãn/QA Hydro. Có/Không/Chưa chắc/Không áp dụng được hiển thị từ `meaning` và tên
+tình trạng, không lấy nguyên tên nhãn tùy ý làm ý nghĩa. UI không còn ô sửa tự do
+từng nhãn Hydro. Mã và tên schema cũ được xem trong phần chi tiết chỉ đọc; mở
+project không sửa metadata hoặc nhãn ảnh. Generic annotation/classification giữ
+luồng sửa giá trị cũ. LabelSchemaV1 và bundle V3/output order không thay contract.
+
+Thêm tình trạng tạo ID/nhãn mới, không kế thừa model của tình trạng khác. Đổi tên
+cùng tình trạng là thao tác riêng có xác nhận giữ cùng ý nghĩa; hủy không đổi
+project. Callback lưu cũng chặn đổi title hoặc nhãn ngoài luồng này. Không dùng
+từ khóa/AI để đoán rằng hai tên chỉ khác chính tả; người kỹ thuật xác nhận cùng
+khái niệm. Schema tùy chỉnh cũ giữ ID/meaning/order và tên đã lưu, kể cả khi UI
+trình bày tên rõ nghĩa hơn. Tên hiển thị thay thế không phải gán nhãn lại dữ liệu.
+
+Đã tái hiện ba regression lỗi trước sửa; sau sửa toàn suite Windows đạt 111/111,
+gồm bảy test UI mới, import/QA/V3, model mapping và bảo vệ chuyển project. Test
+dùng project tạm; không train model bệnh, không nghiệm thu ảnh thật qua toàn
+luồng. Phần QA đã sửa split train tiếp tục được giữ. Còn mở: DATA-01, model
+evaluation gate và export ONNX/QA dài trên worker, theo bộ nhớ AI_KL.
+
 ## Đối chiếu source ngày 11 tháng 9 năm 2026
 
 Kiểm tra local từ HEAD `e12e1a6`: baseline 103/103 test đạt; sau sửa QA và thêm

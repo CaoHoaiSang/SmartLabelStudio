@@ -16,11 +16,24 @@ def model_keys(project):
     return tuple(attr["id"] for attr in model_attributes(project))
 
 
+def semantic_display_values(attribute):
+    """Housekeeping UI text follows explicit meaning, never a free-form label name.
+
+    Stored display names remain part of the original schema/bundle. Reading a
+    legacy project must not rewrite that schema or any saved image labels.
+    """
+    title = attribute["displayName"].strip()
+    subject = "cây" if attribute["role"] == "presence" else title[:1].lower() + title[1:]
+    names = {"positive": f"Có {subject}", "negative": f"Không có {subject}",
+             "uncertain": "Chưa chắc chắn", "not_applicable": "Không áp dụng"}
+    return {value["id"]: names[value["meaning"]] for value in attribute["values"]}
+
+
 def display_values(project, key):
     if project and project.metadata.get("template") == "Hydroponic Slot Condition":
         attr = next((a for a in model_attributes(project) if a["id"] == key), None)
         if attr:
-            return {v["id"]: v["displayName"] for v in attr["values"]}
+            return semantic_display_values(attr)
     return {}
 
 

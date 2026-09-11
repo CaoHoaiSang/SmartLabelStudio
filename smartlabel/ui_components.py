@@ -12,7 +12,7 @@ from PIL import Image
 
 from .models import LabelClass, Project
 from .attribute_labels import HYDRO_VALUE_LABELS
-from .hydro_labels import model_attributes, install_label_schema
+from .hydro_labels import model_attributes, install_label_schema, semantic_display_values
 from .label_schema import make_label_schema
 
 
@@ -687,8 +687,11 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         ).pack(anchor="w", padx=20, pady=(18, 2))
         ctk.CTkLabel(
             self,
-            text="Class mô tả loại vật; nhóm thuộc tính có thể lưu metadata hoặc train thành classifier giai đoạn hai.",
+            text=("Mỗi tình trạng có nhãn Có / Không riêng. Tình trạng khác cần thêm mới và train model riêng."
+                  if self.hydro_attributes else
+                  "Class mô tả loại vật; nhóm thuộc tính có thể lưu metadata hoặc train thành classifier giai đoạn hai."),
             text_color="#8298aa",
+            wraplength=680, justify="left",
         ).pack(anchor="w", padx=20, pady=(0, 10))
 
         tabs = ctk.CTkTabview(self, fg_color="#101b27", corner_radius=12)
@@ -697,6 +700,8 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         tabs.add("THUỘC TÍNH")
         self._build_classes(tabs.tab("CLASS"))
         self._build_attributes(tabs.tab("THUỘC TÍNH"))
+        if self.hydro_attributes:
+            tabs.set("THUỘC TÍNH")
 
         footer = ctk.CTkFrame(self, fg_color="transparent")
         footer.pack(fill="x", padx=18, pady=(4, 16))
@@ -774,11 +779,15 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         toolbar.pack(fill="x", padx=8, pady=8)
         add_group = ctk.CTkButton(toolbar, text="+ Thêm tình trạng" if self.hydro_attributes else "+ Thêm nhóm thuộc tính", width=180, command=self._add_attribute_group)
         add_group.pack(side="left")
-        ToolTip(add_group, "Tạo nhóm tùy chọn mới, ví dụ: Tình trạng, Màu sắc, Nắp chai hoặc Mức che khuất.")
+        ToolTip(add_group, "Tạo tình trạng mới với nhãn và model riêng, ví dụ Đốm lá."
+                if self.hydro_attributes else "Tạo nhóm tùy chọn mới, ví dụ: Tình trạng, Màu sắc, Nắp chai hoặc Mức che khuất.")
         ctk.CTkLabel(
             toolbar,
-            text="* Bắt buộc được kiểm tra khi Duyệt. Mỗi nhóm Classification được train thành một model riêng.",
+            text=("Chưa gán, Chưa chắc và Không áp dụng không được tính là nhãn Không."
+                  if self.hydro_attributes else
+                  "* Bắt buộc được kiểm tra khi Duyệt. Mỗi nhóm Classification được train thành một model riêng."),
             text_color="#8298aa",
+            wraplength=450 if self.hydro_attributes else 0, justify="left",
         ).pack(side="left", padx=12)
         self.attribute_container = ctk.CTkScrollableFrame(parent, fg_color="#0c1721", corner_radius=10)
         self.attribute_container.pack(fill="both", expand=True, padx=8, pady=(0, 8))
@@ -807,7 +816,8 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         return slug or "thuoc_tinh"
 
     def _add_attribute_group(self):
-        title = simpledialog.askstring("Thêm nhóm thuộc tính", "Tên nhóm (ví dụ: Tình trạng chai):", parent=self)
+        title = simpledialog.askstring("Thêm tình trạng" if self.hydro_attributes else "Thêm nhóm thuộc tính",
+            "Tên tình trạng cần nhận diện (ví dụ: Đốm lá):" if self.hydro_attributes else "Tên nhóm (ví dụ: Tình trạng chai):", parent=self)
         if not title or not title.strip():
             return
         base = self._slug(title)
@@ -827,6 +837,9 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
                         {"id": "present", "displayName": "Có dấu hiệu", "meaning": "positive"},
                         {"id": "uncertain", "displayName": "Chưa chắc chắn", "meaning": "uncertain"},
                         {"id": "not_applicable", "displayName": "Không áp dụng", "meaning": "not_applicable"}]}
+            names = semantic_display_values(attr)
+            for value in attr["values"]:
+                value["displayName"] = names[value["id"]]
             self.hydro_attributes[key] = attr
             self._append_attribute_group(key, [v["id"] for v in attr["values"]],
                 {"title": title.strip(), "default": "", "required": True, "role": "classification", "scope": "image"})
@@ -838,6 +851,9 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         self.attribute_container._parent_canvas.yview_moveto(1.0)
 
     def _append_attribute_group(self, key: str, values: list[str], config: dict):
+        if key in self.hydro_attributes:
+            self._append_hydro_group(key, values, config)
+            return
         group = ctk.CTkFrame(self.attribute_container, fg_color="#142333", corner_radius=10)
         group.pack(fill="x", padx=4, pady=7)
         top = ctk.CTkFrame(group, fg_color="transparent")
@@ -874,8 +890,6 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         ctk.CTkLabel(scope_row, text="Phạm vi nhãn", text_color="#8298aa").pack(side="left")
         scope_menu = ctk.CTkOptionMenu(scope_row, width=230, values=list(self.SCOPE_LABELS.values()), variable=scope_var)
         scope_menu.pack(side="left", padx=8)
-        if key in self.hydro_attributes:
-            scope_menu.configure(state="disabled")
         ToolTip(scope_menu, "Crop theo nhãn dùng sau Detection/SEG; toàn ảnh dùng trực tiếp ảnh Classification như slot Hydro.")
 
         option_header = ctk.CTkFrame(group, fg_color="transparent")
@@ -884,13 +898,6 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         add_button = ctk.CTkButton(option_header, text="+ Thêm lựa chọn", width=130, command=lambda: self._add_attribute_option(key))
         add_button.pack(side="right")
         ToolTip(add_button, f"Thêm một giá trị mới cho nhóm {title_var.get()}.")
-        if key in self.hydro_attributes:
-            for widget in (add_button, role_menu):
-                widget.configure(state="disabled")
-            if self.hydro_attributes[key]["role"] == "presence":
-                delete_group.configure(state="disabled")
-            ctk.CTkLabel(group, text="Tên tiếng Việt dùng để gắn nhãn. Mã bên phải được giữ ổn định để train và chạy trên HydroFlow.",
-                         text_color="#8298aa", wraplength=650, anchor="w").pack(fill="x", padx=12, pady=4)
         options = ctk.CTkFrame(group, fg_color="transparent")
         options.pack(fill="x", padx=10, pady=(2, 10))
         self.attribute_groups[key] = {
@@ -913,27 +920,103 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
             self._append_attribute_row(key, options, value)
         self._refresh_default_menu(key)
 
+    def _append_hydro_group(self, key, values, config):
+        attr = self.hydro_attributes[key]
+        frame = ctk.CTkFrame(self.attribute_container, fg_color="#142333", corner_radius=10)
+        frame.pack(fill="x", padx=4, pady=7)
+        header = ctk.CTkFrame(frame, fg_color="transparent")
+        header.pack(fill="x", padx=12, pady=8)
+        title = tk.StringVar(value=attr["displayName"])
+        ctk.CTkLabel(header, textvariable=title, font=("Segoe UI Semibold", 16), anchor="w",
+                     wraplength=400, justify="left").pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(header, text="Đổi tên…", width=90,
+                      command=lambda: self._rename_hydro_attribute(key)).pack(side="right", padx=4)
+        delete = ctk.CTkButton(header, text="Xóa", width=65, fg_color="#a94747",
+                              command=lambda: self._delete_attribute_group(key))
+        delete.pack(side="right", padx=4)
+        if attr["role"] == "presence" or key in self.project.attribute_models:
+            delete.configure(state="disabled")
+        options = ctk.CTkFrame(frame, fg_color="transparent")
+        options.pack(fill="x", padx=10, pady=4)
+        self.attribute_groups[key] = {
+            "frame": frame, "title": title, "rows": [], "options": options,
+            "default": tk.StringVar(value=self.NO_DEFAULT), "default_menu": None,
+            "required": tk.BooleanVar(value=True),
+            "role": tk.StringVar(value=self.ROLE_LABELS["classification"]),
+            "scope": tk.StringVar(value=self.SCOPE_LABELS["image"]),
+            "extra_settings": {k: v for k, v in config.items()
+                               if k not in {"title", "default", "required", "role", "scope"}},
+        }
+        for value in values:
+            self._append_attribute_row(key, options, value)
+        ctk.CTkLabel(frame, text="Chưa chắc: chưa kết luận được. Không áp dụng: không có cây để đánh giá tình trạng."
+                     if attr["role"] == "condition" else "Chưa chắc: ảnh chưa đủ rõ để xác định có cây.",
+                     text_color="#8298aa", wraplength=650, anchor="w", justify="left").pack(fill="x", padx=12, pady=4)
+        detail = ctk.CTkFrame(frame, fg_color="#0c1721")
+        detail_text = tk.StringVar()
+        self.attribute_groups[key]["detail_text"] = detail_text
+        ctk.CTkLabel(detail, textvariable=detail_text, anchor="w", justify="left", wraplength=650,
+                     text_color="#8298aa").pack(fill="x", padx=10, pady=6)
+        def toggle():
+            if detail.winfo_manager():
+                detail.pack_forget()
+            else:
+                detail.pack(fill="x", padx=12, pady=(0, 10))
+        ctk.CTkButton(frame, text="Chi tiết mã và tên đã lưu", width=205, fg_color="#304558",
+                      command=toggle).pack(anchor="w", padx=12, pady=(4, 10))
+        self._refresh_hydro_display(key)
+
+    def _refresh_hydro_display(self, key):
+        attr = self.hydro_attributes[key]
+        group = self.attribute_groups[key]
+        names = semantic_display_values(attr)
+        for row in group["rows"]:
+            row["display"].set(names[row["value"].get()])
+        group["detail_text"].set("Mã tình trạng: " + key + "\n" + "\n".join(
+            f"{names[v['id']]} → {v['id']} ({v['meaning']}) · Tên đã lưu: {v['displayName']}"
+            for v in attr["values"]) + "\nMã và ý nghĩa giữ nguyên; thứ tự output được đọc từ model ONNX.")
+
+    def _rename_hydro_attribute(self, key):
+        attr = self.hydro_attributes[key]
+        title = simpledialog.askstring("Sửa tên cùng tình trạng",
+            "Chỉ sửa chính tả hoặc tên gọi của cùng tình trạng.\n"
+            "Muốn nhận diện tình trạng khác, dùng “+ Thêm tình trạng”.\n\nTên hiển thị:",
+            initialvalue=attr["displayName"], parent=self)
+        if not title or not title.strip() or title.strip() == attr["displayName"]:
+            return
+        title = title.strip()
+        candidate = copy.deepcopy(list(self.hydro_attributes.values()))
+        next(a for a in candidate if a["id"] == key)["displayName"] = title
+        try:
+            make_label_schema(candidate)
+        except ValueError as exc:
+            messagebox.showerror("Tên không hợp lệ", str(exc), parent=self)
+            return
+        if not messagebox.askyesno("Giữ cùng ý nghĩa nhận diện",
+            f"“{attr['displayName']}” → “{title}”\n\n"
+            "Xác nhận đây vẫn là cùng tình trạng: nhãn, dữ liệu và model hiện có sẽ được giữ.\n"
+            "Nếu là một dấu hiệu/bệnh khác, chọn Không rồi thêm tình trạng mới.", parent=self):
+            return
+        attr["displayName"] = title
+        self.attribute_groups[key]["title"].set(title)
+        self._refresh_hydro_display(key)
+
     def _append_attribute_row(self, key: str, parent, value: str):
         row = ctk.CTkFrame(parent, fg_color="#0c1721", corner_radius=7)
         row.pack(fill="x", pady=3)
         variable = tk.StringVar(value=value)
         if key in self.hydro_attributes:
-            label = next(v for v in self.hydro_attributes[key]["values"] if v["id"] == value)
-            display_var = tk.StringVar(value=label["displayName"])
-            ctk.CTkEntry(row, textvariable=display_var, width=300).pack(side="left", padx=10, pady=5)
-            meaning_text = {"positive": "Có dấu hiệu", "negative": "Không có dấu hiệu",
-                            "uncertain": "Chưa chắc chắn", "not_applicable": "Không áp dụng"}[label["meaning"]]
-            ctk.CTkLabel(row, text=f"{meaning_text} · {value}", text_color="#8298aa", anchor="w").pack(side="left", padx=8)
+            display_var = tk.StringVar(value=semantic_display_values(self.hydro_attributes[key])[value])
+            ctk.CTkLabel(row, textvariable=display_var, anchor="w", wraplength=650,
+                         justify="left").pack(fill="x", padx=10, pady=5)
+            self.attribute_groups[key]["rows"].append({"value": variable, "frame": row, "display": display_var})
+            return
         else:
             ctk.CTkEntry(row, textvariable=variable, width=520).pack(side="left", padx=8, pady=5)
         delete = ctk.CTkButton(row, text="Xóa", width=70, fg_color="#a94747")
         delete.pack(side="right", padx=8, pady=5)
         data = {"value": variable, "frame": row}
-        if key in self.hydro_attributes:
-            data["display"] = display_var
         delete.configure(command=lambda: self._delete_attribute_row(key, data))
-        if key in self.hydro_attributes:
-            delete.configure(state="disabled")
         ToolTip(delete, "Xóa lựa chọn này nếu chưa có nhãn nào đang sử dụng.")
         self.attribute_groups[key]["rows"].append(data)
         variable.trace_add("write", lambda *_args, attr=key: self._refresh_default_menu(attr))
@@ -947,7 +1030,7 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
 
     def _refresh_default_menu(self, key: str):
         group = self.attribute_groups.get(key)
-        if not group:
+        if not group or key in self.hydro_attributes:
             return
         values = [row["value"].get().strip() for row in group["rows"] if row["value"].get().strip()]
         choices = [self.NO_DEFAULT, *dict.fromkeys(values)]
@@ -1001,6 +1084,15 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         titles = []
         for key, group in self.attribute_groups.items():
             title = group["title"].get().strip()
+            if key in self.hydro_attributes:
+                attr = self.hydro_attributes[key]
+                expected = semantic_display_values(attr)
+                if (title != attr["displayName"] or
+                    any(row["display"].get() != expected.get(row["value"].get()) for row in group["rows"])):
+                    messagebox.showerror("Giữ ý nghĩa nhãn",
+                        "Các lựa chọn Có/Không được tạo từ ý nghĩa cố định. "
+                        "Sửa tên cùng tình trạng bằng “Đổi tên…”; tình trạng khác phải thêm mới.", parent=self)
+                    return
             if not title:
                 messagebox.showerror("Thiếu tên nhóm", f"Nhóm mã {key} chưa có tên hiển thị.", parent=self)
                 return
@@ -1051,12 +1143,6 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         if self.hydro_attributes:
             try:
                 attrs = copy.deepcopy(list(self.hydro_attributes.values()))
-                for attr in attrs:
-                    group = self.attribute_groups[attr["id"]]
-                    attr["displayName"] = group["title"].get().strip()
-                    labels = {row["value"].get(): row["display"].get().strip() for row in group["rows"]}
-                    for value in attr["values"]:
-                        value["displayName"] = labels[value["id"]]
                 install_label_schema(candidate, make_label_schema(attrs))
             except ValueError as exc:
                 messagebox.showerror("Cấu hình nhãn không hợp lệ", str(exc), parent=self)
