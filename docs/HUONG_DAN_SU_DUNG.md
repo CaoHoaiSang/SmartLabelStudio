@@ -48,9 +48,33 @@ Nếu chọn `cuda` nhưng CUDA chưa sẵn sàng, ứng dụng dừng job và b
 9. Mỗi nhóm gồm:
    - **Tên nhóm**: tên nhìn thấy trong trang Gán nhãn.
    - **Mã**: khóa ổn định lưu trong `project.json`; ứng dụng tự tạo và không đổi khi sửa tên.
-   - **Mặc định**: tự gán cho nhãn mới; chọn “Không mặc định” nếu muốn người dùng quyết định từng nhãn.
+   - **Mặc định**: tự gán cho nhãn hình học mới, hoặc ảnh nhập mới nếu phạm vi là toàn ảnh. Thay đổi mặc định không sửa nhãn đã có, không tự duyệt ảnh.
    - **Bắt buộc**: không cho Duyệt ảnh khi nhãn còn thiếu nhóm này.
    - **Mục đích**: metadata, Classification hai giai đoạn, hoặc điều kiện OK/NG. Nhóm Classification có thể được export thành các crop để train classifier riêng.
+   - **Phạm vi nhãn**: theo nhãn hình học hoặc toàn ảnh / ảnh rọ.
+
+Với mẫu **Hydro**, dùng **+ Thêm tình trạng** và đặt tên, ví dụ “Đốm lá”. Mỗi
+tình trạng có các lựa chọn Có / Không / Chưa chắc chắn / Không áp dụng. Mục
+**Mặc định** chọn được và được giữ khi lưu, mở lại hoặc đổi tên cùng tình trạng.
+**Bắt buộc**, **Mục đích: Phân loại AI Hydro** và **Phạm vi nhãn: Toàn ảnh / ảnh rọ**
+được hiện để đối chiếu, cố định theo hợp đồng Hydro. Project thông thường vẫn
+sửa được các mục này. Đổi tên sang một bệnh/dấu hiệu khác phải thêm tình trạng
+mới và train model tương ứng, không đổi tên model cũ để nhận diện việc khác.
+
+Mặc định áp dụng cho ảnh **nhập mới sau khi lưu cấu hình**, gồm ZIP/manifest Hydro
+và nhập ảnh/video thông thường. Ví dụ chọn Có cây, Không có lá vàng, Không có héo
+để điền trước bộ nhãn thường gặp, rồi kiểm tra và sửa từng ảnh trước khi Duyệt.
+Ảnh đã nhập hoặc nhập trùng giữ nguyên nhãn/review. Khi không chọn mặc định,
+Hydro khởi tạo Chưa chắc chắn cho có cây và Không áp dụng cho tình trạng.
+Nếu mặc định có cây chưa là Có, các tình trạng đều Không áp dụng kể cả khi đã
+chọn mặc định Có/Không cho tình trạng. Ảnh nhập thường không tự có lineage Hydro.
+
+Tên do người kỹ thuật đặt đi cùng schema/model; không dùng tên chữ để đoán nghĩa.
+Mã nhãn ổn định, `meaning` và thứ tự đầu ra model xác định Có/Không. Một cây có thể
+đồng thời vàng lá và héo nên mỗi tình trạng là một classifier độc lập. “Không có
+lá vàng” không khẳng định cây hoàn toàn khỏe; Chưa chắc chắn/Không áp dụng không
+được train thành nhãn Không. Hệ chưa có khung phân loại Hydro tùy ý nhiều mức
+trong cùng một thuộc tính (ví dụ nhẹ/vừa/nặng); việc đó cần mở rộng contract và QA.
 
 Nên đặt tên class theo loại sản phẩm, không theo hình dạng tạm thời. Ví dụ chai bị cán dẹp vẫn là `Chai_trong`; chọn thuộc tính `condition=can_dep`.
 

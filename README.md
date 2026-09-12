@@ -33,7 +33,7 @@ hai vụ tại nhà để dùng gói model tương thích. Duyệt ảnh ở Hyd
 - Xóa ảnh khỏi dự án cùng toàn bộ nhãn, tọa độ, thuộc tính và trạng thái liên quan; không xóa ảnh nguồn ban đầu.
 - Xóa an toàn toàn bộ ảnh của lần nhập thành công gần nhất bằng một lần xác nhận; hiển thị trước số ảnh, số nhãn, thời gian và nguồn rút gọn, đồng thời luôn giữ ảnh/video nguồn ban đầu.
 - Lọc ảnh thông minh cho cả frame video và ảnh nhập/thư mục: mặc định chỉ quét lượt nhập mới nhất, có tùy chọn bao gồm dữ liệu cũ; dùng model đang hoạt động kết hợp OpenCV để nhóm ảnh nên giữ, ảnh gần trùng, ảnh trống và ảnh chất lượng kém; giữ một tỷ lệ negative sample, bảo vệ ảnh đã có nhãn/đã duyệt và cho duyệt lại trước khi xóa.
-- Mỗi nhóm thuộc tính có tên, giá trị mặc định, cờ bắt buộc và mục đích `metadata`, `classification` hoặc quy tắc `OK/NG`.
+- Mỗi nhóm thuộc tính có tên, mặc định, cờ bắt buộc, mục đích và phạm vi nhãn. Hydro cho chọn mặc định, hiển thị ba mục còn lại cố định theo Classification toàn ảnh rọ; project thường vẫn chỉnh được. Mặc định điền cho nhãn/ảnh nhập mới, không ghi đè ảnh cũ hoặc tự duyệt.
 - Dấu tick trong trang Gán nhãn là công tắc chế độ: tắt để train định vị Detection/SEG/OBB/ORI; bật để hiện thuộc tính và train Classification hai giai đoạn trên crop vật.
 - Export Classification tự cắt từng vật theo RECT, chia train/val/test theo giá trị của một nhóm thuộc tính và dùng `yolo11n-cls.pt`.
 - Có thể tick nhiều nhóm thuộc tính để ứng dụng tự export và train tuần tự; các `best.pt` được gom vào một gói ZIP kèm manifest nhưng vẫn giữ label space độc lập.
@@ -150,19 +150,22 @@ Trong project Hydro, hai thao tác chuyên biệt được đặt theo đúng gi
 
 Khi tạo project bằng mẫu Hydro, nhập **tên cây hiển thị** và `cropCode`; giá trị mặc định là
 **Cải ngọt cọng xanh** (`cai_ngot`). Đây là định danh cây của vụ trồng và model bundle, không phải
-một classifier nhận dạng loài cây. Hydro vẫn dùng Classification toàn ảnh slot với ba nhóm độc lập
+một classifier nhận dạng loài cây. Hydro dùng Classification toàn ảnh slot, khởi tạo ba nhóm độc lập
 `plant_presence` (hiển thị theo cây đã cấu hình), `yellow_leaf` và
 `wilt`; công tắc Classification bị khóa ON để không vô tình quay về Detection/SEG. `uncertain` và
-`not_applicable` không vào train. Khi cây không hiện diện, hai condition tự chuyển thành
-`not_applicable`. `other_abnormal` chỉ là ghi chú phục vụ đánh nhãn, chưa được train.
+`not_applicable` không vào train. Khi chưa xác nhận có cây, các tình trạng tự chuyển thành
+`not_applicable`. Có thể quản lý tối đa 15 tình trạng có tên riêng bên cạnh nhóm có cây;
+mỗi tình trạng train một classifier Có/Không độc lập. `other_abnormal` chỉ là ghi chú phục vụ đánh nhãn, chưa được train.
 
-Trang **Triển khai** của project Hydro xuất ba ONNX static batch 1 rồi tạo `HydroModelBundleV1`
+Trang **Triển khai** của project Hydro xuất ONNX static batch 1 cho từng nhóm rồi tạo model bundle
 với camera/geometry IDs, checksum, preprocessing và từng cặp ngưỡng low/high đã hiệu chỉnh. Studio
 đồng thời tạo file `.zip` portable cạnh thư mục bundle để tải trực tiếp tại **HydroFlow → Cài đặt → AI → Model AI đang chạy**. Có hai
 runtime đích: Windows ONNX Runtime CPU để kiểm thử toàn tuyến ở chế độ `shadow` (không kích hoạt
 cảnh báo), và Jetson Nano TensorRT FP16. Khoảng giữa hai ngưỡng được runtime trả về `uncertain`;
 TensorRT engine chỉ build/smoke-test trên Jetson. Các nút RKNN/Radxa cũ vẫn giữ nguyên cho project
 thường và không hiện trong project Hydro.
+Project có `labelSchema` xuất bundle V3 mang tên tùy chỉnh, ý nghĩa nhãn và thứ tự
+output thật; project cũ chưa lưu schema mở rộng giữ bundle V1/V2 theo geometry.
 
 Schema project là v2. Project v1 cũ được migrate trong bộ nhớ khi mở và chỉ ghi an toàn khi người
 dùng lưu. Có thể đặt biến `SMARTLABEL_WORKSPACE` để chạy thử trên workspace tách biệt; nếu không đặt,

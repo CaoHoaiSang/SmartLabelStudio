@@ -135,6 +135,60 @@ class HydroLabelUiTests(unittest.TestCase):
         self.assertTrue(self.saved)
         self.assertIn("custom_value", self.project.attribute_schema["condition"])
 
+    def test_defaults_save_reload_clear_and_cancel_without_relabeling(self):
+        from smartlabel.models import ImageRecord
+        self.project.images.append(ImageRecord(id="old", file_name="never-opened.png",
+            width=10, height=10, attributes={"plant_presence": "absent"}, review_status="reviewed"))
+        before_images = copy.deepcopy(self.project.images)
+        dialog = self.dialog()
+        presence = dialog.attribute_groups["plant_presence"]
+        self.assertEqual(presence["default_label"].get(), "Chưa chắc chắn")
+        presence["default_menu"].cget("command")("Có cây")
+        dialog.attribute_groups["yellow_leaf"]["default_menu"].cget("command")("Không có lá vàng")
+        self.assertEqual(presence["required_control"].cget("state"), "disabled")
+        dialog._save()
+        self.store.save(self.project)
+        self.project = self.store.load(self.project.id)
+        self.assertEqual(self.project.attribute_settings["plant_presence"]["default"], "present")
+        self.assertEqual(self.project.attribute_settings["yellow_leaf"]["default"], "absent")
+        self.assertEqual(self.project.images, before_images)
+        dialog = self.dialog()
+        self.assertEqual(dialog.attribute_groups["plant_presence"]["default_label"].get(), "Có cây")
+        dialog.attribute_groups["plant_presence"]["default_menu"].cget("command")(dialog.NO_DEFAULT)
+        dialog._save()
+        self.assertEqual(self.project.attribute_settings["plant_presence"]["default"], "")
+        before = copy.deepcopy(self.project)
+        dialog = self.dialog()
+        dialog.attribute_groups["plant_presence"]["default_menu"].cget("command")("Có cây")
+        dialog.destroy()
+        self.assertEqual(self.project, before)
+
+    def test_custom_default_mapping_survives_display_rename(self):
+        attrs = model_attributes(self.project)
+        negative = next(v for v in attrs[1]["values"] if v["meaning"] == "negative")
+        negative["id"] = "clean_custom"
+        install_label_schema(self.project, make_label_schema(attrs))
+        self.project.attribute_settings["yellow_leaf"]["default"] = "clean_custom"
+        dialog = self.dialog()
+        group = dialog.attribute_groups["yellow_leaf"]
+        self.assertEqual(group["default_label"].get(), "Không có lá vàng")
+        with patch("smartlabel.ui_components.simpledialog.askstring", return_value="Vàng lá"), \
+             patch("smartlabel.ui_components.messagebox.askyesno", return_value=True):
+            dialog._rename_hydro_attribute("yellow_leaf")
+        self.assertEqual(group["default_label"].get(), "Không có vàng lá")
+        dialog._save()
+        self.assertEqual(self.project.attribute_settings["yellow_leaf"]["default"], "clean_custom")
+
+    def test_invalid_default_rejected_without_mutating_project(self):
+        before = copy.deepcopy(self.project)
+        dialog = self.dialog()
+        dialog.attribute_groups["plant_presence"]["default"].set("not_a_label")
+        with patch("smartlabel.ui_components.messagebox.showerror") as error:
+            dialog._save()
+        error.assert_called_once()
+        self.assertFalse(self.saved)
+        self.assertEqual(self.project, before)
+
 
 if __name__ == "__main__":
     unittest.main()

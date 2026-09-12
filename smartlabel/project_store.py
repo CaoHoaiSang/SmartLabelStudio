@@ -12,6 +12,7 @@ import shutil
 from PIL import Image, ImageStat
 
 from .models import ImageRecord, LabelClass, Project, new_id, utc_now
+from .attribute_defaults import image_attribute_defaults
 
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
@@ -209,6 +210,7 @@ class ProjectStore:
                     width=width,
                     height=height,
                     quality={"brightness": round(brightness, 2), "contrast": round(contrast, 2)},
+                    attributes=image_attribute_defaults(project),
                 )
             )
             known_hashes.add(digest)

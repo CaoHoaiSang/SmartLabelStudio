@@ -1,5 +1,29 @@
 # Trạng thái tích hợp HydroFlow ngày 10 tháng 9 năm 2026
 
+## Mặc định thuộc tính và cấu hình Hydro — 12/09/2026
+
+Khôi phục chọn Mặc định trong quản lý thuộc tính Hydro; giá trị lưu bằng ID,
+hiển thị theo meaning và tên tình trạng. Lưu schema không xóa mặc định nữa;
+đổi tên cùng tình trạng giữ lựa chọn và mã, hủy không đổi project/nhãn.
+Bắt buộc, Mục đích và Phạm vi được hiện lại ở trạng thái cố định: required,
+classification, image. Project generic giữ các điều khiển chỉnh được.
+
+Mặc định toàn ảnh áp dụng lúc tạo ảnh nhập mới qua manifest/ZIP hoặc ProjectStore
+(ảnh/thư mục/frame video). Không sửa ảnh cũ/nhập trùng, không tự duyệt; xuất train
+toàn ảnh vẫn yêu cầu reviewed. Hydro áp dụng dependency có cây theo meaning;
+chưa xác nhận có cây thì các tình trạng Không áp dụng. Không đặt mặc định giữ
+khởi tạo chưa kết luận như trước. Không sửa schema/bundle contract hoặc model.
+
+Tên tình trạng tùy chỉnh đã được hỗ trợ bởi labelSchema V1 / bundle V3, gồm
+model ID, displayName, value meanings và actual output order. Tình trạng độc lập
+nhị phân cho phép nhiều dấu hiệu đồng thời; không suy ra khỏe từ một negative.
+[Hướng dẫn các trường và cách dùng mặc định](HUONG_DAN_SU_DUNG.md#3-tạo-dự-án).
+
+Kiểm Windows: `python -m unittest discover -s tests -v` đạt122/122, gồm6 test
+mới cho mặc định/lưu/hủy/custom meaning/import/review gate. Render dialog Tk
+thực trên project tạm ở900 và760 px: các trường hiện và vừa chiều rộng. Năm
+tệp workspace đã dirty trước tác vụ giữ nguyên SHA256; không train model thật.
+
 ## Ảnh thật và crop context cũ — 12/09/2026
 
 Đã nhập ZIP do dialog/API Hydro xuất từ snapshot ảnh thật qua callback Tk và

@@ -17,6 +17,7 @@ import zipfile
 from PIL import Image
 
 from .models import ImageRecord, Project, new_id
+from .attribute_defaults import image_attribute_defaults
 from .project_store import ProjectStore
 from .hydro_labels import model_attributes, model_keys, project_label_schema
 from .label_schema import label_for, meaning_for, validate_model_labels
@@ -534,8 +535,7 @@ def import_capture_manifest(
                 import_batch=import_batch,
                 review_status="unlabeled",
                 quality=dict(asset.get("quality", {})),
-                attributes={attr["id"]: label_for(attr, "uncertain" if attr["role"] == "presence" else "not_applicable")
-                            for attr in model_attributes(project)},
+                attributes=image_attribute_defaults(project),
                 metadata={
                     **({"datasetExportId": dataset_export_id} if dataset_export_id else {}),
                     "captureSchemaVersion": manifest["schemaVersion"],

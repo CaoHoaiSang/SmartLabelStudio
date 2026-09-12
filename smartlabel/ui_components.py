@@ -789,6 +789,12 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
             text_color="#8298aa",
             wraplength=450 if self.hydro_attributes else 0, justify="left",
         ).pack(side="left", padx=12)
+        if self.hydro_attributes:
+            ctk.CTkLabel(parent,
+                text="Mặc định chỉ điền cho ảnh nhập mới, vẫn cần duyệt; không đổi nhãn ảnh đã có.\n"
+                     "Không đặt mặc định: Chưa chắc chắn / Không áp dụng. Chưa có cây: tình trạng Không áp dụng.",
+                text_color="#8298aa", wraplength=680, justify="left", anchor="w"
+            ).pack(fill="x", padx=12, pady=(0, 6))
         self.attribute_container = ctk.CTkScrollableFrame(parent, fg_color="#0c1721", corner_radius=10)
         self.attribute_container.pack(fill="both", expand=True, padx=8, pady=(0, 8))
         schema = dict(self.project.attribute_schema)
@@ -936,12 +942,32 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         delete.pack(side="right", padx=4)
         if attr["role"] == "presence" or key in self.project.attribute_models:
             delete.configure(state="disabled")
+        defaults = ctk.CTkFrame(frame, fg_color="transparent")
+        defaults.pack(fill="x", padx=12, pady=4)
+        ctk.CTkLabel(defaults, text="Mặc định").pack(side="left", padx=(0, 8))
+        default_label = tk.StringVar()
+        default_menu = ctk.CTkOptionMenu(defaults, variable=default_label, width=250,
+            values=[self.NO_DEFAULT], command=lambda label: self.attribute_groups[key]["default"].set(
+                self.attribute_groups[key]["default_by_label"].get(label, "")))
+        default_menu.pack(side="left")
+        required = tk.BooleanVar(value=True)
+        required_control = ctk.CTkCheckBox(defaults, text="Bắt buộc", variable=required, state="disabled")
+        required_control.pack(side="left", padx=18)
+        contract = ctk.CTkFrame(frame, fg_color="transparent")
+        contract.pack(fill="x", padx=12, pady=4)
+        ctk.CTkLabel(contract, text="Mục đích: Phân loại AI Hydro", anchor="w").pack(side="left", padx=(0, 22))
+        ctk.CTkLabel(contract, text="Phạm vi nhãn: Toàn ảnh / ảnh rọ", anchor="w").pack(side="left")
+        ctk.CTkLabel(frame,
+            text="Bắt buộc, mục đích và phạm vi cố định theo mẫu Hydro; mỗi ảnh rọ được phân loại riêng.",
+            text_color="#8298aa", wraplength=650, anchor="w", justify="left"
+        ).pack(fill="x", padx=12, pady=(2, 6))
         options = ctk.CTkFrame(frame, fg_color="transparent")
         options.pack(fill="x", padx=10, pady=4)
         self.attribute_groups[key] = {
             "frame": frame, "title": title, "rows": [], "options": options,
-            "default": tk.StringVar(value=self.NO_DEFAULT), "default_menu": None,
-            "required": tk.BooleanVar(value=True),
+            "default": tk.StringVar(value=config.get("default", "") or self.NO_DEFAULT),
+            "default_menu": default_menu, "default_label": default_label,
+            "required": required, "required_control": required_control,
             "role": tk.StringVar(value=self.ROLE_LABELS["classification"]),
             "scope": tk.StringVar(value=self.SCOPE_LABELS["image"]),
             "extra_settings": {k: v for k, v in config.items()
@@ -972,6 +998,7 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         names = semantic_display_values(attr)
         for row in group["rows"]:
             row["display"].set(names[row["value"].get()])
+        self._refresh_default_menu(key)
         group["detail_text"].set("Mã tình trạng: " + key + "\n" + "\n".join(
             f"{names[v['id']]} → {v['id']} ({v['meaning']}) · Tên đã lưu: {v['displayName']}"
             for v in attr["values"]) + "\nMã và ý nghĩa giữ nguyên; thứ tự output được đọc từ model ONNX.")
@@ -1030,7 +1057,13 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
 
     def _refresh_default_menu(self, key: str):
         group = self.attribute_groups.get(key)
-        if not group or key in self.hydro_attributes:
+        if not group:
+            return
+        if key in self.hydro_attributes:
+            names = semantic_display_values(self.hydro_attributes[key])
+            group["default_by_label"] = {self.NO_DEFAULT: "", **{name: value for value, name in names.items()}}
+            group["default_menu"].configure(values=list(group["default_by_label"]))
+            group["default_label"].set(names.get(group["default"].get(), self.NO_DEFAULT))
             return
         values = [row["value"].get().strip() for row in group["rows"] if row["value"].get().strip()]
         choices = [self.NO_DEFAULT, *dict.fromkeys(values)]

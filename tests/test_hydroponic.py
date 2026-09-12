@@ -285,6 +285,24 @@ class HydroponicMvpTests(unittest.TestCase):
         self.assertEqual(self.project.last_import_batch, original_batch)
         self.assertEqual(len(self.project.images), 20)
 
+    def test_archive_defaults_seed_new_images_but_do_not_approve_or_relabel_existing(self):
+        import copy
+        archive = self.create_dataset_archive(["cap_defaults"])
+        for key, value in {"plant_presence": "present", "yellow_leaf": "absent", "wilt": "present"}.items():
+            self.project.attribute_settings[key]["default"] = value
+        import_capture_dataset_archive(self.store, self.project, archive)
+        for record in self.project.images:
+            self.assertEqual(record.attributes, {"plant_presence": "present", "yellow_leaf": "absent", "wilt": "present"})
+            self.assertEqual(record.review_status, "unlabeled")
+        with self.assertRaises(ValueError):
+            DatasetManager(self.store).export_classification(self.project, "yellow_leaf")
+        self.project.images[0].review_status = "reviewed"
+        before = copy.deepcopy(self.project.images)
+        self.project.attribute_settings["yellow_leaf"]["default"] = "present"
+        repeated = import_capture_dataset_archive(self.store, self.project, archive)
+        self.assertEqual(repeated["capturesSkipped"], 1)
+        self.assertEqual(self.project.images, before)
+
     def test_archive_delete_all_and_reimport_keeps_parent_evidence(self):
         archive = self.create_dataset_archive(["cap_restore_1", "cap_restore_2"])
         import_capture_dataset_archive(self.store, self.project, archive)

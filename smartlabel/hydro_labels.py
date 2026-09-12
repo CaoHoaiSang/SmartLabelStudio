@@ -65,10 +65,12 @@ def install_label_schema(project, schema):
         existing = project.attribute_schema.get(key, [])
         values = [v["id"] for v in attr["values"]]
         project.attribute_schema[key] = existing if set(existing) == set(values) else values
+        default = project.attribute_settings.get(key, {}).get("default", "")
         project.attribute_settings[key] = {
             **project.attribute_settings.get(key, {}), "title": attr["displayName"],
             "scope": "image", "role": "classification", "required": True,
-            "default": "", "train_exclude": [v["id"] for v in attr["values"]
+            "default": default if default in values else "",
+            "train_exclude": [v["id"] for v in attr["values"]
                                             if v["meaning"] in {"uncertain", "not_applicable"}],
         }
     project.metadata["labelSchema"] = schema
