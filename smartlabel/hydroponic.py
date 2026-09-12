@@ -241,6 +241,35 @@ def _validate_crop_context(value: Any, captured_at: str) -> dict[str, Any]:
     return value
 
 
+def _archive_import_context(index: dict[str, Any], row: dict[str, Any], manifest: dict[str, Any]) -> tuple[dict[str, Any] | None, str]:
+    """Enrich legacy captures only when their original context is entirely absent.
+
+    A bundled lifecycle is provenance for missing metadata, never permission to
+    replace recorded dates without the existing audited correction contract.
+    """
+    if isinstance(row.get("effectiveCropContext"), dict):
+        return row["effectiveCropContext"], "audited_correction"
+    if isinstance(manifest.get("cropContext"), dict):
+        return None, "capture_manifest"
+    cycle = index.get("cropCycle")
+    if cycle is None:
+        return None, "legacy_missing"
+    if (not isinstance(cycle, dict) or cycle.get("cropCycleId") != manifest["cropCycleId"]
+            or cycle.get("cropCode") != manifest["cropCode"]):
+        raise CaptureManifestError("legacy crop context requires the matching cropCycle record")
+    captured_at = _validate_captured_at(manifest.get("capturedAt"))
+    local_day = datetime.fromisoformat(captured_at.replace("Z", "+00:00")).astimezone(timezone(timedelta(hours=7))).date()
+    try:
+        sowing = date.fromisoformat(cycle["sowingDate"])
+        nft = date.fromisoformat(cycle["nftStartDate"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise CaptureManifestError("legacy crop context requires valid cropCycle dates") from exc
+    context = {"cropDisplayName": cycle.get("cropDisplayName"), "sowingDate": cycle["sowingDate"],
+               "nftStartDate": cycle["nftStartDate"], "localDate": local_day.isoformat(), "timezone": "Asia/Bangkok",
+               "daysAfterSowing": (local_day - sowing).days, "daysAfterNft": (local_day - nft).days}
+    return _validate_crop_context(context, captured_at), "dataset_crop_cycle"
+
+
 def _safe_relative_path(value: Any) -> Path:
     if not isinstance(value, str) or not value.strip():
         raise CaptureManifestError("asset relativePath is required")
@@ -396,6 +425,7 @@ def import_capture_manifest(
     manifest_path: str | Path,
     *,
     effective_crop_context: dict[str, Any] | None = None,
+    crop_context_source: str | None = None,
     crop_context_correction_ids: list[str] | None = None,
     import_batch: str | None = None,
     dataset_export_id: str | None = None,
@@ -538,6 +568,8 @@ def import_capture_manifest(
                     "daysAfterNft": crop_context.get("daysAfterNft"),
                     "timezone": crop_context.get("timezone"),
                     "cropContextCorrectionIds": list(correction_ids),
+                    "cropContextSource": crop_context_source or ("capture_manifest" if original_crop_context else "legacy_missing"),
+                    **({"cropContextDatasetExportId": dataset_export_id} if crop_context_source == "dataset_crop_cycle" else {}),
                     "originalSowingDate": original_crop_context.get("sowingDate"),
                     "originalNftStartDate": original_crop_context.get("nftStartDate"),
                     "originalDaysAfterSowing": original_crop_context.get("daysAfterSowing"),
@@ -808,6 +840,9 @@ def import_capture_dataset_archive(
             row["captureId"]: row
             for row in index["captures"] if isinstance(row, dict) and isinstance(row.get("captureId"), str)
         }
+        # Resolve every fallback before importing any capture or updating metadata.
+        import_contexts = {manifest["captureId"]: _archive_import_context(index, rows_by_capture[manifest["captureId"]], manifest)
+                           for manifest, _path in manifests}
         known_asset_ids = {record.metadata.get("assetId") for record in project.images}
         for record in project.images:
             capture_id = record.metadata.get("captureId")
@@ -826,18 +861,17 @@ def import_capture_dataset_archive(
                 partial = len(existing) < len(topology_slots(manifest))
                 if not existing_slot_ids.issubset(set(topology_slots(manifest))):
                     raise CaptureManifestError(f"project capture topology mismatch: {capture_id}")
-                effective_context = row.get("effectiveCropContext")
+                effective_context, context_source = import_contexts[capture_id]
                 if isinstance(effective_context, dict):
                     correction_ids = list(row.get("cropContextCorrectionIds") or [])
                     capture_metadata_changed = False
                     for record in existing:
                         metadata = dict(record.metadata)
                         before_metadata = dict(metadata)
-                        metadata.setdefault("originalSowingDate", metadata.get("sowingDate"))
-                        metadata.setdefault("originalNftStartDate", metadata.get("nftStartDate"))
-                        metadata.setdefault("originalDaysAfterSowing", metadata.get("daysAfterSowing"))
-                        metadata.setdefault("originalDaysAfterNft", metadata.get("daysAfterNft"))
-                        metadata.update({
+                        for original_key, current_key in (("originalSowingDate", "sowingDate"), ("originalNftStartDate", "nftStartDate"),
+                                                          ("originalDaysAfterSowing", "daysAfterSowing"), ("originalDaysAfterNft", "daysAfterNft")):
+                            metadata.setdefault(original_key, None if context_source == "dataset_crop_cycle" else metadata.get(current_key))
+                        updates = {
                             "cropDisplayName": effective_context.get("cropDisplayName", ""),
                             "captureLocalDate": effective_context.get("localDate"),
                             "sowingDate": effective_context.get("sowingDate"),
@@ -846,7 +880,18 @@ def import_capture_dataset_archive(
                             "daysAfterNft": effective_context.get("daysAfterNft"),
                             "timezone": effective_context.get("timezone"),
                             "cropContextCorrectionIds": correction_ids,
-                        })
+                            "cropContextSource": context_source,
+                        }
+                        if context_source == "dataset_crop_cycle":
+                            for key, value in updates.items():
+                                if key in {"cropContextSource", "cropContextCorrectionIds"}:
+                                    continue
+                                if metadata.get(key) not in (None, "", value):
+                                    raise CaptureManifestError("legacy crop context conflicts with existing record; preserve it for review")
+                            if metadata.get("cropContextCorrectionIds"):
+                                raise CaptureManifestError("legacy crop context cannot replace audited corrections")
+                            metadata.setdefault("cropContextDatasetExportId", index["datasetExportId"])
+                        metadata.update(updates)
                         capture_metadata_changed = capture_metadata_changed or metadata != before_metadata
                         if metadata != before_metadata:
                             pending_metadata.append((record, metadata))
@@ -874,7 +919,8 @@ def import_capture_dataset_archive(
                 store,
                 project,
                 manifest_path,
-                effective_crop_context=row.get("effectiveCropContext"),
+                effective_crop_context=import_contexts[manifest["captureId"]][0],
+                crop_context_source=import_contexts[manifest["captureId"]][1],
                 crop_context_correction_ids=row.get("cropContextCorrectionIds"),
                 import_batch=import_batch,
                 dataset_export_id=index["datasetExportId"],

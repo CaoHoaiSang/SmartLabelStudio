@@ -1,5 +1,27 @@
 # Trạng thái tích hợp HydroFlow ngày 10 tháng 9 năm 2026
 
+## Ảnh thật và crop context cũ — 12/09/2026
+
+Đã nhập ZIP do dialog/API Hydro xuất từ snapshot ảnh thật qua callback Tk và
+worker SmartLabel: ba capture ngày21/08,09/09,10/09,30 slot +9 parent images.
+Hash/kích thước/lineage/ID/vụ/thời gian khớp; re-import/cancel, repair thiếu một
+ảnh có xác nhận, ZIP hỏng, file mất và lỗi lưu giữa capture/retry được kiểm.
+Workspace nghiệm thu riêng; không sửa project nguồn hoặc lịch sử xuất DB live.
+
+Phát hiện manifest21/08 không có cropContext dù index có cropCycle. Importer nay
+bổ sung các ngày/tuổi cây thiếu từ đúng cropCycle/cropCode đã kiểm, ghi nguồn
+`dataset_crop_cycle` và datasetExportId; original dates vẫn null. Manifest đã có
+ngày không bị registry ghi đè; audited correction giữ contract hiện có. Re-import
+có thể bổ sung metadata còn thiếu, giữ ID/nhãn/review; xung đột ngày đã lưu bị chặn.
+Không có lifecycle đáng tin trong gói thì giữ trạng thái thiếu, không đoán ngày.
+
+Full116/116 đạt, thêm5 regression; sau siết provenance cuối đã chạy lại28 test
+importer. `tools/hydro_real_dataset_acceptance.py` kiểm ZIP thật trong workspace
+mới, không gán nhãn cây hay train. Toàn bộ30 ảnh thật chưa có nhãn được duyệt,
+QA/bundle readiness và export train bị chặn đúng. Đã nghiệm thu vận chuyển/import;
+dataset train/bundle với nhãn thật, topology V2 thực địa và model accuracy còn mở.
+Hydro có hướng dẫn phối hợp tại `docs/REAL_DATASET_ACCEPTANCE.md` trong repo Hydro.
+
 ## Ý nghĩa nhãn Hydro — 12/09/2026
 
 Nhánh `fix/hydro-label-semantics-ui` sửa luồng Quản lý nhãn và các lựa chọn gán

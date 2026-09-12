@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from datetime import datetime
 import json
+import hashlib
 import subprocess
 import sys
 import unittest
@@ -388,6 +389,85 @@ class HydroponicMvpTests(unittest.TestCase):
             import_capture_dataset_archive(self.store, self.project, archive)
         self.assertEqual(image.read_bytes(), b"existing corrupt evidence")
         self.assertEqual(len(self.project.images), 9)
+
+    def legacy_context_archive(self, *, cycle_id="cai_ngot_2026-08-03", sowing_date="2026-08-03", remove_context=True):
+        archive = self.create_dataset_archive(["cap_legacy_context"])
+        with zipfile.ZipFile(archive) as package:
+            files = {name: package.read(name) for name in package.namelist()}
+        index = json.loads(files["dataset-export.json"])
+        index["cropCycle"] = {"cropCycleId": cycle_id, "cropCode": "cai_ngot",
+            "cropDisplayName": "Cải ngọt cọng xanh", "sowingDate": sowing_date, "nftStartDate": "2026-08-19"}
+        index["cropCycleCorrections"] = []
+        if remove_context:
+            for row in index["captures"]:
+                manifest = json.loads(files[row["manifestPath"]]); manifest.pop("cropContext", None)
+                files[row["manifestPath"]] = json.dumps(manifest).encode()
+                row["manifestSha256"] = hashlib.sha256(files[row["manifestPath"]]).hexdigest()
+        files["dataset-export.json"] = json.dumps(index).encode()
+        with zipfile.ZipFile(archive, "w") as package:
+            for name, data in files.items(): package.writestr(name, data)
+        return archive
+
+    def test_legacy_crop_context_uses_bundled_cycle_without_rewriting_original(self):
+        archive = self.legacy_context_archive()
+        archive_sha = sha256(archive)
+        import_capture_dataset_archive(self.store, self.project, archive)
+        metadata = self.project.images[0].metadata
+        self.assertEqual(metadata["sowingDate"], "2026-08-03")
+        self.assertEqual(metadata["daysAfterSowing"], 17)
+        self.assertEqual(metadata["daysAfterNft"], 1)
+        self.assertEqual(metadata["cropContextSource"], "dataset_crop_cycle")
+        self.assertIsNone(metadata["originalSowingDate"])
+        self.assertEqual(metadata["cropContextCorrectionIds"], [])
+        self.assertEqual(sha256(archive), archive_sha)
+
+    def test_legacy_crop_context_repairs_missing_metadata_preserving_labels(self):
+        archive = self.legacy_context_archive()
+        import_capture_dataset_archive(self.store, self.project, archive)
+        for record in self.project.images:
+            for key in ("cropDisplayName", "captureLocalDate", "sowingDate", "nftStartDate", "daysAfterSowing", "daysAfterNft", "timezone", "cropContextSource", "originalSowingDate"):
+                record.metadata.pop(key, None)
+        record = self.project.images[0]
+        record.metadata["sowingDate"] = "2026-08-03"  # Earlier partial enrichment is not an original manifest value.
+        record.attributes["plant_presence"] = "present"  # Synthetic fixture, not a user's plant label.
+        record.review_status = "reviewed"
+        self.store.save(self.project)
+        result = import_capture_dataset_archive(self.store, self.project, archive)
+        self.assertEqual(result["capturesMetadataUpdated"], 1)
+        self.assertEqual(record.attributes["plant_presence"], "present")
+        self.assertEqual(record.review_status, "reviewed")
+        self.assertEqual(record.metadata["daysAfterSowing"], 17)
+        self.assertIsNone(record.metadata["originalSowingDate"])
+        repeated = import_capture_dataset_archive(self.store, self.project, archive)
+        self.assertEqual(repeated["capturesMetadataUpdated"], 0)
+
+    def test_legacy_crop_context_rejects_wrong_cycle_or_invalid_dates_before_writes(self):
+        for options in ({"cycle_id": "other_cycle"}, {"sowing_date": "not-a-date"}, {"sowing_date": "2026-09-03"}):
+            with self.subTest(options=options), self.assertRaises(CaptureManifestError):
+                import_capture_dataset_archive(self.store, self.project, self.legacy_context_archive(**options))
+            self.assertEqual(self.project.images, [])
+
+    def test_legacy_crop_context_never_overrides_recorded_manifest_dates(self):
+        archive = self.legacy_context_archive(sowing_date="2026-08-02", remove_context=False)
+        import_capture_dataset_archive(self.store, self.project, archive)
+        self.assertEqual(self.project.images[0].metadata["sowingDate"], "2026-08-03")
+        self.assertEqual(self.project.images[0].metadata["originalSowingDate"], "2026-08-03")
+
+    def test_legacy_crop_context_conflict_or_save_failure_preserves_existing_metadata(self):
+        archive = self.legacy_context_archive()
+        import_capture_dataset_archive(self.store, self.project, archive)
+        first, last = self.project.images[0], self.project.images[-1]
+        first.metadata["sowingDate"] = None
+        last.metadata["sowingDate"] = "2026-08-01"
+        before = [dict(record.metadata) for record in self.project.images]
+        with self.assertRaisesRegex(CaptureManifestError, "conflicts"):
+            import_capture_dataset_archive(self.store, self.project, archive)
+        self.assertEqual([record.metadata for record in self.project.images], before)
+        last.metadata["sowingDate"] = "2026-08-03"
+        before = [dict(record.metadata) for record in self.project.images]
+        with patch.object(self.store, "save", side_effect=OSError("disk unavailable")), self.assertRaises(OSError):
+            import_capture_dataset_archive(self.store, self.project, archive)
+        self.assertEqual([record.metadata for record in self.project.images], before)
 
     def test_dataset_archive_applies_audited_crop_context_correction_without_rewriting_manifest(self) -> None:
         initial_archive = self.create_dataset_archive(["cap_archive_corrected"])
