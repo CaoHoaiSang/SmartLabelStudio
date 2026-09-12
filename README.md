@@ -34,6 +34,7 @@ hai vụ tại nhà để dùng gói model tương thích. Duyệt ảnh ở Hyd
 - Xóa an toàn toàn bộ ảnh của lần nhập thành công gần nhất bằng một lần xác nhận; hiển thị trước số ảnh, số nhãn, thời gian và nguồn rút gọn, đồng thời luôn giữ ảnh/video nguồn ban đầu.
 - Lọc ảnh thông minh cho cả frame video và ảnh nhập/thư mục: mặc định chỉ quét lượt nhập mới nhất, có tùy chọn bao gồm dữ liệu cũ; dùng model đang hoạt động kết hợp OpenCV để nhóm ảnh nên giữ, ảnh gần trùng, ảnh trống và ảnh chất lượng kém; giữ một tỷ lệ negative sample, bảo vệ ảnh đã có nhãn/đã duyệt và cho duyệt lại trước khi xóa.
 - Mỗi nhóm thuộc tính có tên, mặc định, cờ bắt buộc, mục đích và phạm vi nhãn. Hydro cho chọn mặc định, hiển thị ba mục còn lại cố định theo Classification toàn ảnh rọ; project thường vẫn chỉnh được. Mặc định điền cho nhãn/ảnh nhập mới, không ghi đè ảnh cũ hoặc tự duyệt.
+- Hydro cho sửa tên hiển thị từng giá trị, luôn đặt cạnh ý nghĩa Có/Không/Chưa chắc/Không áp dụng cố định. Tên mới đi cùng tiền tố nghĩa ở Mặc định, Gán nhãn và QA; mã nhãn, dữ liệu và model giữ nguyên.
 - Dấu tick trong trang Gán nhãn là công tắc chế độ: tắt để train định vị Detection/SEG/OBB/ORI; bật để hiện thuộc tính và train Classification hai giai đoạn trên crop vật.
 - Export Classification tự cắt từng vật theo RECT, chia train/val/test theo giá trị của một nhóm thuộc tính và dùng `yolo11n-cls.pt`.
 - Có thể tick nhiều nhóm thuộc tính để ứng dụng tự export và train tuần tự; các `best.pt` được gom vào một gói ZIP kèm manifest nhưng vẫn giữ label space độc lập.

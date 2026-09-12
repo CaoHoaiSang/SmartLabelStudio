@@ -1,5 +1,29 @@
 # Trạng thái tích hợp HydroFlow ngày 10 tháng 9 năm 2026
 
+## Chỉnh tên giá trị Hydro — 12/09/2026
+
+Mẫu Hydro cho sửa `displayName` từng giá trị trực tiếp, bên cạnh ý nghĩa cố định
+được sinh từ role/meaning/tên tình trạng. ID, meaning, requires và số lớp vẫn khóa;
+không thay LabelSchemaV1/bundle V3. Chỉ thay tên không phải train lại. Lưu cập
+nhật fingerprint schema nhưng giữ ID/nhãn ảnh/review/default/model/output order.
+Hủy và tên không hợp lệ không sửa project; tên trống, quá100 ký tự, ký tự điều
+khiển và trùng trong nhóm bị chặn. Tên gợi ý tự theo rename nhóm cùng khái niệm,
+còn tên tùy chỉnh giữ nguyên.
+
+Mặc định/Gán nhãn/QA cùng dùng tên đã lưu kèm tiền tố nghĩa, ví dụ
+`Có · Phát hiện vàng lá`; tên trùng đúng gợi ý không lặp lại. Tên cũ khác nghĩa
+không được dùng thay meaning: vẫn hiện tiền tố cố định, mở project không migrate
+schema/nhãn. Menu giữ chiều rộng, tooltip cho xem tên dài. Generic giữ luồng cũ.
+Các bundle đã xuất và model đang chạy trên Hydro không bị đổi; bundle mới mang
+tên mới qua trường displayName sẵn có. Đây là thay đổi SmartLabel, không deploy Nano.
+
+Kiểm Windows: toàn suite127/127 đạt, gồm14 test dialog và luồng app thật
+save → gán nhãn/QA → chuyển project/mở lại. Bốn ảnh dialog ở900/760 px và
+tên dài đã kiểm. Fixture xuất ONNX hằng số/V3 sau sửa tên được `validate_bundle`
+của source Hydro hiện tại chấp nhận, output positive-first và SHA model giữ
+nguyên. Đây là kiểm contract bằng model tổng hợp, không train/đo độ chính xác
+hoặc kích hoạt model trên thiết bị. Năm tệp workspace dirty giữ nguyên SHA256.
+
 ## Mặc định thuộc tính và cấu hình Hydro — 12/09/2026
 
 Khôi phục chọn Mặc định trong quản lý thuộc tính Hydro; giá trị lưu bằng ID,

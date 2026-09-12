@@ -1895,10 +1895,13 @@ class SmartLabelApp(ctk.CTk):
                 self.attribute_panel,
                 width=220,
                 values=choices,
+                dynamic_resizing=not is_hydroponic_project(self.project),
                 command=lambda value, attr=key: self._attribute_changed(attr, value),
             )
             widget.set("— Chưa gán —")
             widget.pack(fill="x", padx=10, pady=(1, 7))
+            if is_hydroponic_project(self.project):
+                ToolTip(widget, "\n".join(display_values))
             self.attribute_widgets[key] = widget
         if hasattr(self, "canvas"):
             self.canvas.set_default_attributes(self._attribute_defaults())

@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from smartlabel.hydro_labels import display_values, install_label_schema, model_attributes
 from smartlabel.hydroponic import apply_hydroponic_slot_template
-from smartlabel.label_schema import make_label_schema
+from smartlabel.label_schema import make_label_schema, training_identity, validate_label_schema, validate_model_labels
 from smartlabel.project_store import ProjectStore
 from smartlabel.ui_components import ProjectSettingsDialog
 
@@ -63,17 +63,19 @@ class HydroLabelUiTests(unittest.TestCase):
         attrs[1]["values"][0]["displayName"] = "Có đốm lá"
         install_label_schema(self.project, make_label_schema(attrs))
         before = copy.deepcopy(self.project)
-        self.assertEqual(display_values(self.project, "yellow_leaf")["absent"], "Không có lá vàng")
+        self.assertEqual(display_values(self.project, "yellow_leaf")["absent"], "Không · Có đốm lá")
         self.assertEqual(self.project, before)
 
-    def test_new_condition_has_read_only_choices_and_no_old_model_reference(self):
+    def test_new_condition_has_editable_names_fixed_meanings_and_no_old_model_reference(self):
         import customtkinter as ctk
         self.project.attribute_models["yellow_leaf"] = "fixture-never-loaded.pt"
         dialog = self.dialog()
         with patch("smartlabel.ui_components.simpledialog.askstring", return_value="Đốm lá"):
             dialog._add_attribute_group()
         for row in dialog.attribute_groups["dom_la"]["rows"]:
-            self.assertFalse(any(isinstance(w, ctk.CTkEntry) for w in row["frame"].winfo_children()))
+            self.assertIsInstance(row["entry"], ctk.CTkEntry)
+            self.assertIsInstance(row["meaning_label"], ctk.CTkLabel)
+            self.assertNotEqual(row["entry"].cget("state"), "disabled")
         dialog._save()
         self.assertTrue(self.saved)
         self.assertEqual(display_values(self.project, "dom_la"), {
@@ -113,7 +115,8 @@ class HydroLabelUiTests(unittest.TestCase):
         self.assertTrue(self.saved)
         self.assertEqual(self.project.attribute_schema, before_schema)
         attr = next(a for a in model_attributes(self.project) if a["id"] == "yellow_leaf")
-        self.assertEqual(attr["values"], before_values)
+        self.assertEqual([(v["id"], v["meaning"]) for v in attr["values"]],
+                         [(v["id"], v["meaning"]) for v in before_values])
         self.assertEqual(attr["displayName"], "Vàng lá")
         self.assertEqual(display_values(self.project, "yellow_leaf")["absent"], "Không có vàng lá")
         self.assertEqual(display_values(self.project, "yellow_leaf")["skip_custom"], "Không áp dụng")
@@ -188,6 +191,92 @@ class HydroLabelUiTests(unittest.TestCase):
         error.assert_called_once()
         self.assertFalse(self.saved)
         self.assertEqual(self.project, before)
+
+    def test_value_name_save_reload_preserves_used_ids_models_defaults_and_output_order(self):
+        from smartlabel.models import ImageRecord
+        attrs = model_attributes(self.project)
+        for value in attrs[1]["values"]:
+            value["id"] = "custom_" + value["meaning"]
+        attrs[1]["values"].reverse()
+        install_label_schema(self.project, make_label_schema(attrs))
+        self.project.attribute_models["yellow_leaf"] = "existing-not-loaded.pt"
+        self.project.attribute_settings["yellow_leaf"]["default"] = "custom_positive"
+        self.project.images.append(ImageRecord(id="reviewed", file_name="not-loaded.jpg", width=10, height=10,
+            attributes={"plant_presence": "present", "yellow_leaf": "custom_negative"}, review_status="reviewed"))
+        before = copy.deepcopy(self.project)
+        dialog = self.dialog()
+        group = dialog.attribute_groups["yellow_leaf"]
+        row = next(r for r in group["rows"] if r["value"].get() == "custom_positive")
+        row["entry"].delete(0, "end")
+        row["entry"].insert(0, "Phát hiện vàng lá")
+        self.assertEqual(row["meaning"].get(), "Có lá vàng")
+        self.assertEqual(group["default"].get(), "custom_positive")
+        self.assertEqual(group["default_label"].get(), "Có · Phát hiện vàng lá")
+        self.assertEqual(self.project, before)
+        dialog._save()
+        self.assertTrue(self.saved)
+        self.store.save(self.project)
+        self.project = self.store.load(self.project.id)
+        self.assertEqual(self.project.images, before.images)
+        self.assertEqual(self.project.attribute_schema, before.attribute_schema)
+        self.assertEqual(self.project.attribute_models, before.attribute_models)
+        self.assertEqual(self.project.attribute_settings, before.attribute_settings)
+        schema = validate_label_schema(self.project.metadata["labelSchema"])
+        attr = next(a for a in schema["attributes"] if a["id"] == "yellow_leaf")
+        self.assertEqual(training_identity(attr), training_identity(attrs[1]))
+        self.assertNotEqual(schema["schemaId"], before.metadata["labelSchema"]["schemaId"])
+        self.assertEqual(validate_model_labels(attr, {"attributeId": "yellow_leaf",
+            "outputLabels": ["custom_positive", "custom_negative"], "positiveIndex": 0, "negativeIndex": 1}),
+            ["custom_positive", "custom_negative"])
+        dialog = self.dialog()
+        row = next(r for r in dialog.attribute_groups["yellow_leaf"]["rows"] if r["value"].get() == "custom_positive")
+        self.assertEqual(row["entry"].get(), "Phát hiện vàng lá")
+        self.assertEqual(display_values(self.project, "yellow_leaf")["custom_positive"], "Có · Phát hiện vàng lá")
+
+    def test_value_name_cancel_and_group_rename_preserve_custom_text(self):
+        before = copy.deepcopy(self.project)
+        dialog = self.dialog()
+        row = next(r for r in dialog.attribute_groups["yellow_leaf"]["rows"] if r["value"].get() == "present")
+        row["display"].set("Phát hiện vàng lá")
+        with patch("smartlabel.ui_components.simpledialog.askstring", return_value="Vàng lá"), \
+             patch("smartlabel.ui_components.messagebox.askyesno", return_value=True):
+            dialog._rename_hydro_attribute("yellow_leaf")
+        self.assertEqual(row["display"].get(), "Phát hiện vàng lá")
+        self.assertEqual(row["meaning"].get(), "Có vàng lá")
+        dialog.destroy()
+        self.assertEqual(self.project, before)
+
+    def test_invalid_value_names_do_not_mutate_project(self):
+        for name in (" ", "x" * 101, "a\nb", "KHÔNG CÓ LÁ VÀNG"):
+            with self.subTest(name=name):
+                before = copy.deepcopy(self.project)
+                dialog = self.dialog()
+                row = next(r for r in dialog.attribute_groups["yellow_leaf"]["rows"] if r["value"].get() == "present")
+                row["display"].set(name)
+                with patch("smartlabel.ui_components.messagebox.showerror") as error:
+                    dialog._save()
+                error.assert_called_once()
+                self.assertFalse(self.saved)
+                self.assertEqual(self.project, before)
+                dialog.destroy()
+
+    def test_value_editor_cannot_change_unused_meanings_or_ids(self):
+        before = copy.deepcopy(self.project)
+        for change in ("meaning", "id"):
+            with self.subTest(change=change):
+                dialog = self.dialog()
+                if change == "meaning":
+                    attr = dialog.hydro_attributes["yellow_leaf"]
+                    attr["values"][0]["meaning"], attr["values"][1]["meaning"] = (
+                        attr["values"][1]["meaning"], attr["values"][0]["meaning"])
+                else:
+                    dialog.attribute_groups["yellow_leaf"]["rows"][0]["value"].set("replacement_id")
+                with patch("smartlabel.ui_components.messagebox.showerror") as error:
+                    dialog._save()
+                error.assert_called_once()
+                self.assertFalse(self.saved)
+                self.assertEqual(self.project, before)
+                dialog.destroy()
 
 
 if __name__ == "__main__":

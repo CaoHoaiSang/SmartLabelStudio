@@ -393,6 +393,42 @@ class ProjectSwitchingTests(unittest.TestCase):
             start.assert_called_once_with(project, "fixture.zip", "verified-plan")
         self.app.import_in_progress = False
 
+    def test_24_edited_value_names_refresh_labeling_qa_and_raw_value_selection(self):
+        from smartlabel.ui_components import ProjectSettingsDialog
+        from smartlabel.hydro_labels import model_attributes
+        project = self.store.create_project("Value name UI fixture", task="classify")
+        apply_hydroponic_slot_template(project)
+        source = self.store.project_dir(project) / "fixture.png"
+        Image.new("RGB", (64, 48), "green").save(source)
+        self.store.import_images(project, [source])
+        project.images[0].attributes = {"plant_presence": "present", "yellow_leaf": "present", "wilt": "absent"}
+        project.images[0].review_status = "reviewed"
+        self.store.save(project)
+        self.switch(project)
+        dialog = ProjectSettingsDialog(self.app, self.app.project, self.app._save_project_settings)
+        dialog.withdraw()
+        row = next(r for r in dialog.attribute_groups["yellow_leaf"]["rows"] if r["value"].get() == "present")
+        row["entry"].delete(0, "end")
+        row["entry"].insert(0, "Phát hiện vàng lá")
+        dialog._save()
+        self.assertEqual(self.app.attribute_widgets["yellow_leaf"].get(), "Có · Phát hiện vàng lá")
+        self.assertEqual(self.app.project.images[0].review_status, "reviewed")
+        self.assertFalse(self.app.attribute_widgets["yellow_leaf"].cget("dynamic_resizing"))
+        with patch.object(self.app, "_append_review_result") as result:
+            self.app._run_hydro_qa()
+        self.assertTrue(any("Có · Phát hiện vàng lá: 1" in str(call) for call in result.call_args_list))
+        self.switch(self.bottle)
+        self.switch(project)
+        self.assertEqual(self.app.attribute_widgets["yellow_leaf"].get(), "Có · Phát hiện vàng lá")
+        self.app.attribute_widgets["yellow_leaf"].cget("command")("Không có lá vàng")
+        self.assertEqual(self.app.project.images[0].attributes["yellow_leaf"], "absent")
+        self.assertEqual(self.app.project.images[0].review_status, "draft")
+        self.app.attribute_widgets["yellow_leaf"].cget("command")("Có · Phát hiện vàng lá")
+        loaded = self.store.load(project.id)
+        self.assertEqual(loaded.images[0].attributes["yellow_leaf"], "present")
+        attr = next(a for a in model_attributes(loaded) if a["id"] == "yellow_leaf")
+        self.assertEqual(next(v for v in attr["values"] if v["id"] == "present")["displayName"], "Phát hiện vàng lá")
+
 
 if __name__ == "__main__":
     unittest.main()

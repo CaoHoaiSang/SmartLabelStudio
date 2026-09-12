@@ -29,11 +29,26 @@ def semantic_display_values(attribute):
     return {value["id"]: names[value["meaning"]] for value in attribute["values"]}
 
 
+def presented_display_values(attribute):
+    """Keep meaning visible when an operator uses a custom display name.
+
+    UI captions never determine training labels or classifier output order.
+    Reading a legacy/custom schema does not modify its stored names.
+    """
+    canonical = semantic_display_values(attribute)
+    meaning_titles = {"positive": "Có", "negative": "Không",
+                      "uncertain": "Chưa chắc", "not_applicable": "Không áp dụng"}
+    return {value["id"]: (canonical[value["id"]]
+            if value["displayName"].strip() == canonical[value["id"]]
+            else f"{meaning_titles[value['meaning']]} · {value['displayName'].strip()}")
+            for value in attribute["values"]}
+
+
 def display_values(project, key):
     if project and project.metadata.get("template") == "Hydroponic Slot Condition":
         attr = next((a for a in model_attributes(project) if a["id"] == key), None)
         if attr:
-            return semantic_display_values(attr)
+            return presented_display_values(attr)
     return {}
 
 

@@ -61,6 +61,24 @@ tình trạng có các lựa chọn Có / Không / Chưa chắc chắn / Không 
 sửa được các mục này. Đổi tên sang một bệnh/dấu hiệu khác phải thêm tình trạng
 mới và train model tương ứng, không đổi tên model cũ để nhận diện việc khác.
 
+**Chỉnh tên từng giá trị Hydro:** nhập trực tiếp ở cột **Tên giá trị · có thể chỉnh**.
+Cột **Ý nghĩa cố định** bên cạnh cho biết Có/Không đối với đúng tình trạng đang
+sửa. Ví dụ tên “Có đốm lá” có thể đổi thành “Phát hiện đốm lá”, vẫn mang nghĩa Có.
+Tên cần 1–100 ký tự và không trùng trong cùng nhóm; không dùng ký tự xuống dòng.
+Nhấn **Lưu thay đổi** để áp dụng; **Hủy** bỏ toàn bộ sửa trong hộp thoại.
+
+Tên tùy chỉnh được hiện ở Mặc định, Gán nhãn và phân bố QA với tiền tố ý nghĩa,
+ví dụ **Có · Phát hiện đốm lá**. Nếu giữ đúng tên gợi ý thì chỉ hiện một lần.
+Rê chuột vào mục chọn để xem đầy đủ tên dài. Mã nhãn, giá trị mặc định đã chọn,
+review ảnh, model và thứ tự đầu ra giữ nguyên; chỉ đổi cách gọi cùng ý nghĩa
+không cần train lại. Model bundle đã xuất trước đó giữ nguyên như một bản chụp;
+bundle xuất mới sẽ mang tên mới, không tự cập nhật model đang chạy trên Hydro.
+
+Khi đổi tên nhóm cùng tình trạng, tên giá trị còn giống nguyên tên gợi ý sẽ theo
+tên nhóm mới; tên đã tùy chỉnh được giữ lại để người kỹ thuật chủ động chỉnh.
+Ứng dụng không đoán nghĩa từ nội dung tên. Người đánh nhãn cần đặt tên phù hợp
+với ý nghĩa cố định, không dùng đổi tên để đổi bệnh hoặc tạo thêm mức phân loại.
+
 Mặc định áp dụng cho ảnh **nhập mới sau khi lưu cấu hình**, gồm ZIP/manifest Hydro
 và nhập ảnh/video thông thường. Ví dụ chọn Có cây, Không có lá vàng, Không có héo
 để điền trước bộ nhãn thường gặp, rồi kiểm tra và sửa từng ảnh trước khi Duyệt.

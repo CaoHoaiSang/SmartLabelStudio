@@ -12,8 +12,8 @@ from PIL import Image
 
 from .models import LabelClass, Project
 from .attribute_labels import HYDRO_VALUE_LABELS
-from .hydro_labels import model_attributes, install_label_schema, semantic_display_values
-from .label_schema import make_label_schema
+from .hydro_labels import model_attributes, install_label_schema, semantic_display_values, presented_display_values
+from .label_schema import make_label_schema, training_identity
 
 
 PROJECT_TEMPLATE_LABELS = {
@@ -947,7 +947,8 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         ctk.CTkLabel(defaults, text="Mặc định").pack(side="left", padx=(0, 8))
         default_label = tk.StringVar()
         default_menu = ctk.CTkOptionMenu(defaults, variable=default_label, width=250,
-            values=[self.NO_DEFAULT], command=lambda label: self.attribute_groups[key]["default"].set(
+            values=[self.NO_DEFAULT], dynamic_resizing=False,
+            command=lambda label: self.attribute_groups[key]["default"].set(
                 self.attribute_groups[key]["default_by_label"].get(label, "")))
         default_menu.pack(side="left")
         required = tk.BooleanVar(value=True)
@@ -963,13 +964,21 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         ).pack(fill="x", padx=12, pady=(2, 6))
         options = ctk.CTkFrame(frame, fg_color="transparent")
         options.pack(fill="x", padx=10, pady=4)
+        columns = ctk.CTkFrame(options, fg_color="transparent")
+        columns.pack(fill="x", padx=10)
+        ctk.CTkLabel(columns, text="Ý nghĩa cố định", width=220, anchor="w",
+                     text_color="#8298aa").pack(side="right", padx=(12, 0))
+        ctk.CTkLabel(columns, text="Tên giá trị · có thể chỉnh", anchor="w",
+                     text_color="#8298aa").pack(side="left", fill="x", expand=True)
         self.attribute_groups[key] = {
             "frame": frame, "title": title, "rows": [], "options": options,
             "default": tk.StringVar(value=config.get("default", "") or self.NO_DEFAULT),
             "default_menu": default_menu, "default_label": default_label,
+            "default_tooltip": ToolTip(default_menu, ""),
             "required": required, "required_control": required_control,
             "role": tk.StringVar(value=self.ROLE_LABELS["classification"]),
             "scope": tk.StringVar(value=self.SCOPE_LABELS["image"]),
+            "training_identity": training_identity(attr),
             "extra_settings": {k: v for k, v in config.items()
                                if k not in {"title", "default", "required", "role", "scope"}},
         }
@@ -997,7 +1006,7 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         group = self.attribute_groups[key]
         names = semantic_display_values(attr)
         for row in group["rows"]:
-            row["display"].set(names[row["value"].get()])
+            row["meaning"].set(names[row["value"].get()])
         self._refresh_default_menu(key)
         group["detail_text"].set("Mã tình trạng: " + key + "\n" + "\n".join(
             f"{names[v['id']]} → {v['id']} ({v['meaning']}) · Tên đã lưu: {v['displayName']}"
@@ -1024,7 +1033,15 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
             "Xác nhận đây vẫn là cùng tình trạng: nhãn, dữ liệu và model hiện có sẽ được giữ.\n"
             "Nếu là một dấu hiệu/bệnh khác, chọn Không rồi thêm tình trạng mới.", parent=self):
             return
+        old_names = semantic_display_values(attr)
         attr["displayName"] = title
+        new_names = semantic_display_values(attr)
+        # Follow a group rename only for untouched generated captions.
+        # Operator-authored names remain exactly as entered.
+        for row in self.attribute_groups[key]["rows"]:
+            value_id = row["value"].get()
+            if row["display"].get() == old_names[value_id]:
+                row["display"].set(new_names[value_id])
         self.attribute_groups[key]["title"].set(title)
         self._refresh_hydro_display(key)
 
@@ -1033,10 +1050,19 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         row.pack(fill="x", pady=3)
         variable = tk.StringVar(value=value)
         if key in self.hydro_attributes:
-            display_var = tk.StringVar(value=semantic_display_values(self.hydro_attributes[key])[value])
-            ctk.CTkLabel(row, textvariable=display_var, anchor="w", wraplength=650,
-                         justify="left").pack(fill="x", padx=10, pady=5)
-            self.attribute_groups[key]["rows"].append({"value": variable, "frame": row, "display": display_var})
+            attr = self.hydro_attributes[key]
+            saved = next(v for v in attr["values"] if v["id"] == value)
+            display_var = tk.StringVar(value=saved["displayName"])
+            meaning_var = tk.StringVar(value=semantic_display_values(attr)[value])
+            meaning_label = ctk.CTkLabel(row, textvariable=meaning_var, width=220, anchor="w",
+                wraplength=220, justify="left", text_color="#a7c5d6")
+            meaning_label.pack(side="right", padx=(12, 10), pady=5)
+            entry = ctk.CTkEntry(row, textvariable=display_var, width=250)
+            entry.pack(side="left", fill="x", expand=True, padx=(10, 0), pady=5)
+            ToolTip(entry, "Chỉ đổi cách gọi của cùng giá trị, tối đa 100 ký tự. Mã nhãn và ý nghĩa bên phải giữ nguyên.")
+            self.attribute_groups[key]["rows"].append({"value": variable, "frame": row,
+                "display": display_var, "entry": entry, "meaning": meaning_var, "meaning_label": meaning_label})
+            display_var.trace_add("write", lambda *_args, attr_key=key: self._refresh_default_menu(attr_key))
             return
         else:
             ctk.CTkEntry(row, textvariable=variable, width=520).pack(side="left", padx=8, pady=5)
@@ -1060,9 +1086,14 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         if not group:
             return
         if key in self.hydro_attributes:
-            names = semantic_display_values(self.hydro_attributes[key])
+            attr = copy.deepcopy(self.hydro_attributes[key])
+            names_by_id = {r["value"].get(): r["display"].get() for r in group["rows"]}
+            for value in attr["values"]:
+                value["displayName"] = names_by_id.get(value["id"], value["displayName"])
+            names = presented_display_values(attr)
             group["default_by_label"] = {self.NO_DEFAULT: "", **{name: value for value, name in names.items()}}
             group["default_menu"].configure(values=list(group["default_by_label"]))
+            group["default_tooltip"].set_text("\n".join(names.values()))
             group["default_label"].set(names.get(group["default"].get(), self.NO_DEFAULT))
             return
         values = [row["value"].get().strip() for row in group["rows"] if row["value"].get().strip()]
@@ -1115,17 +1146,30 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         schema = {}
         attribute_settings = {}
         titles = []
+        hydro_attrs = copy.deepcopy(self.hydro_attributes)
         for key, group in self.attribute_groups.items():
             title = group["title"].get().strip()
             if key in self.hydro_attributes:
-                attr = self.hydro_attributes[key]
-                expected = semantic_display_values(attr)
-                if (title != attr["displayName"] or
-                    any(row["display"].get() != expected.get(row["value"].get()) for row in group["rows"])):
+                attr = hydro_attrs[key]
+                if title != attr["displayName"] or training_identity(attr) != group["training_identity"]:
                     messagebox.showerror("Giữ ý nghĩa nhãn",
-                        "Các lựa chọn Có/Không được tạo từ ý nghĩa cố định. "
+                        "Mã và ý nghĩa Có/Không phải giữ nguyên. "
                         "Sửa tên cùng tình trạng bằng “Đổi tên…”; tình trạng khác phải thêm mới.", parent=self)
                     return
+                display_names = {row["value"].get(): row["display"].get().strip() for row in group["rows"]}
+                if set(display_names) != {v["id"] for v in attr["values"]}:
+                    messagebox.showerror("Giữ mã Hydro", "Không đổi hoặc bỏ mã giá trị Hydro.", parent=self)
+                    return
+                if any(not name or len(name) > 100 for name in display_names.values()) or any(
+                        ord(char) < 32 for row in group["rows"] for char in row["display"].get()):
+                    messagebox.showerror("Tên giá trị không hợp lệ",
+                        f"{title}: nhập tên từ 1 đến 100 ký tự, không chứa ký tự xuống dòng/điều khiển.", parent=self)
+                    return
+                if len({unicodedata.normalize("NFC", name).casefold() for name in display_names.values()}) != len(display_names):
+                    messagebox.showerror("Trùng tên giá trị", f"{title}: mỗi giá trị cần một tên riêng.", parent=self)
+                    return
+                for value in attr["values"]:
+                    value["displayName"] = display_names[value["id"]]
             if not title:
                 messagebox.showerror("Thiếu tên nhóm", f"Nhóm mã {key} chưa có tên hiển thị.", parent=self)
                 return
@@ -1175,7 +1219,7 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         candidate.attribute_settings = attribute_settings
         if self.hydro_attributes:
             try:
-                attrs = copy.deepcopy(list(self.hydro_attributes.values()))
+                attrs = list(hydro_attrs.values())
                 install_label_schema(candidate, make_label_schema(attrs))
             except ValueError as exc:
                 messagebox.showerror("Cấu hình nhãn không hợp lệ", str(exc), parent=self)
