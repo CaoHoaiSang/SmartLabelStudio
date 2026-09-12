@@ -301,6 +301,15 @@ Ba tập là cần thiết nếu muốn biết model có thực sự tổng quá
 5. Chọn `auto`, `cpu` hoặc `cuda`.
 6. Nhấn **BẮT ĐẦU TRAIN**. Ứng dụng tự export ảnh/nhãn theo task đang chọn, tạo `data.yaml`, kiểm tra có nhãn hợp lệ rồi mới khởi chạy train.
 
+Theo dõi ô **NHẬT KÝ TRAIN / XUẤT MODEL**:
+
+- **ĐÃ NHẬN YÊU CẦU TRAIN**: ứng dụng đang kiểm tra cấu hình và chuẩn bị dataset; chưa chạy epoch.
+- **KHỞI ĐỘNG TRAIN** và **TIẾN TRÌNH TRAIN ĐÃ MỞ**: đang kiểm tra CPU/CUDA, mở tiến trình và nạp thư viện/model. Khi học bắt đầu, nhật ký hiển thị các epoch do thư viện train gửi về.
+- **CHƯA BẮT ĐẦU TRAIN**: có lỗi cấu hình hoặc dữ liệu; nguyên nhân được giữ trong nhật ký cùng hộp thông báo. **ĐÃ HỦY** nghĩa là đã hủy bước xác nhận trước train.
+- **TRAIN THÀNH CÔNG** hoặc **TRAIN DỪNG/LỖI**: kết quả của tiến trình. Với nhiều thuộc tính, xem thêm kết quả toàn lượt train hàng loạt.
+
+Nhật ký chỉ đọc, vẫn cho chọn và sao chép. Nút Train được khóa trong lượt đang chạy để tránh khởi động trùng. Nhật ký này thuộc phiên ứng dụng, không phải lịch sử được lưu qua lần đóng/mở; kết quả và checkpoint nằm trong thư mục `runs` của dự án.
+
 Ý nghĩa thông số:
 
 - **Epoch**: số lần model đi qua toàn bộ Train. Bắt đầu 30–50 epoch; nếu loss/validation còn cải thiện có thể tăng. Với Final Train không có validation, dùng gần epoch tốt nhất của lần phát triển trước (model chai hiện tại đạt validation tốt nhất khoảng epoch 47).

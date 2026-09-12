@@ -2816,7 +2816,7 @@ class SmartLabelApp(ctk.CTk):
             return
         self.cancel_event.clear()
         self.auto_label_running = True
-        self.auto_log.delete("1.0", tk.END)
+        self._replace_text(self.auto_log, "")
         project = self.project
         def progress(index, total, name):
             self.event_queue.put(("auto_progress", (index, total, name)))
@@ -4270,22 +4270,49 @@ class SmartLabelApp(ctk.CTk):
         return ready
 
     def _start_training_for_current_mode(self) -> None:
-        if self.project and self.project.attribute_classification_enabled:
-            self._start_batch_classification_training()
-        else:
-            self._start_localization_training_with_auto_export()
+        if not self.project:
+            self._training_error("Chưa có dự án", "Hãy mở dự án trước khi train.")
+            return
+        # Keep ownership until completion has been consumed, including the gap
+        # between two classifiers, even if the worker thread has already exited.
+        if (self.running_training_task or self.batch_training_active
+                or (self.training_job and self.training_job.thread and self.training_job.thread.is_alive())):
+            messagebox.showinfo("Train đang chạy", "Hãy chờ lượt train hiện tại kết thúc.", parent=self)
+            return
+        self._replace_text(self.train_log, "")
+        self.pending_training_note = ""
+        self._append_log(self.train_log, f"ĐÃ NHẬN YÊU CẦU TRAIN · {datetime.now():%H:%M:%S}\nĐang kiểm tra cấu hình và chuẩn bị dataset; chưa chạy epoch.")
+        self._set_button_enabled(self.train_start_button, False)
+        # Render the acknowledgement before synchronous model/dataset preflight.
+        # Do not call update(): it would allow reentrant project edits here.
+        self.update_idletasks()
+        try:
+            if self.project.attribute_classification_enabled:
+                self._start_batch_classification_training()
+            else:
+                self._start_localization_training_with_auto_export()
+        except Exception as exc:
+            self._training_error("Không khởi động được train", str(exc))
+        finally:
+            if not self.running_training_task and not self.batch_training_active:
+                self._set_button_enabled(self.train_start_button, True)
+
+    def _training_error(self, title: str, detail: str) -> None:
+        self._append_log(self.train_log, f"CHƯA BẮT ĐẦU TRAIN · {title}\n{detail}")
+        messagebox.showerror(title, detail, parent=self)
 
     def _start_localization_training_with_auto_export(self) -> None:
         if not self.project:
             return
         task = self.train_task_menu.get()
         if task not in {"detect", "segment", "obb", "pose"}:
-            messagebox.showerror("Task không hợp lệ", "Hãy chọn Detection, SEG, OBB hoặc ORI/Pose.")
+            self._training_error("Task không hợp lệ", "Hãy chọn Detection, SEG, OBB hoặc ORI/Pose.")
             return
         if self.training_job and self.training_job.thread and self.training_job.thread.is_alive():
             messagebox.showerror("Train đang chạy", "Hãy chờ hoặc dừng tác vụ train hiện tại trước.")
             return
         if not self._confirm_split_strategy():
+            self._append_log(self.train_log, "ĐÃ HỦY · Chưa bắt đầu train.")
             return
         split_strategy = self._selected_split_strategy()
         try:
@@ -4314,7 +4341,7 @@ class SmartLabelApp(ctk.CTk):
             )
             self._set_status(f"Đã tự export {exported_annotations} nhãn {task} · bắt đầu train")
         except Exception as exc:
-            messagebox.showerror("Tự export dataset trước khi train thất bại", str(exc))
+            self._training_error("Tự export dataset trước khi train thất bại", str(exc))
             return
         self._start_training()
 
@@ -4325,11 +4352,12 @@ class SmartLabelApp(ctk.CTk):
             messagebox.showerror("Train đang chạy", "Hãy chờ hoặc dừng tác vụ train hiện tại trước.")
             return
         if not self._confirm_split_strategy():
+            self._append_log(self.train_log, "ĐÃ HỦY · Chưa bắt đầu train.")
             return
         split_strategy = self._selected_split_strategy()
         keys = self._selected_batch_classification_keys()
         if not keys:
-            messagebox.showerror("Chưa chọn nhóm", "Hãy tick ít nhất một nhóm thuộc tính trong phần Train hàng loạt.")
+            self._training_error("Chưa chọn nhóm", "Hãy tick ít nhất một nhóm thuộc tính trong phần Train hàng loạt.")
             return
         model_path = self.train_model_entry.get().strip()
         auto_model_selected = False
@@ -4361,12 +4389,11 @@ class SmartLabelApp(ctk.CTk):
                 "validate": split_strategy == DatasetManager.STRATEGY_LOCKED,
             }
         except ValueError as exc:
-            messagebox.showerror("Cấu hình train chưa hợp lệ", str(exc))
+            self._training_error("Cấu hình train chưa hợp lệ", str(exc))
             return
         reviewed_only = bool(self.reviewed_only_switch.get()) if hasattr(self, "reviewed_only_switch") else True
         prepared: list[tuple[str, Path]] = []
         problems: list[str] = []
-        self.train_log.delete("1.0", tk.END)
         self._append_log(self.train_log, f"CHUẨN BỊ TRAIN HÀNG LOẠT · {len(keys)} NHÓM")
         if auto_model_selected:
             self._append_log(self.train_log, "Đã tự chọn model khởi tạo Classification: yolo11n-cls.pt")
@@ -4391,7 +4418,7 @@ class SmartLabelApp(ctk.CTk):
             except Exception as exc:
                 problems.append(f"{title}: {exc}")
         if problems:
-            messagebox.showerror(
+            self._training_error(
                 "Không thể train hàng loạt",
                 "Hãy sửa dữ liệu của các nhóm sau rồi thử lại:\n\n" + "\n".join(problems),
             )
@@ -4454,7 +4481,16 @@ class SmartLabelApp(ctk.CTk):
             lambda line: self.event_queue.put(("train_line", line)),
             lambda code: self.event_queue.put(("train_done", code)),
         )
-        self.training_job.start()
+        self._launch_training_job()
+
+    def _launch_training_job(self) -> None:
+        try:
+            self.training_job.start()
+        except Exception as exc:
+            # Use the normal completion path to release project/batch ownership
+            # even when Python cannot create the worker thread.
+            self.event_queue.put(("train_line", f"KHỞI ĐỘNG TRAIN LỖI: {exc}"))
+            self.event_queue.put(("train_done", 1))
 
     def _finish_batch_classification_training(self, *, cancelled: bool = False, error: str = "") -> None:
         was_active = self.batch_training_active
@@ -4495,21 +4531,21 @@ class SmartLabelApp(ctk.CTk):
         data_path = Path(self.train_data_entry.get())
         model_path = self.train_model_entry.get().strip()
         if not data_path.exists():
-            messagebox.showerror("Thiếu dataset", "Hãy export YOLO rồi chọn data.yaml.")
+            self._training_error("Thiếu dataset", "Hãy export YOLO rồi chọn data.yaml.")
             return
         if not self.project:
             return
         expected_task = self.train_task_menu.get()
         if expected_task == "classify":
             if not self.project.attribute_classification_enabled:
-                messagebox.showerror(
+                self._training_error(
                     "Classification chưa bật",
                     "Hãy tick “Bật Classification thuộc tính” trong trang GÁN NHÃN hoặc chọn task classify lại.",
                 )
                 return
             classification_key = self._selected_classification_key()
             if not classification_key:
-                messagebox.showerror("Chưa chọn nhóm", "Hãy chọn nhóm thuộc tính cần train Classification.")
+                self._training_error("Chưa chọn nhóm", "Hãy chọn nhóm thuộc tính cần train Classification.")
                 return
         else:
             classification_key = ""
@@ -4520,10 +4556,10 @@ class SmartLabelApp(ctk.CTk):
                 export_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
                 exported_task = export_metadata.get("task", "detect")
                 if exported_task != expected_task:
-                    messagebox.showerror("Sai loại dataset", f"Dataset là task {exported_task}, nhưng mục Train đang chọn {expected_task}.")
+                    self._training_error("Sai loại dataset", f"Dataset là task {exported_task}, nhưng mục Train đang chọn {expected_task}.")
                     return
                 if expected_task == "classify" and export_metadata.get("attribute_key") != classification_key:
-                    messagebox.showerror(
+                    self._training_error(
                         "Sai nhóm thuộc tính",
                         "Dataset Classification được xuất cho nhóm khác với nhóm đang chọn trong trang Train.",
                     )
@@ -4531,7 +4567,7 @@ class SmartLabelApp(ctk.CTk):
                 if expected_task == "classify":
                     populated = [name for name, count in export_metadata.get("counts", {}).items() if count]
                     if len(populated) < 2:
-                        messagebox.showerror(
+                        self._training_error(
                             "Classification cần ít nhất hai nhãn",
                             "Dataset hiện chỉ có một giá trị thuộc tính có ảnh. Hãy gán và duyệt dữ liệu cho ít nhất hai giá trị.",
                         )
@@ -4543,7 +4579,7 @@ class SmartLabelApp(ctk.CTk):
                 from ultralytics import YOLO
                 model_task = YOLO(model_path).task
                 if model_task != expected_task:
-                    messagebox.showerror(
+                    self._training_error(
                         "Model không đúng task",
                         f"Model đã chọn là {model_task}, nhưng dataset cần {expected_task}.\n"
                         "Hãy nhấn “Dùng model khởi tạo phù hợp” hoặc chọn checkpoint đúng task.",
@@ -4553,10 +4589,10 @@ class SmartLabelApp(ctk.CTk):
                 lower_name = Path(model_path).name.lower()
                 required = {"segment": "-seg", "obb": "-obb", "pose": "-pose", "classify": "-cls"}.get(expected_task)
                 if required and required not in lower_name:
-                    messagebox.showerror("Model không đúng task", f"Task {expected_task} cần model có hậu tố {required}.pt.")
+                    self._training_error("Model không đúng task", f"Task {expected_task} cần model có hậu tố {required}.pt.")
                     return
         except Exception as exc:
-            messagebox.showerror("Không kiểm tra được model", str(exc))
+            self._training_error("Không kiểm tra được model", str(exc))
             return
         try:
             epochs = int(self.epochs_entry.get())
@@ -4581,12 +4617,11 @@ class SmartLabelApp(ctk.CTk):
                 validate=validate,
             )
         except ValueError:
-            messagebox.showerror(
+            self._training_error(
                 "Sai thông số",
                 "Epoch và Image size phải > 0; Batch khác 0; Patience phải ≥ 0. Tất cả phải là số nguyên.",
             )
             return
-        self.train_log.delete("1.0", tk.END)
         if self.pending_training_note:
             self._append_log(self.train_log, self.pending_training_note)
             self.pending_training_note = ""
@@ -4603,7 +4638,7 @@ class SmartLabelApp(ctk.CTk):
             lambda line: self.event_queue.put(("train_line", line)),
             lambda code: self.event_queue.put(("train_done", code)),
         )
-        self.training_job.start()
+        self._launch_training_job()
 
     def _stop_training(self) -> None:
         if self.batch_training_active:
@@ -4870,8 +4905,14 @@ class SmartLabelApp(ctk.CTk):
 
     @staticmethod
     def _append_log(widget, value: str) -> None:
-        widget.insert(tk.END, value + "\n")
-        widget.see(tk.END)
+        # Project reset makes logs read-only. Tk silently ignores insert/delete
+        # while disabled, so unlock only for the programmatic write.
+        widget.configure(state="normal")
+        try:
+            widget.insert(tk.END, value + "\n")
+            widget.see(tk.END)
+        finally:
+            widget.configure(state="disabled")
 
     def _set_status(self, text: str, color: str | None = None) -> None:
         self.title(f"DeltaX Smart Label Studio — {text}")
@@ -5056,6 +5097,8 @@ class SmartLabelApp(ctk.CTk):
                 elif kind == "train_done":
                     completed_training_task = self.running_training_task
                     self.running_training_task = ""
+                    if not self.batch_training_active:
+                        self._set_button_enabled(self.train_start_button, True)
                     self._append_log(self.train_log, "\nTRAIN THÀNH CÔNG" if payload == 0 else f"\nTRAIN DỪNG/LỖI · mã {payload}")
                     if self.batch_training_active:
                         if payload == 0 and not self.batch_training_cancelled:

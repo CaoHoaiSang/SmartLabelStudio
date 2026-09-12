@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from queue import Queue
 from threading import Thread
 from typing import Callable
 import json
+import os
 import subprocess
 import sys
 
@@ -43,10 +43,12 @@ class TrainingJob:
 
     def _run(self) -> None:
         try:
+            self.on_line("KHỞI ĐỘNG TRAIN · Đang kiểm tra thiết bị CPU/CUDA…")
             device = best_ultralytics_device(self.config.device)
+            self.on_line(f"Thiết bị train: {device} · Đang mở tiến trình huấn luyện…")
             payload = dict(self.config.__dict__)
             payload["device"] = device
-            command = [sys.executable, "-m", "smartlabel.train_worker", json.dumps(payload, ensure_ascii=False)]
+            command = [sys.executable, "-u", "-m", "smartlabel.train_worker", json.dumps(payload, ensure_ascii=False)]
             self.process = subprocess.Popen(
                 command,
                 cwd=str(Path(__file__).resolve().parents[1]),
@@ -56,10 +58,13 @@ class TrainingJob:
                 encoding="utf-8",
                 errors="replace",
                 bufsize=1,
+                env={**os.environ, "PYTHONIOENCODING": "utf-8"},
             )
+            self.on_line(f"TIẾN TRÌNH TRAIN ĐÃ MỞ · PID {self.process.pid} · Chờ nạp model/dataset.")
             assert self.process.stdout is not None
-            for line in self.process.stdout:
-                self.on_line(line.rstrip())
+            with self.process.stdout as output:
+                for line in output:
+                    self.on_line(line.rstrip())
             code = self.process.wait()
         except Exception as exc:
             self.on_line(f"LỖI: {exc}")

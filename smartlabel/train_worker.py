@@ -5,12 +5,13 @@ import sys
 
 
 def main() -> int:
-    from ultralytics import YOLO
-
     if len(sys.argv) != 2:
         print("Thiếu cấu hình train", flush=True)
         return 2
     config = json.loads(sys.argv[1])
+    print("Đang nạp thư viện huấn luyện Ultralytics…", flush=True)
+    from ultralytics import YOLO
+
     print(f"Nạp model: {config['model']}", flush=True)
     print(f"Task: {config.get('task', 'detect')}", flush=True)
     print(f"Thiết bị: {config['device']}", flush=True)

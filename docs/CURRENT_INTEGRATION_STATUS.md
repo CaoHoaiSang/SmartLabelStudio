@@ -1,5 +1,28 @@
 # Trạng thái tích hợp HydroFlow ngày 10 tháng 9 năm 2026
 
+## Nhật ký train/xuất model — 13/09/2026
+
+Sửa lỗi sau mở/chuyển project: `_replace_text` đặt Textbox về disabled nhưng
+`_append_log` trước đây insert trực tiếp, khiến Tk bỏ qua mọi dòng. Hàm ghi
+nay mở khóa trong lúc ghi rồi trả về chỉ đọc; các lượt Train/Auto-Label xóa
+nhật ký qua cùng hàm thay nội dung. Áp dụng cả train, xuất RKNN và Auto-Label.
+
+Nút Train báo nhận yêu cầu trước khi kiểm tra model/xuất dataset, giữ nguyên
+log chuẩn bị và ghi lỗi/hủy. Worker báo kiểm tra thiết bị, PID và nạp thư viện;
+stdout không đệm, UTF-8 để đọc log tiếng Việt trong lúc chạy. Nút Train khóa
+đến completion; dùng trạng thái sở hữu job hiện có để chặn chạy trùng cả khi
+thread vừa kết thúc và giữa hai classifier. Lỗi tạo thread đi qua completion
+bình thường để mở khóa. Không đổi dataset, nhãn, schema, tham số học/QA gate.
+
+Full suite Windows `python -m unittest discover -s tests -v` đạt140/140,
+gồm13 test mới bằng Tk thật trong workspace tạm và subprocess tổng hợp,
+không khởi động train dữ liệu người dùng. Năm tệp workspace đã dirty giữ
+nguyên SHA256. Nhánh sửa `fix/training-log-feedback`.
+Lượt CPU do người dùng mở trước bản sửa được
+giữ nguyên; muốn áp dụng phần UI phải mở lại SmartLabel sau khi lượt đó kết
+thúc. Log phiên cũ không được hồi phục tự động. Chuẩn bị model/dataset vẫn
+đồng bộ trên giao diện; chuyển công việc này ra nền là hạng mục riêng.
+
 ## Chỉnh tên giá trị Hydro — 12/09/2026
 
 Mẫu Hydro cho sửa `displayName` từng giá trị trực tiếp, bên cạnh ý nghĩa cố định
