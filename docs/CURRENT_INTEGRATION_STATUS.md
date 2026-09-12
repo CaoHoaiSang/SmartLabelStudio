@@ -1,5 +1,24 @@
 # Trạng thái tích hợp HydroFlow ngày 10 tháng 9 năm 2026
 
+## Worker Windows và thứ tự xuất Hydro — 13/09/2026
+
+Sửa regression của4afe44f khi SmartLabel chưa mở lại: parent cũ chưa đặt
+PYTHONIOENCODING, worker mới in tiếng Việt trước import Ultralytics trên
+stdout cp1252 nên UnicodeEncodeError/mã1 trước khi học. Worker nay tự đặt
+stdout và stderr UTF-8 trước mọi thông báo, kể cả lỗi thiếu đối số; không
+phụ thuộc vào biến môi trường của launcher. Kiểm thêm subprocess thực dùng
+cp1252 và YOLO giả, không train dữ liệu thật. Nhánh sửa
+`fix/train-worker-windows-encoding`.
+Full suite Windows đạt142/142;15 test train/GUI tập trung đạt. Không khởi
+động train thật, không ghi đè hai model đã hoàn thành hay năm tệp dirty cũ.
+
+Lượt người dùng project_eb99e9722cff đã lưu model plant_presence và yellow_leaf;
+wilt chưa có run. Không train lại hai nhóm đã hoàn tất. Mở lại app để nạp UI
+log đã sửa, chỉ tick Héo và train nhóm còn thiếu. Sau đó Xuất ONNX Hydro lấy
+đủ model đã lưu của mọi nhóm, rồi Tạo Hydro Model Bundle để tạo ZIP cho Hydro.
+Hai nút là hai bước nối tiếp; ZIP PT tự tạo sau batch chỉ là gói quản lý
+checkpoint, không thay ZIP Hydro. Xem hướng dẫn trong HUONG_DAN_SU_DUNG.md.
+
 ## Nhật ký train/xuất model — 13/09/2026
 
 Sửa lỗi sau mở/chuyển project: `_replace_text` đặt Textbox về disabled nhưng

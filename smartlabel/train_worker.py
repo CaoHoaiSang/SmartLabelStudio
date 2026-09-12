@@ -5,6 +5,11 @@ import sys
 
 
 def main() -> int:
+    # A running app may still use the legacy launcher without PYTHONIOENCODING.
+    # Configure both pipes before the first Vietnamese message or library import.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
     if len(sys.argv) != 2:
         print("Thiếu cấu hình train", flush=True)
         return 2

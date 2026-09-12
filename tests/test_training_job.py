@@ -6,7 +6,9 @@ from tempfile import TemporaryDirectory
 from threading import Event
 from unittest.mock import patch
 import json
+import os
 import subprocess
+import sys
 import unittest
 
 from smartlabel.training import TrainingConfig, TrainingJob
@@ -90,6 +92,49 @@ class TrainingJobTests(unittest.TestCase):
             with self.assertRaisesRegex(ImportError, "ultralytics unavailable"):
                 train_worker.main()
         self.assertIn("Đang nạp thư viện", output.getvalue())
+
+    def test_worker_bootstraps_utf8_from_legacy_windows_parent(self):
+        # An already open app still uses the old launcher without its UTF-8 env.
+        # Replace YOLO inside this child: exercise main(), but never train a model.
+        script = """
+import runpy, sys, types, json
+print('inherited_encoding=' + sys.stdout.encoding, flush=True)
+class FakeYOLO:
+    def __init__(self, model, task):
+        assert model == 'fixture.pt' and task == 'classify'
+    def train(self, **kwargs):
+        assert kwargs['epochs'] == 1
+        print('Fixture tiếng Việt · không train thật', flush=True)
+        print('Thông báo stderr', file=sys.stderr, flush=True)
+sys.modules['ultralytics'] = types.SimpleNamespace(YOLO=FakeYOLO)
+sys.argv = ['train_worker', json.dumps({
+    'model': 'fixture.pt', 'task': 'classify', 'device': 'cpu',
+    'data': 'unused', 'project_dir': 'unused', 'run_name': 'fixture',
+    'epochs': 1, 'image_size': 224, 'batch': 1, 'patience': 1,
+})]
+runpy.run_module('smartlabel.train_worker', run_name='__main__')
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=Path(__file__).resolve().parents[1], capture_output=True, timeout=15,
+            env={**os.environ, "PYTHONIOENCODING": "cp1252", "PYTHONUTF8": "0"},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", errors="replace"))
+        output = result.stdout.decode("utf-8")
+        self.assertIn("inherited_encoding=cp1252", output)
+        self.assertIn("Đang nạp thư viện", output)
+        self.assertIn("Fixture tiếng Việt", output)
+        self.assertIn("TRAINING_COMPLETE", output)
+        self.assertIn("Thông báo stderr", result.stderr.decode("utf-8"))
+
+    def test_worker_missing_arguments_reports_utf8_error_before_import(self):
+        result = subprocess.run(
+            [sys.executable, "-m", "smartlabel.train_worker"],
+            cwd=Path(__file__).resolve().parents[1], capture_output=True, timeout=15,
+            env={**os.environ, "PYTHONIOENCODING": "cp1252", "PYTHONUTF8": "0"},
+        )
+        self.assertEqual(result.returncode, 2, result.stderr.decode("utf-8", errors="replace"))
+        self.assertIn("Thiếu cấu hình train", result.stdout.decode("utf-8"))
 
 
 if __name__ == "__main__":

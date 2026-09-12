@@ -406,6 +406,33 @@ workspace\projects\<project_id>\bundles\classification_models_*.zip
 
 ## 11. Dùng model đã train và triển khai
 
+### Hai bước xuất model cho Hydro
+
+Với dự án Hydro, **Xuất ONNX Hydro** và **Tạo Hydro Model Bundle** được dùng
+nối tiếp, sau khi train đủ các nhóm thuộc tính cần thiết.
+
+| Nút | Việc thực hiện | Kết quả |
+| --- | --- | --- |
+| **XUẤT ONNX HYDRO** | Chuyển các classifier `.pt` đã lưu của mọi nhóm sang ONNX tĩnh batch-1. | Thư mục chứa một file `.onnx` cho mỗi nhóm. |
+| **TẠO HYDRO MODEL BUNDLE** | Kiểm tra QA dataset và đóng gói ONNX cùng ý nghĩa/thứ tự nhãn, ngưỡng, checksum, profile camera/hình học và runtime đích. | Thư mục bundle và file `.zip` để tải lên HydroFlow. |
+
+Quy trình: **train đủ nhóm → đánh giá model → Xuất ONNX Hydro → Tạo Hydro Model
+Bundle → tải ZIP lên Hydro**. Tạo Bundle không train lại và không tự chuyển
+`.pt` thành ONNX; nếu chưa xuất ONNX, ứng dụng sẽ yêu cầu làm bước đó trước.
+Nếu train lại một nhóm, hãy xuất lại ONNX rồi tạo bundle mới để dùng model mới.
+
+Nếu train hàng loạt dừng giữa chừng, các classifier đã hoàn thành vẫn được
+lưu trong dự án. Bỏ tick những nhóm đã xong, chỉ tick nhóm lỗi/chưa train rồi
+nhấn Train. Khi đủ nhóm, nút Xuất ONNX lấy cả model mới và model đã lưu trước
+đó. ZIP PT tự tạo sau mỗi lượt batch chỉ để quản lý checkpoint, không phải
+Hydro Model Bundle để cài lên Hydro.
+
+Windows hiện dùng ONNX Runtime ở chế độ shadow. Với Nano, chọn runtime Jetson;
+TensorRT engine được build trên Nano. QA dataset khi đóng gói không thay thế
+đánh giá độ chính xác của model trên tập test và ảnh thực tế.
+
+### Auto-Label và triển khai DeltaX/Radxa
+
 Tại **AUTO-LABEL**, chọn `best.pt`, chọn phạm vi rồi nhấn **CHẠY AUTO-LABEL** một lần. Ứng dụng chạy lần lượt toàn bộ ảnh thuộc phạm vi:
 
 - bật **Chỉ ảnh chưa có nhãn**: bỏ qua ảnh đã có nhãn;
