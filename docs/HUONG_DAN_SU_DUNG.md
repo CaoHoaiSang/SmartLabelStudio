@@ -122,6 +122,15 @@ Khi chiều cao cửa sổ nhỏ, dùng thanh cuộn riêng trong cột **Công 
 
 ## 5. Gán nhãn thủ công
 
+**Kiểm tra từng nhãn/thuộc tính:** ở danh sách ảnh bên trái, chọn trường
+(ví dụ Lá vàng), rồi chọn giá trị Có/Không/Chưa chắc/Không áp dụng hoặc
+**Chưa gán giá trị**. Có thể kết hợp với Bản nháp/Đã duyệt/Từ chối phía trên.
+Chai nhựa có thêm lọc Class và thuộc tính trên vật. Hai nút Ảnh trước/Ảnh sau
+chỉ đi trong kết quả lọc; số ảnh/phân trang cũng theo kết quả này. Khi sửa
+nhãn làm ảnh không còn khớp, ứng dụng chuyển sang ảnh còn lại. Bộ lọc được
+nhớ riêng theo project trong phiên. Mở ảnh từ kết quả QA sẽ bỏ bộ lọc nếu
+cần để hiển thị đúng ảnh được yêu cầu.
+
 1. Mở trang **GÁN NHÃN**.
 2. Chọn ảnh bên trái.
 3. Chọn Class bằng nút màu ở cột phải; dùng ô tìm kiếm khi có nhiều Class.
@@ -339,6 +348,21 @@ Trang **AUTO-LABEL** hiển thị dòng xanh `ĐANG DÙNG` cùng tên model và 
 
 ### Đánh giá model
 
+**Với Hydro:** chọn thuộc tính ở đầu ô Đánh giá Model, chọn `test` hoặc
+`val`, rồi nhấn **ĐÁNH GIÁ MODEL**. Ứng dụng lấy classifier đã lưu của nhóm
+và dataset gốc từ checkpoint, nên không nhập tay hai đường dẫn này. Không
+xóa thư mục export đã dùng train nếu còn cần đánh giá. Tập bị dùng để train
+(Train All hoặc Val đã gộp trong Final), thiếu ảnh Có/Không hoặc trùng nội
+dung Train sẽ được báo rõ. Bộ đánh giá hiện dùng benchmark gốc của checkpoint;
+chưa có hộp chọn benchmark Hydro mới ngoài dataset gốc.
+
+Nhật ký báo số ảnh, Accuracy, Precision, Recall, F1, số đúng/báo nhầm/bỏ sót
+và đường dẫn JSON có xác suất từng ảnh. Đừng chỉ nhìn Accuracy nếu ảnh Có
+héo/vàng ít hơn nhiều ảnh Không. Kết quả Val có thể tạo gợi ý ngưỡng xuất;
+Test chỉ để đo kết quả, không được dùng để chọn ngưỡng.
+
+**Với Chai nhựa và bài định vị:** tiếp tục quy trình sau.
+
 Khung **ĐÁNH GIÁ MODEL · VALIDATION / TEST** tách riêng hai đầu vào:
 
 1. **Chọn model .pt**: chọn `best.pt` cần kiểm tra; ứng dụng mặc định điền model vừa train mới nhất.
@@ -412,7 +436,7 @@ Sau khi train đủ các nhóm, dùng **TẠO GÓI MODEL HYDRO**. Ứng dụng t
 hiện cả xuất ONNX và tạo Hydro Model Bundle; không còn cần bấm hai nút.
 
 1. Kiểm tra các nhóm cần thiết đã có model được lưu; đánh giá model trước khi phát hành.
-2. Nhấn **TẠO GÓI MODEL HYDRO**, xác nhận ngưỡng đã hiệu chỉnh, profile và runtime đích.
+2. Nhấn **TẠO GÓI MODEL HYDRO**, xem nguồn ngưỡng gợi ý, điều chỉnh nếu cần và chọn runtime đích. Các thông tin dataset/source/profile có sẵn được khóa; chỉ nhập phần còn thiếu.
 3. Chọn nơi lưu một lần. Ứng dụng chạy nền và báo tiến độ trong nhật ký:
 
 | Bước | Hệ thống thực hiện |
@@ -438,8 +462,36 @@ checkpoint, không phải gói dùng để cài lên Hydro.
 
 Windows hiện dùng ONNX Runtime ở chế độ shadow. Với Nano, chọn runtime Jetson;
 TensorRT engine được build trên Nano. QA dataset khi đóng gói không thay thế
-đánh giá độ chính xác của model trên tập test và ảnh thực tế. Các ngưỡng vẫn
-cần giá trị đã hiệu chỉnh; hệ thống không tự đoán khi gộp hai bước xuất.
+đánh giá độ chính xác của model trên tập test và ảnh thực tế.
+
+**Ngưỡng điền sẵn:** Low 0.30 / High 0.70 là mức khởi đầu, chưa hiệu chỉnh.
+Score Có ≤ Low được xem là Không; ≥ High là Có; khoảng giữa là Chưa chắc.
+Sau Đánh giá Val, ứng dụng có thể đề xuất low/high từ dữ liệu nếu ít nhất
+20 ảnh mỗi phía và kết quả đủ phân biệt. Dòng dưới từng nhóm ghi rõ nguồn.
+Gợi ý chỉ dùng cho đúng checkpoint/ý nghĩa nhãn đã đánh giá; ngưỡng đã xác
+nhận khi tạo gói được giữ cho cùng checkpoint. Model đổi thì cần xem lại.
+Test không tạo gợi ý ngưỡng. Đây không phải cam kết model đã đủ tốt để phát hành.
+
+### Auto-Label cho Hydro
+
+Sau khi đã train đủ các nhóm, mở **AUTO-LABEL** và nhấn **CHẠY AUTO-LABEL**.
+Ứng dụng tự chọn các classifier đã đăng ký; không cần detector hoặc SAM.
+Chỉ xử lý ảnh `slot`, không tự cắt giàn từ ảnh toàn cảnh. Confidence mặc định
+0.80: score Có ≥0.80 gợi ý Có, ≤0.20 gợi ý Không, khoảng giữa là Chưa chắc.
+Nếu chưa xác nhận Có cây, các điều kiện phụ được xem là Không áp dụng.
+
+- **Chỉ nhãn trống / khởi tạo**: điền phần thiếu và các giá trị mặc định có
+  nguồn gốc từ khi nhập ảnh. Ảnh Có/Không cũ thiếu thông tin nguồn được giữ
+  nguyên; hệ thống không suy đoán đó là nhãn mặc định hay người dùng đã gán.
+- Khi bỏ lựa chọn trên, **Thay gợi ý AI cũ** cho phép chạy lại phần do AI
+  tạo mà người dùng chưa sửa. Ảnh đã duyệt/từ chối và nhãn nhập tay được giữ.
+- Kết quả luôn là **Bản nháp** để người dùng kiểm tra rồi duyệt. Chỉnh sửa
+  đến trong lúc worker chạy được giữ, không ghi đè khi job trả kết quả.
+- **Dừng** chờ ảnh đang xử lý; các đề xuất đã xong được áp dụng dưới dạng
+  nháp, nhật ký báo số ảnh/lỗi/bỏ qua. Đang xử lý thì không đổi bài/train/xuất.
+
+Ngưỡng Confidence của Auto-Label chỉ phục vụ gợi ý đánh nhãn, độc lập với
+low/high trong gói model để chạy Hydro.
 
 ### Auto-Label và triển khai DeltaX/Radxa
 

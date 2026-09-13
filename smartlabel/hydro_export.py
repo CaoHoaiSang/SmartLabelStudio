@@ -8,7 +8,7 @@ import shutil
 from .dataset_manager import DatasetManager
 from .hydro_labels import model_attributes
 from .hydroponic import (RUNTIME_TARGETS, describe_hydro_qa_issue, export_jetson_onnx,
-                        hydro_dataset_qa, write_hydro_model_bundle)
+                        hydro_dataset_qa, write_hydro_model_bundle, _sha256)
 
 
 class HydroExportCancelled(Exception):
@@ -66,6 +66,7 @@ def build_hydro_package(project, store, output, config, progress, cancel):
     with TemporaryDirectory(prefix=".hydro-package-", dir=output.parent) as directory:
         staging = Path(directory)
         onnx = {}
+        model_hashes = {}
         for index, attr in enumerate(attrs, 1):
             checkpoint()
             key = attr["id"]
@@ -74,6 +75,7 @@ def build_hydro_package(project, store, output, config, progress, cancel):
             model_dir.mkdir()
             source = model_dir / "model.pt"
             shutil.copy2(models[key], source)
+            model_hashes[key] = _sha256(source)
             checkpoint()
             onnx[key] = export_jetson_onnx(source, model_dir / "model.onnx", input_size=224, opset=12)
             checkpoint()
@@ -107,6 +109,7 @@ def build_hydro_package(project, store, output, config, progress, cancel):
     return {
         "bundle": output, "archive": archive, "validationStatus": report["validationStatus"],
         "onnxModels": {key: str(output / "models" / f"{key}.onnx") for key in models},
+        "modelHashes": model_hashes,
     }
 
 

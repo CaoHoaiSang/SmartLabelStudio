@@ -1,5 +1,60 @@
 # Trạng thái tích hợp HydroFlow ngày 10 tháng 9 năm 2026
 
+## Lọc nhãn, ngưỡng và công cụ model Hydro — 13/09/2026
+
+Nhánh `feat/hydro-review-and-model-tools`, kế thừa `596eb23`:
+
+Kiểm thử Windows: **184/184 đạt**, gồm 23 test mới (15 quy tắc/model và
+8 Tk/worker). Thử inference thật trên checkpoint hiện có; hash project và
+ba PT giữ nguyên ở lần kiểm cuối. Test/UI dùng workspace tạm; không gán nhãn
+thử vào project người dùng. Mở lại SmartLabel để nạp các công cụ mới.
+
+- Danh sách ảnh có lọc Class/thuộc tính và giá trị, kết hợp trạng thái duyệt;
+  hỗ trợ nhãn toàn ảnh Hydro và nhãn/thuộc tính trên vật của Chai nhựa.
+  Trước/sau chỉ đi trong tập lọc, lưu lựa chọn theo project, tự cập nhật khi
+  sửa nhãn. Mở ảnh từ kết quả QA chủ động bỏ bộ lọc nếu cần đến đúng ảnh.
+- Hộp xuất Hydro điền sẵn low/high 0.30/0.70, ghi rõ là khởi đầu chưa hiệu
+  chỉnh. Gợi ý từ Val được dùng khi đủ điều kiện và SHA checkpoint/ý nghĩa
+  nhãn còn khớp. Ngưỡng người dùng đã xác nhận khi xuất được gắn SHA của PT
+  thực sự dùng; giữ cho cùng checkpoint và bỏ khi model đổi. Ngưỡng legacy
+  thiếu SHA được giữ với nhắc kiểm tra. Dataset/source/profile có sẵn bị
+  khóa, chỉ trường thiếu mới nhập; runtime đích vẫn được chọn.
+- Hydro Auto-Label dùng classifier từng thuộc tính trên ảnh slot, không
+  dùng detector hoặc tạo thêm Class. Đọc xác suất theo mã/ý nghĩa nhãn trong
+  model, xử lý presence trước condition; kết quả là bản nháp, không tự duyệt.
+  Giữ ảnh reviewed/rejected, nhãn tay và chỉnh sửa đến trong lúc worker chạy.
+  Ảnh nhập mới lưu nguồn giá trị mặc định; thao tác tay lưu dấu riêng. Nhãn
+  cũ Có/Không không có nguồn gốc được giữ nguyên, không đoán là mặc định.
+  Placeholder Chưa chắc/Không áp dụng ở ảnh unlabeled cũ có thể được gợi ý.
+- Đánh giá Hydro có chọn thuộc tính; tự đọc dataset gốc của checkpoint,
+  kiểm đúng project/thuộc tính/scope và tập Val/Test độc lập. Tập thiếu một
+  phía hoặc trùng nội dung Train bị từ chối. Báo Accuracy, Precision, Recall,
+  F1, TP/TN/FP/FN và lưu từng score ảnh trong báo cáo. Val có thể đề xuất
+  ngưỡng; Test chỉ đo kết quả, không chọn ngưỡng. Train All/Final thiếu tập
+  độc lập tương ứng phải chuẩn bị benchmark riêng; không đánh giá trên bản
+  sao train hoặc tự thay dataset.
+- `hydro_model_tools.py` và `image_filters.py` chứa quy tắc riêng; GUI chỉ
+  điều phối. Luồng generic detection/SEG/OBB/pose, SAM và RKNN của Chai nhựa
+  vẫn riêng. Khóa job dùng cơ chế ownership hiện có; snapshot controls trên
+  Tk trước khi chạy, không đọc Tk từ worker Auto-Label. Không đổi contract
+  bundle, không triển khai model lên Hydro/Nano.
+
+Quy tắc gợi ý Val: ít nhất 20 ảnh mỗi phía, tìm ngưỡng giữa 0.10–0.90 tăng
+0.01 để tối đa balanced accuracy, hòa thì gần 0.50; cần đạt ít nhất 0.65,
+low/high là ngưỡng giữa ±0.10. Đây là heuristic minh bạch, không hiệu chuẩn
+xác suất hoặc bảo đảm chất lượng; vẫn cần Test/hiện trường. Không dùng ngưỡng
+đơn 0.50 như quyết định Có/Không bắt buộc trong vận hành Hydro.
+
+Đã kiểm bằng classifier thật trên dữ liệu gốc, báo cáo ở vùng tạm: có cây
+139 ảnh Test (126 Có/13 Không) đều đúng ở ngưỡng 0.50; Héo 126 ảnh, TP1/TN118/
+FP0/FN7 (Recall 12.5%, F1 0.222 dù Accuracy 94.4%); Lá vàng thiếu ảnh Có ở
+Test. Không suy kết quả tập nhỏ thành độ chính xác thực địa. Auto-Label được
+thử trên bản sao hai ảnh slot trong bộ nhớ, không ghi nhãn thử vào project.
+
+Nguồn thiết kế tra cứu 13/09/2026: [Ultralytics classification probabilities](https://docs.ultralytics.com/modes/predict/)
+và [scikit-learn threshold tuning](https://scikit-learn.org/stable/modules/classification_threshold.html).
+Chỉ dùng thư viện hiện có, không nâng framework/cài dịch vụ trả phí.
+
 ## Một nút tạo gói Hydro — 13/09/2026
 
 Thay hai nút ONNX/Bundle bằng **TẠO GÓI MODEL HYDRO**. Sau xác nhận cấu hình

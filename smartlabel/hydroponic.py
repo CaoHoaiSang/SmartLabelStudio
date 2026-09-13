@@ -537,6 +537,7 @@ def import_capture_manifest(
                 quality=dict(asset.get("quality", {})),
                 attributes=image_attribute_defaults(project),
                 metadata={
+                    "hydroAttributeDefaults": image_attribute_defaults(project),
                     **({"datasetExportId": dataset_export_id} if dataset_export_id else {}),
                     "captureSchemaVersion": manifest["schemaVersion"],
                     **({"topology": topology_for(manifest)} if manifest["schemaVersion"] == 2 else {}),

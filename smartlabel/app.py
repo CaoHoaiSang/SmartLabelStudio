@@ -25,6 +25,9 @@ from .deployment import build_vision_bundle_manifest, classifier_manifest_entry,
 from .evaluation import evaluate_yolo_model
 from .hardware import inspect_hardware
 from .hydro_export import HydroBundleJob
+from . import image_filters
+from .hydro_model_tools import (propose_hydro_labels, apply_hydro_proposals,
+                                evaluate_hydro_attribute, threshold_defaults)
 from .hydroponic import (
     CaptureRepairConfirmationRequired,
     apply_hydroponic_slot_template,
@@ -760,6 +763,11 @@ class SmartLabelApp(ctk.CTk):
         index = next((i for i, record in enumerate(self.project.images) if record.id == image_id), None)
         if index is None:
             return
+        if not self._image_matches_filters(self.project.images[index]):
+            self.image_filter.set("Tất cả")
+            self.label_filter_field.set(image_filters.ALL)
+            self.label_filter_value.set(image_filters.ANY)
+            self._refresh_image_list()
         self.current_index = index
         self.tabs.set("GÁN NHÃN")
         self._load_current_image()
@@ -844,6 +852,7 @@ class SmartLabelApp(ctk.CTk):
         record = self.project.images[self.current_index] if 0 <= self.current_index < len(self.project.images) else None
         self.project_views[self.project.id] = {
             "filter": self.image_filter.get(), "page": self.image_page,
+            "label_field": self.label_filter_field.get(), "label_value": self.label_filter_value.get(),
             "image_id": record.id if record else None,
             "class_id": self.canvas.active_class_id,
             "localization_task": self.last_localization_task,
@@ -854,6 +863,9 @@ class SmartLabelApp(ctk.CTk):
         self.project = project
         view = self.project_views.get(project.id, {})
         self.image_filter.set(view.get("filter", "Tất cả"))
+        self.label_filter_field.set(view.get("label_field", image_filters.ALL))
+        self.label_filter_value.set(view.get("label_value", image_filters.ANY))
+        self._refresh_label_filters()
         self.image_page = view.get("page", 0)
         self.current_index = next((i for i, record in enumerate(project.images)
                                    if record.id == view.get("image_id")), -1)
@@ -1226,7 +1238,8 @@ class SmartLabelApp(ctk.CTk):
         if not self.project:
             messagebox.showinfo("Chưa có dự án", "Hãy tạo hoặc mở một dự án trước khi quản lý Class và thuộc tính.", parent=self)
             return
-        ProjectSettingsDialog(self, self.project, self._save_project_settings)
+        if self._can_change_project():
+            ProjectSettingsDialog(self, self.project, self._save_project_settings)
 
     def _apply_project_context_visibility(self) -> None:
         hydro = is_hydroponic_project(self.project)
@@ -1347,6 +1360,12 @@ class SmartLabelApp(ctk.CTk):
         left.pack(side="left", fill="y", padx=(0, 5))
         self.image_filter = ctk.CTkOptionMenu(left, width=260, values=["Tất cả", "Chưa gán nhãn", "Bản nháp", "Đã duyệt", "Từ chối"], command=self._change_image_filter)
         self.image_filter.pack(padx=10, pady=6)
+        self.label_filter_field = ctk.CTkOptionMenu(left, width=260, values=[image_filters.ALL],
+                                                   command=self._label_filter_changed)
+        self.label_filter_field.pack(padx=10, pady=(0, 5))
+        self.label_filter_value = ctk.CTkOptionMenu(left, width=260, values=[image_filters.ANY],
+                                                   command=self._change_image_filter)
+        self.label_filter_value.pack(padx=10, pady=(0, 6))
         page_row = ctk.CTkFrame(left, fg_color="transparent")
         page_row.pack(fill="x", padx=8, pady=(0, 3))
         self.image_page_previous_button = self._button(
@@ -1605,6 +1624,29 @@ class SmartLabelApp(ctk.CTk):
         else:
             self._clear_current_image()
 
+    def _refresh_label_filters(self):
+        self.label_filter_fields = image_filters.filter_fields(self.project)
+        self.label_filter_field.configure(values=list(self.label_filter_fields))
+        if self.label_filter_field.get() not in self.label_filter_fields:
+            self.label_filter_field.set(image_filters.ALL)
+        field = self.label_filter_fields[self.label_filter_field.get()]
+        self.label_filter_values = image_filters.filter_values(self.project, field)
+        self.label_filter_value.configure(values=list(self.label_filter_values),
+                                          state="disabled" if field[0] == "all" else "normal")
+        if self.label_filter_value.get() not in self.label_filter_values:
+            self.label_filter_value.set(image_filters.ANY)
+
+    def _label_filter_changed(self, _value=None):
+        self.label_filter_value.set(image_filters.ANY)
+        self._refresh_label_filters()
+        self._change_image_filter()
+
+    def _image_matches_filters(self, record):
+        status = {"Chưa gán nhãn": "unlabeled", "Bản nháp": "draft", "Đã duyệt": "reviewed", "Từ chối": "rejected"}.get(self.image_filter.get())
+        field = self.label_filter_fields.get(self.label_filter_field.get(), ("all", ""))
+        return image_filters.matches_image(self.project, record, status, field,
+                                           self.label_filter_values.get(self.label_filter_value.get()))
+
     def _change_image_page(self, delta: int) -> None:
         total_pages = max(1, (len(getattr(self, "filtered_images", [])) + self.image_page_size - 1) // self.image_page_size)
         target = min(max(self.image_page + delta, 0), total_pages - 1)
@@ -1618,6 +1660,7 @@ class SmartLabelApp(ctk.CTk):
             self._load_current_image()
 
     def _refresh_image_list(self) -> None:
+        self._refresh_label_filters()
         self.filtered_images = []
         if not self.project:
             self.paged_images = []
@@ -1625,10 +1668,8 @@ class SmartLabelApp(ctk.CTk):
             if hasattr(self, "image_page_label"):
                 self.image_page_label.configure(text="0 ảnh")
             return
-        mapping = {"Chưa gán nhãn": "unlabeled", "Bản nháp": "draft", "Đã duyệt": "reviewed", "Từ chối": "rejected"}
-        status = mapping.get(self.image_filter.get())
         for record in self.project.images:
-            if status and record.review_status != status:
+            if not self._image_matches_filters(record):
                 continue
             self.filtered_images.append(record)
         total = len(self.filtered_images)
@@ -1705,10 +1746,15 @@ class SmartLabelApp(ctk.CTk):
         if not self.project or not (0 <= self.current_index < len(self.project.images)):
             return
         record = self.project.images[self.current_index]
-        if record not in getattr(self, "filtered_images", []):
-            self.image_filter.set("Tất cả")
-            self.image_page = 0
+        if not self._image_matches_filters(record) or record not in self.filtered_images:
             self._refresh_image_list()
+            if record not in self.filtered_images:
+                if self.paged_images:
+                    self.current_index = self.project.images.index(self.paged_images[0])
+                    self._load_current_image()
+                else:
+                    self._clear_current_image()
+                return
         if record in self.filtered_images:
             filtered_index = self.filtered_images.index(record)
             target_page = filtered_index // self.image_page_size
@@ -1719,14 +1765,21 @@ class SmartLabelApp(ctk.CTk):
             self.image_list.select(local_index, focus=focus)
 
     def _previous_image(self) -> None:
-        if self.project and self.project.images:
-            self.current_index = (self.current_index - 1) % len(self.project.images)
-            self._load_current_image()
+        self._navigate_filtered_image(-1)
 
     def _next_image(self) -> None:
-        if self.project and self.project.images:
-            self.current_index = (self.current_index + 1) % len(self.project.images)
+        self._navigate_filtered_image(1)
+
+    def _navigate_filtered_image(self, delta):
+        records = getattr(self, "filtered_images", [])
+        if self.project and records:
+            current = self.project.images[self.current_index] if self.current_index >= 0 else None
+            index = records.index(current) if current in records else (-1 if delta > 0 else 0)
+            self.current_index = self.project.images.index(records[(index + delta) % len(records)])
             self._load_current_image()
+
+        elif self.project:
+            self._clear_current_image()
 
     def _delete_image_from_thumbnail(self, image_id: object) -> None:
         if not self.project:
@@ -2327,6 +2380,13 @@ class SmartLabelApp(ctk.CTk):
             else:
                 record.attributes.pop(key, None)
             if is_hydroponic_project(self.project):
+                record.metadata.get("hydroAutoLabels", {}).pop(key, None)
+                manual = set(record.metadata.get("hydroManualAttributes", []))
+                if value:
+                    manual.add(key)
+                else:
+                    manual.discard(key)
+                record.metadata["hydroManualAttributes"] = sorted(manual)
                 enforce_presence(self.project, record.attributes)
             if record.review_status == "reviewed":
                 record.review_status = "draft"
@@ -2471,8 +2531,7 @@ class SmartLabelApp(ctk.CTk):
 
     def _update_record_thumbnail(self, record) -> None:
         """Update one visible row; only reconcile rows when filter membership changes."""
-        filter_status = {"Chưa gán nhãn": "unlabeled", "Bản nháp": "draft", "Đã duyệt": "reviewed", "Từ chối": "rejected"}.get(self.image_filter.get())
-        belongs = filter_status is None or record.review_status == filter_status
+        belongs = self._image_matches_filters(record)
         was_filtered = record in getattr(self, "filtered_images", [])
         if belongs != was_filtered:
             self._refresh_image_list()
@@ -2485,6 +2544,7 @@ class SmartLabelApp(ctk.CTk):
     def _build_auto_tab(self) -> None:
         tab = self.tabs.tab("AUTO-LABEL")
         settings = self._card(tab, "MODEL PHÁT HIỆN")
+        self.auto_settings_title = settings.winfo_children()[0]
         settings.pack(side="left", fill="y", padx=(8, 5), pady=8)
         self.model_entry = ctk.CTkEntry(settings, width=330, textvariable=self.model_path)
         self.model_entry.pack(padx=14, pady=5)
@@ -2499,21 +2559,23 @@ class SmartLabelApp(ctk.CTk):
             font=("Segoe UI Semibold", 10),
         )
         self.active_model_status_label.pack(anchor="w", padx=14, pady=(0, 4))
-        self._button(
+        self.auto_choose_button = self._button(
             settings,
             "Chọn model PC · .pt / .onnx",
             self._choose_model,
             width=330,
             tooltip="Chọn model chạy Auto-Label trên PC. RKNN dành cho NPU Rockchip/Radxa nên không chọn tại đây.",
-        ).pack(padx=14, pady=5)
-        ctk.CTkLabel(
+        )
+        self.auto_choose_button.pack(padx=14, pady=5)
+        self.auto_model_help = ctk.CTkLabel(
             settings,
             text=".pt/.onnx: Auto-Label trên PC  ·  .rknn: triển khai trên Radxa",
             wraplength=320,
             justify="left",
             text_color="#8fa6b8",
             font=("Segoe UI", 10),
-        ).pack(anchor="w", padx=14, pady=(0, 4))
+        )
+        self.auto_model_help.pack(anchor="w", padx=14, pady=(0, 4))
         ctk.CTkLabel(settings, text="Thiết bị", text_color=COLORS["muted"]).pack(anchor="w", padx=14, pady=(12, 2))
         self.device_menu = ctk.CTkOptionMenu(settings, width=330, values=["auto", "cpu", "cuda"])
         self.device_menu.pack(padx=14, pady=4)
@@ -2533,6 +2595,7 @@ class SmartLabelApp(ctk.CTk):
         self._button(settings, "Dừng", self._stop_auto_label, width=330, color="#a94747").pack(padx=14, pady=5)
 
         sam = self._card(tab, "SAM2 · BOX → MASK")
+        self.auto_sam_card = sam
         sam.pack(side="left", fill="y", padx=5, pady=8)
         ctk.CTkLabel(sam, text="Checkpoint SAM2 / SAM2.1", text_color=COLORS["muted"]).pack(anchor="w", padx=14, pady=(4, 2))
         ctk.CTkEntry(sam, width=300, textvariable=self.sam_checkpoint).pack(padx=14, pady=4)
@@ -2561,6 +2624,7 @@ class SmartLabelApp(ctk.CTk):
         ).pack(anchor="w", padx=14, pady=12)
 
         content = self._card(tab, "TIẾN TRÌNH")
+        self.auto_progress_card = content
         content.pack(side="left", fill="both", expand=True, padx=(5, 8), pady=8)
         self.auto_progress = ctk.CTkProgressBar(content)
         self.auto_progress.set(0)
@@ -2588,6 +2652,29 @@ class SmartLabelApp(ctk.CTk):
     def _refresh_active_model_status(self) -> None:
         if not hasattr(self, "active_model_status_label"):
             return
+        hydro = is_hydroponic_project(self.project)
+        self.auto_settings_title.configure(text="THUỘC TÍNH TOÀN ẢNH HYDRO" if hydro else "MODEL PHÁT HIỆN")
+        self.model_entry.configure(state="disabled" if hydro else "normal")
+        self._set_button_enabled(self.auto_choose_button, not hydro)
+        self.unlabeled_switch.configure(text="Chỉ nhãn trống / khởi tạo" if hydro else "Chỉ ảnh chưa có nhãn")
+        self.replace_switch.configure(text="Thay gợi ý AI cũ" if hydro else "Thay dự đoán AI cũ")
+        self.auto_model_help.configure(text=("Dùng các classifier đã train của bài này. Chỉ gợi ý nhãn nháp cho ảnh slot; giữ nhãn tay và ảnh đã duyệt."
+            if hydro else ".pt/.onnx: Auto-Label trên PC  ·  .rknn: triển khai trên Radxa"))
+        if getattr(self, "auto_context_hydro", None) != hydro:
+            self.auto_context_hydro = hydro
+            self.confidence_slider.configure(from_=0.55 if hydro else 0.05, to=0.95,
+                                              number_of_steps=40 if hydro else 90)
+            self.confidence_slider.set(0.8 if hydro else 0.25)
+            self._confidence_changed(self.confidence_slider.get())
+        if hydro:
+            self.auto_sam_card.pack_forget()
+            attrs = model_attributes(self.project)
+            ready = sum(Path(self.project.attribute_models.get(a["id"], "")).is_file() for a in attrs)
+            self.active_model_status_label.configure(text=f"Classifier đã lưu: {ready}/{len(attrs)} · không cần model định vị",
+                                                     text_color=COLORS["good"] if ready == len(attrs) else COLORS["warn"])
+            return
+        if not self.auto_sam_card.winfo_manager():
+            pack_before(self.auto_sam_card, self.auto_progress_card, side="left", fill="y", padx=5, pady=8)
         path = Path(self.project.active_model) if self.project and self.project.active_model else None
         if path and path.is_file():
             updated = datetime.fromtimestamp(path.stat().st_mtime).strftime("%d/%m/%Y %H:%M")
@@ -2817,6 +2904,11 @@ class SmartLabelApp(ctk.CTk):
         if not self.project or not self.project.images:
             messagebox.showwarning("Thiếu dữ liệu", "Hãy tạo dự án và nhập ảnh trước.")
             return
+        if not self._can_change_project():
+            return
+        if is_hydroponic_project(self.project):
+            self._start_hydro_auto_label()
+            return
         if not Path(self.model_path.get()).exists():
             messagebox.showerror("Thiếu model", "Hãy chọn model YOLO .pt hợp lệ.")
             return
@@ -2824,6 +2916,9 @@ class SmartLabelApp(ctk.CTk):
         self.auto_label_running = True
         self._replace_text(self.auto_log, "")
         project = self.project
+        settings = dict(model_path=self.model_path.get(), confidence=float(self.confidence_slider.get()),
+                        device=self.device_menu.get(), unlabeled_only=bool(self.unlabeled_switch.get()),
+                        replace_predictions=bool(self.replace_switch.get()))
         def progress(index, total, name):
             self.event_queue.put(("auto_progress", (index, total, name)))
         def worker():
@@ -2831,18 +2926,41 @@ class SmartLabelApp(ctk.CTk):
                 stats = auto_label_project(
                     self.store,
                     project,
-                    self.model_path.get(),
-                    confidence=float(self.confidence_slider.get()),
-                    device=self.device_menu.get(),
-                    unlabeled_only=bool(self.unlabeled_switch.get()),
-                    replace_predictions=bool(self.replace_switch.get()),
+                    **settings,
                     progress=progress,
                     cancel_event=self.cancel_event,
                 )
                 self.event_queue.put(("auto_done", stats))
             except Exception as exc:
                 self.event_queue.put(("auto_error", str(exc)))
-        Thread(target=worker, daemon=True).start()
+        try:
+            Thread(target=worker, daemon=True).start()
+        except Exception as exc:
+            self.auto_label_running = False
+            messagebox.showerror("Auto-Label chưa chạy", str(exc), parent=self)
+
+    def _start_hydro_auto_label(self):
+        project = self.project
+        snapshot = deepcopy(project)
+        options = dict(device=self.device_menu.get(), confidence=float(self.confidence_slider.get()),
+                       unlabeled_only=bool(self.unlabeled_switch.get()), replace_predictions=bool(self.replace_switch.get()))
+        self.cancel_event.clear()
+        self.auto_label_running = True
+        self.auto_progress.set(0)
+        self._replace_text(self.auto_log, "BẮT ĐẦU AUTO-LABEL HYDRO · Nạp classifier; kết quả là nhãn nháp chờ duyệt.\n")
+        def worker():
+            try:
+                result = propose_hydro_labels(snapshot, self.store, **options, cancel_event=self.cancel_event,
+                    progress=lambda i, n, name: self.event_queue.put(("auto_progress", (i, n, name))))
+                self.event_queue.put(("hydro_auto_done", (project, result)))
+            except Exception as exc:
+                self.event_queue.put(("auto_error", str(exc)))
+        try:
+            Thread(target=worker, daemon=True).start()
+        except Exception as exc:
+            self.auto_label_running = False
+            self._append_log(self.auto_log, f"AUTO-LABEL LỖI: {exc}")
+            messagebox.showerror("Auto-Label chưa chạy", str(exc), parent=self)
 
     def _stop_auto_label(self) -> None:
         self.cancel_event.set()
@@ -3549,38 +3667,44 @@ class SmartLabelApp(ctk.CTk):
 
         evaluation_card = self._card(right, "ĐÁNH GIÁ MODEL · VALIDATION / TEST")
         evaluation_card.pack(fill="x", pady=6)
-        ctk.CTkLabel(
+        self.hydro_evaluation_group = ctk.CTkOptionMenu(evaluation_card, values=["Thuộc tính Hydro"],
+            command=lambda _: self._refresh_evaluation_defaults(force=True))
+        self.hydro_evaluation_group.pack(fill="x", padx=14, pady=3)
+        self.evaluation_help = ctk.CTkLabel(
             evaluation_card,
             text="Model đánh giá và Dataset là hai file riêng. Mặc định dùng best.pt mới nhất trên tập test chưa dùng để cập nhật trọng số.",
             wraplength=900,
             justify="left",
             text_color=COLORS["muted"],
             font=("Segoe UI", 10),
-        ).pack(anchor="w", padx=14, pady=(1, 5))
+        )
+        self.evaluation_help.pack(anchor="w", padx=14, pady=(1, 5))
         evaluation_model_row = ctk.CTkFrame(evaluation_card, fg_color="transparent")
         evaluation_model_row.pack(fill="x", padx=14, pady=3)
         self.evaluation_model_entry = ctk.CTkEntry(evaluation_model_row, textvariable=self.evaluation_model_path)
         self.evaluation_model_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
-        self._button(
+        self.evaluation_choose_model = self._button(
             evaluation_model_row,
             "Chọn model .pt…",
             self._choose_evaluation_model,
             width=155,
             color="#48657a",
             tooltip="Chọn best.pt cần đánh giá. Đây không phải nút chọn Dataset.",
-        ).pack(side="left")
+        )
+        self.evaluation_choose_model.pack(side="left")
         evaluation_data_row = ctk.CTkFrame(evaluation_card, fg_color="transparent")
         evaluation_data_row.pack(fill="x", padx=14, pady=3)
         self.evaluation_data_entry = ctk.CTkEntry(evaluation_data_row, textvariable=self.evaluation_data_path)
         self.evaluation_data_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
-        self._button(
+        self.evaluation_choose_data = self._button(
             evaluation_data_row,
             "Chọn Dataset…",
             self._choose_evaluation_dataset,
             width=155,
             color="#48657a",
             tooltip="Detection/SEG/OBB/ORI chọn data.yaml; Classification chọn thư mục dataset. File model được chọn ở hàng phía trên.",
-        ).pack(side="left")
+        )
+        self.evaluation_choose_data.pack(side="left")
         evaluation_action_row = ctk.CTkFrame(evaluation_card, fg_color="transparent")
         evaluation_action_row.pack(fill="x", padx=14, pady=(4, 4))
         ctk.CTkLabel(evaluation_action_row, text="Tập:", text_color=COLORS["muted"]).pack(side="left", padx=(2, 5))
@@ -3729,6 +3853,25 @@ class SmartLabelApp(ctk.CTk):
     def _refresh_evaluation_defaults(self, *, force: bool = False) -> None:
         if not self.project:
             return
+        hydro = is_hydroponic_project(self.project)
+        for entry in (self.evaluation_model_entry, self.evaluation_data_entry):
+            entry.configure(state="disabled" if hydro else "normal")
+        for button in (self.evaluation_choose_model, self.evaluation_choose_data):
+            self._set_button_enabled(button, not hydro)
+        if hydro:
+            self.hydro_evaluation_lookup = {f"{a['displayName']} · {a['id']}": a["id"] for a in model_attributes(self.project)}
+            self.hydro_evaluation_group.configure(values=list(self.hydro_evaluation_lookup))
+            if self.hydro_evaluation_group.get() not in self.hydro_evaluation_lookup:
+                self.hydro_evaluation_group.set(next(iter(self.hydro_evaluation_lookup)))
+            if not self.hydro_evaluation_group.winfo_manager():
+                pack_before(self.hydro_evaluation_group, self.evaluation_help, fill="x", padx=14, pady=3)
+            key = self.hydro_evaluation_lookup[self.hydro_evaluation_group.get()]
+            self.evaluation_model_path.set(self.project.attribute_models.get(key, ""))
+            self.evaluation_data_path.set("Tự lấy dataset gốc đã train từ checkpoint" if self.evaluation_model_path.get() else "")
+            self.evaluation_help.configure(text="Hydro: chọn thuộc tính đã train. Test đo kết quả; Val có thể gợi ý ngưỡng. Chỉ dùng tập độc lập, không sửa nhãn.")
+            return
+        self.hydro_evaluation_group.pack_forget()
+        self.evaluation_help.configure(text="Model đánh giá và Dataset riêng. Chọn model và tập test/val phù hợp với task.")
         best = self._latest_best_pt()
         current_model = Path(self.evaluation_model_path.get()) if self.evaluation_model_path.get().strip() else None
         if best and (force or current_model is None or not current_model.is_file()):
@@ -3978,6 +4121,7 @@ class SmartLabelApp(ctk.CTk):
             "runtimeTarget": self.project.metadata.get("hydroRuntimeTarget", "jetson_nano_tensorrt_fp16"),
             "cropDisplayName": self.project.metadata.get("cropDisplayName", "cây mục tiêu"),
         }
+        defaults["thresholds"], defaults["thresholdSources"] = threshold_defaults(self.project)
         config = ask_hydro_bundle_config(self, defaults)
         if not config:
             return
@@ -4034,6 +4178,7 @@ class SmartLabelApp(ctk.CTk):
                 "hydroOnnxInputSize": 224, "lastHydroBundle": str(result["bundle"]),
                 "datasetVersion": config["datasetVersion"], "sourceCommit": config["sourceCommit"],
                 "hydroThresholds": config["thresholds"], "hydroRuntimeTarget": config["runtimeTarget"],
+                "hydroThresholdModelHashes": result.get("modelHashes", {}),
             })
             try:
                 self.store.save(self.project)
@@ -4251,6 +4396,9 @@ class SmartLabelApp(ctk.CTk):
         return ready
 
     def _start_training_for_current_mode(self) -> None:
+        if self.auto_label_running or self.evaluation_running:
+            messagebox.showinfo("Dự án đang xử lý", "Hãy chờ Auto-Label/Đánh giá kết thúc trước khi train.", parent=self)
+            return
         if self.hydro_export_running:
             messagebox.showinfo("Đang tạo gói Hydro", "Hãy chờ tạo gói kết thúc trước khi train.", parent=self)
             return
@@ -4672,7 +4820,12 @@ class SmartLabelApp(ctk.CTk):
         if self.evaluation_running:
             messagebox.showinfo("Đang đánh giá", "Hãy chờ lần đánh giá hiện tại hoàn tất.", parent=self)
             return
+        if not self._can_change_project():
+            return
         self._refresh_evaluation_defaults()
+        if is_hydroponic_project(self.project):
+            self._evaluate_hydro_model()
+            return
         model_path = Path(self.evaluation_model_path.get().strip())
         data_path = Path(self.evaluation_data_path.get().strip())
         if not model_path.is_file():
@@ -4717,12 +4870,50 @@ class SmartLabelApp(ctk.CTk):
             except Exception as exc:
                 self.event_queue.put(("evaluation_error", str(exc)))
 
-        Thread(target=worker, daemon=True).start()
+        try:
+            Thread(target=worker, daemon=True).start()
+        except Exception as exc:
+            self._fail_evaluation(str(exc))
+
+    def _evaluate_hydro_model(self):
+        snapshot = deepcopy(self.project)
+        key = self.hydro_evaluation_lookup[self.hydro_evaluation_group.get()]
+        split, device = self.evaluation_split.get(), self.train_device_menu.get()
+        self.evaluation_running = True
+        self._set_button_enabled(self.evaluation_button, False)
+        self.evaluation_status_label.configure(text=f"Đang đánh giá {key} · {split}…", text_color=COLORS["warn"])
+        self._append_log(self.train_log, f"\nBẮT ĐẦU ĐÁNH GIÁ HYDRO · {key} · {split}\nNạp classifier và kiểm dataset gốc…")
+        def worker():
+            try:
+                result = evaluate_hydro_attribute(snapshot, key, self.store, split=split, device=device,
+                    progress=lambda i, n, name: self.event_queue.put(("train_line", f"Đánh giá {i}/{n} · {name}")))
+                self.event_queue.put(("evaluation_done", result))
+            except Exception as exc:
+                self.event_queue.put(("evaluation_error", str(exc)))
+        try:
+            Thread(target=worker, daemon=True).start()
+        except Exception as exc:
+            self._fail_evaluation(str(exc))
 
     def _finish_evaluation(self, result: dict) -> None:
         self.evaluation_running = False
         self._set_button_enabled(self.evaluation_button, True)
         metrics = result.get("metrics", {})
+        if result.get("task") == "hydro_classify":
+            stored = {k: v for k, v in result.items() if k != "predictions"}
+            self.project.metadata.setdefault("hydroEvaluations", {}).setdefault(result["attributeId"], {})[result["split"]] = stored
+            try:
+                self.store.save(self.project)
+            except Exception as exc:
+                self._append_log(self.train_log, f"Chưa lưu được kết quả trong project: {exc}; báo cáo vẫn ở {result['save_dir']}")
+            self.evaluation_status_label.configure(text=f"{result['title']} · F1 {metrics['f1']:.3f}", text_color=COLORS["muted"])
+            recommendation = result.get("recommendedThresholds")
+            self._append_log(self.train_log, f"\nĐÁNH GIÁ HYDRO HOÀN TẤT · {result['title']} · {result['split']}\n"
+                f"{metrics['samples']} ảnh · Accuracy={metrics['accuracy']:.3f} · Precision={metrics['precision']:.3f} · Recall={metrics['recall']:.3f} · F1={metrics['f1']:.3f}\n"
+                f"Đúng Có={metrics['tp']} · Đúng Không={metrics['tn']} · Báo nhầm Có={metrics['fp']} · Bỏ sót Có={metrics['fn']}\n"
+                f"{result['rating']}\n" + (f"Gợi ý low/high: {recommendation['lowThreshold']:.2f}/{recommendation['highThreshold']:.2f}\n" if recommendation else
+                    "Không tạo gợi ý ngưỡng: chỉ dùng val có ít nhất 20 ảnh mỗi phía và kết quả đủ phân biệt. Test không dùng để chọn ngưỡng.\n") + f"Báo cáo: {result['save_dir']}")
+            return
         rating = str(result.get("rating", "Đã hoàn tất"))
         lines = [
             "\nĐÁNH GIÁ HOÀN TẤT",
@@ -4968,8 +5159,23 @@ class SmartLabelApp(ctk.CTk):
                     self.auto_label_running = False
                     self._append_log(self.auto_log, f"\nHoàn tất · {payload.processed} ảnh · {payload.detections} vật · task {payload.task} · {payload.elapsed_seconds:.1f}s · {payload.device}")
                     self._refresh_everything(keep_image=True)
+                elif kind == "hydro_auto_done":
+                    self.auto_label_running = False
+                    project, result = payload
+                    if self.project is project:
+                        applied, conflicts = apply_hydro_proposals(project, result)
+                        try:
+                            self.store.save(project)
+                        except Exception as exc:
+                            self._append_log(self.auto_log, f"Chưa lưu được nhãn nháp xuống đĩa: {exc}. Nhãn còn trong phiên này.")
+                        state = "Đã dừng" if result["cancelled"] else "Hoàn tất"
+                        self._append_log(self.auto_log, f"\n{state} · {applied} ảnh nháp · {result['skipped']} bỏ qua · {conflicts} ảnh đã thay đổi được giữ nguyên · {len(result['failed'])} lỗi")
+                        for error in result["failed"][:10]:
+                            self._append_log(self.auto_log, error)
+                        self._refresh_everything(keep_image=True)
                 elif kind == "auto_error":
                     self.auto_label_running = False
+                    self._append_log(self.auto_log, f"AUTO-LABEL LỖI: {payload}")
                     messagebox.showerror("Auto-Label thất bại", str(payload), parent=self)
                 elif kind == "sam_done":
                     image_id, ann_id, request_version, points, score = payload
@@ -5169,6 +5375,11 @@ class SmartLabelApp(ctk.CTk):
             self.after(100, self._drain_events)
 
     def _on_close(self) -> None:
+        if self.auto_label_running or self.evaluation_running:
+            if self.auto_label_running:
+                self._stop_auto_label()
+            messagebox.showinfo("Dự án đang xử lý", "Hãy chờ Auto-Label/Đánh giá kết thúc rồi đóng ứng dụng.", parent=self)
+            return
         if self.hydro_export_running:
             self._stop_hydro_export()
             messagebox.showinfo("Đang dừng tạo gói", "Hãy chờ bước đang xử lý kết thúc rồi đóng ứng dụng.", parent=self)

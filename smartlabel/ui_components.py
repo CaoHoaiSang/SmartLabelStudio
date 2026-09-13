@@ -202,28 +202,33 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
         self.grab_set()
         self.configure(fg_color="#0b151f")
         ctk.CTkLabel(
-            self, text="HYDRO MODEL BUNDLE · NGƯỠNG ĐÃ HIỆU CHỈNH",
+            self, text="GÓI MODEL HYDRO · CẤU HÌNH VÀ NGƯỠNG",
             font=("Segoe UI Semibold", 19), text_color="#22b9ee",
         ).pack(anchor="w", padx=22, pady=(20, 3))
         ctk.CTkLabel(
             self,
-            text="Không dùng mặc định 0.5. Hãy nhập low/high lấy từ validation; khoảng giữa được trả về uncertain.",
+            text="Low: ngưỡng kết luận Không; High: ngưỡng kết luận Có. Khoảng giữa là Chưa chắc. Gợi ý khởi đầu chưa chứng minh độ chính xác; nên đánh giá trên Val trước khi phát hành.",
             wraplength=660, justify="left", text_color="#ffb547",
         ).pack(anchor="w", padx=22, pady=(0, 12))
         self.variables: dict[str, tk.StringVar] = {}
+        self.metadata_entries = {}
 
         def field(label: str, key: str, value: str = "") -> None:
             row = ctk.CTkFrame(self, fg_color="transparent")
             row.pack(fill="x", padx=22, pady=4)
             ctk.CTkLabel(row, text=label, width=190, anchor="w", text_color="#8298aa").pack(side="left")
             variable = tk.StringVar(value=value)
-            ctk.CTkEntry(row, textvariable=variable).pack(side="left", fill="x", expand=True)
+            entry = ctk.CTkEntry(row, textvariable=variable, state="disabled" if value.strip() else "normal")
+            entry.pack(side="left", fill="x", expand=True)
+            self.metadata_entries[key] = entry
             self.variables[key] = variable
 
         field("Dataset version", "datasetVersion", str(defaults.get("datasetVersion", "")))
         field("Source commit", "sourceCommit", str(defaults.get("sourceCommit", "")))
         field("Camera profile IDs", "cameraProfileIds", ",".join(defaults.get("cameraProfileIds", [])))
         field("Geometry profile IDs", "geometryProfileIds", ",".join(defaults.get("geometryProfileIds", [])))
+        ctk.CTkLabel(self, text="Thông tin đã có từ dự án/source được khóa. Chỉ nhập phần còn thiếu; sửa profile tại dữ liệu nguồn.",
+                     wraplength=660, justify="left", text_color="#8298aa").pack(anchor="w", padx=22, pady=3)
         runtime_row = ctk.CTkFrame(self, fg_color="transparent")
         runtime_row.pack(fill="x", padx=22, pady=4)
         ctk.CTkLabel(runtime_row, text="Runtime đích", width=190, anchor="w", text_color="#8298aa").pack(side="left")
@@ -255,14 +260,18 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
         threshold_area = ctk.CTkScrollableFrame(self, fg_color="transparent", height=160)
         threshold_area.pack(fill="both", expand=True, padx=12)
         for key, title in self.model_titles.items():
-            row = ctk.CTkFrame(threshold_area, fg_color="#142333", corner_radius=8)
-            row.pack(fill="x", padx=22, pady=4)
+            card = ctk.CTkFrame(threshold_area, fg_color="#142333", corner_radius=8)
+            card.pack(fill="x", padx=12, pady=4)
+            row = ctk.CTkFrame(card, fg_color="transparent")
+            row.pack(fill="x")
             ctk.CTkLabel(row, text=title, width=190, anchor="w").pack(side="left", padx=10, pady=8)
             for bound, label in (("lowThreshold", "Low"), ("highThreshold", "High")):
                 ctk.CTkLabel(row, text=label, text_color="#8298aa").pack(side="left", padx=(4, 2))
-                variable = tk.StringVar(value=str(thresholds.get(key, {}).get(bound, "")))
+                variable = tk.StringVar(value=str(thresholds.get(key, {}).get(bound, 0.30 if bound == "lowThreshold" else 0.70)))
                 ctk.CTkEntry(row, width=90, textvariable=variable).pack(side="left", padx=(0, 8))
                 self.variables[f"{key}.{bound}"] = variable
+            ctk.CTkLabel(card, text=defaults.get("thresholdSources", {}).get(key, "Khởi đầu 0.30 / 0.70 · chưa hiệu chỉnh"),
+                         wraplength=540, justify="left", text_color="#8298aa", font=("Segoe UI", 11)).pack(anchor="w", padx=10, pady=(0, 6))
         actions = ctk.CTkFrame(self, fg_color="transparent")
         actions.pack(fill="x", padx=22, pady=18)
         ctk.CTkButton(actions, text="Hủy", width=110, fg_color="#415466", command=self.destroy).pack(side="right", padx=(6, 0))

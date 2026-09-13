@@ -211,6 +211,8 @@ class ProjectStore:
                     height=height,
                     quality={"brightness": round(brightness, 2), "contrast": round(contrast, 2)},
                     attributes=image_attribute_defaults(project),
+                    metadata=({"hydroAttributeDefaults": image_attribute_defaults(project)}
+                              if project.metadata.get("template") == "Hydroponic Slot Condition" else {}),
                 )
             )
             known_hashes.add(digest)
