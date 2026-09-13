@@ -1,6 +1,24 @@
 # Trạng thái tích hợp HydroFlow ngày 10 tháng 9 năm 2026
 
-## Tổng quan thuộc tính và ảnh bổ trợ train — 13/09/2026
+## 40 ảnh vàng đa dạng từ ảnh giàn — 13/09/2026
+
+Nhánh `feat/hydro-yellow-diversity-40`, kế thừa `fe6bc35`.
+Đã tạo/duyệt/cài **40 ảnh vàng mới + 5 xanh đối chứng**, giữ 6 ảnh lô trước:
+tổng 51 (44 vàng/7 xanh), chỉ vào TRAIN Lá vàng qua adapter hiện có.
+Ảnh gốc 19–39 ngày, 10 ảnh từ 7 nhóm cây TRAIN trong cùng vụ; bốn mức vàng
+mỗi mức 10 ảnh. Gallery `training_supplements/XEM_ANH.html` có lọc kích thước,
+mức độ và ảnh gốc bên cạnh. Prompt/SHA/parent/review lưu đầy đủ ở sidecar.
+Không sửa runtime source, không tạo capture hoặc class mới.
+
+Project được chỉnh ngoài tác vụ trong thời gian tạo ảnh. Đã kiểm lại trạng
+thái thực trước cài, bảo toàn chỉnh sửa: 1.297 ảnh; TRAIN vàng thật 2 Có/833
+Không, VAL 0/238, TEST 0/125. Export mới TRAIN 46 Có/840 Không, 51 supplement;
+VAL/TEST và TRAIN cũ giữ từng byte. Project/split/baPT giữ hash từ trước cài.
+14/14 test adapter đạt (0,203 giây); preflight kiểm cả 3 classifier; cài lại
+không nhân đôi. Chưa train hay triển khai model. VAL/TEST thiếu Có nên chưa
+đủ đo chất lượng Lá vàng hai phía. [Chi tiết lô và cách dùng](HYDRO_TRAINING_SUPPLEMENTS.md).
+
+## Mốc trước: Tổng quan thuộc tính và ảnh bổ trợ train — 13/09/2026
 
 Nhánh `feat/hydro-attribute-overview-yellow-training`, kế thừa `427a734`.
 Kiểm thử Windows: **199/199 đạt** (89,031 giây), gồm 15 ca mới cho thống kê,

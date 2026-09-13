@@ -45,16 +45,48 @@ ghi vào `export.json`; ảnh chỉ vào TRAIN, kể cả các thư mục VAL t�
 ở chế độ Final/Train All. Ảnh chỉ có nhãn Lá vàng không vào classifier Hiện diện/Héo.
 Project không có sidecar hoặc tắt mọi ảnh vẫn train theo luồng trước.
 
-## Lô thử thực tế trên máy chủ hệ thống
+## Lô đa dạng 40 ảnh vàng — 13/09/2026
 
-Project Cải ngọt có 1.300 ảnh giàn: Lá vàng TRAIN 80 Có/755 Không,
-VAL 21 Có/219 Không, TEST 0 Có/126 Không; phần còn lại không áp dụng.
-Đã thêm **4 ảnh vàng tổng hợp + 2 ảnh xanh tổng hợp đối chứng**, từ ảnh TRAIN đã
-duyệt, chỉ cho Lá vàng. TRAIN sau bổ sung 84 Có/757 Không; VAL/TEST giữ nguyên.
-Đây là lô nhỏ để thử augmentation, không giải quyết toàn bộ thiếu dữ liệu và
-chưa chứng minh model tốt hơn. Không có lần train hay phát hành model trong đợt này.
-Ảnh tạo bằng ImageGen có thể thay đổi chi tiết nhỏ ngoài phần sửa; cần so sánh
-model mới/cũ trên VAL thật rồi nghiệm thu TEST/hiện trường có đủ hai phía.
+Theo yêu cầu mở rộng của chủ hệ thống, đã tạo và kiểm từng ảnh bằng mắt:
+**40 ảnh vàng mới + 5 ảnh xanh đối chứng**, từ 10 ảnh giàn có sẵn ở mốc
+19–39 ngày. Cả 10 ảnh gốc đã duyệt và thuộc TRAIN khóa; mỗi biến thể tham
+chiếu trực tiếp ảnh gốc, không nối nhiều lần sửa trên ảnh tổng hợp.
+
+| Mức vàng mô phỏng | Cây nhỏ | Cây vừa | Cây lớn | Tổng |
+| --- | ---: | ---: | ---: | ---: |
+| Một phần lá | 3 | 4 | 3 | 10 |
+| Trọn một lá | 3 | 4 | 3 | 10 |
+| Nhiều lá | 3 | 4 | 3 | 10 |
+| Toàn cây | 3 | 4 | 3 | 10 |
+| Xanh đối chứng | 2 | 2 | 1 | 5 |
+
+Giữ nguyên 6 ảnh lô trước, tổng **51 ảnh bổ trợ: 44 vàng + 7 xanh**.
+Lô mới nằm trong `training_supplements/batches/yellow_diversity_40_20260913/`.
+Mở `XEM_ANH.html` từ thư mục bổ trợ để lọc theo kích thước/mức vàng và xem
+ảnh gốc cạnh ảnh tổng hợp. Manifest lưu prompt đầy đủ, SHA, parent/group,
+ngày duyệt; `growthStage`, `ageDays`, `severity` chỉ mô tả lô ảnh, không thêm
+class mới. Luồng train vẫn học Có/Không của `yellow_leaf`; Hiện diện/Héo
+không nhận nhãn suy đoán. Không đổi source runtime hoặc contract trong đợt này.
+
+**Số liệu hiện hành trước cài:** project đã được chỉnh ngoài tác vụ trong lúc
+tạo ảnh, từ 1.300 còn 1.297 ảnh và nhãn vàng đã đổi. Không khôi phục dữ liệu
+về bản cũ. Snapshot kiểm ngày 13/09: TRAIN thật 2 Có/833 Không, VAL 0/238,
+TEST 0/125. Export sau bổ sung: **TRAIN 46 Có/840 Không**; VAL/TEST và ảnh
+TRAIN cũ giữ nguyên từng byte. Project, split và ba PT giữ hash từ ngay trước
+cài đến sau kiểm. Kiểm 14 test adapter đạt; cài lại không nhân đôi lô hoặc
+đổi manifest. Sáu ảnh cũ giữ file và bản ghi nguồn. Các số 80/755, 21/219,
+0/126 và 84/757 thuộc mốc lô 6 ảnh trước đó, không còn là số hiện hành.
+
+Ảnh tổng hợp bằng built-in ImageGen có thể dựng lại gân, viền và chi tiết.
+Mức độ vàng không phải nhãn đếm lá chính xác hoặc kết luận nguyên nhân bệnh.
+10 ảnh gốc thuộc 7 nhóm cây cùng một vụ, không tạo thêm vụ/cây độc lập.
+Chưa train hoặc phát hành model mới. VAL và TEST hiện đều thiếu lớp Có:
+cần bổ sung ảnh vàng thật vào benchmark độc lập trước khi đo hai phía;
+không đưa ảnh tổng hợp hoặc chuyển ảnh gốc TRAIN vào đó để đủ số lượng.
+Sau đó mới so sánh model có/không augmentation. Không suy số ảnh tăng thành
+chất lượng tăng.
+
+## Khảo sát nguồn ngoài trước lô đa dạng
 
 Khảo sát nguồn công khai ngày 13/09/2026:
 
