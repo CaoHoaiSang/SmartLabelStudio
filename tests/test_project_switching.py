@@ -179,7 +179,8 @@ class ProjectSwitchingTests(unittest.TestCase):
         self.switch(self.bottle)
         original = self.app.project
         for flag in ("import_in_progress", "auto_label_running", "evaluation_running",
-                     "running_training_task", "batch_training_active", "running_rknn_task", "rknn_batch_active"):
+                     "running_training_task", "batch_training_active", "running_rknn_task", "rknn_batch_active",
+                     "hydro_export_running"):
             before = getattr(self.app, flag)
             try:
                 setattr(self.app, flag, "classify" if flag.startswith("running_") else True)
@@ -285,6 +286,9 @@ class ProjectSwitchingTests(unittest.TestCase):
             self.switch(self.hydro)
             self.assertTrue(self.app.hydro_bundle_export_button.winfo_manager())
             self.assertFalse(self.app.batch_rknn_export_button.winfo_manager())
+            self.assertFalse(hasattr(self.app, "hydro_onnx_export_button"))
+            self.assertEqual(self.app.deploy_title_label.cget("text"), "GÓI MODEL CHO HYDRO")
+            self.assertEqual(self.app.deploy_stop_button.cget("text"), "Dừng tạo gói")
 
     def test_16_completion_event_owns_source_project_until_processed(self):
         self.switch(self.bottle)

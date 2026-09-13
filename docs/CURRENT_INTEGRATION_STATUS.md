@@ -1,5 +1,42 @@
 # Trạng thái tích hợp HydroFlow ngày 10 tháng 9 năm 2026
 
+## Một nút tạo gói Hydro — 13/09/2026
+
+Thay hai nút ONNX/Bundle bằng **TẠO GÓI MODEL HYDRO**. Sau xác nhận cấu hình
+và chọn nơi lưu, job nền tự kiểm đủ PT/QA, xuất ONNX từ từng PT rồi đóng ZIP
+theo contract hiện có. Nhật ký và dòng trạng thái hiển thị ba bước cùng số
+model đang chuyển. ONNX vẫn có trong thư mục models của gói để kiểm tra riêng.
+Không tái sử dụng đường dẫn ONNX cũ nên không vô tình đóng gói model cũ sau train.
+
+Job chụp metadata dự án và cấu hình khi bắt đầu, đọc phân tập với persist=False;
+không sửa split/project trong worker. PT được sao vào vùng tạm trước export để
+Ultralytics không ghi ONNX cạnh checkpoint gốc. Kiểm tra và đóng gói trong vùng
+tạm; chỉ khi thành công mới lưu folder/ZIP và cập nhật đường dẫn dự án trên Tk.
+Đích lưu độc quyền, lỗi lưu cuối dọn riêng phần do job tạo, giữ gói có sẵn.
+
+Nút Dừng tạo gói chờ bước hiện tại kết thúc rồi hủy; không cưỡng bức dừng thread
+giữa lúc ghi. Giữ ownership đến completion, chặn đổi/tạo dự án và Train trùng.
+Đóng app khi còn xuất yêu cầu dừng và chờ. Lỗi/hủy nhả nút; lỗi lưu metadata dự
+án vẫn báo rõ ZIP đã tạo ở đâu. Chức năng RKNN của dự án DeltaX giữ nguyên.
+
+Không tự đoán ngưỡng, không nới QA/Windows shadow/contract. Source export ONNX
+riêng vẫn có cho công cụ kỹ thuật; UI không yêu cầu người dùng thực hiện bước
+trung gian. Hướng dẫn hai nút bên dưới thuộc mốc trước và đã được thay bằng
+quy trình một nút trong HUONG_DAN_SU_DUNG.md.
+
+Kiểm Windows:161/161 test đạt, gồm19 test mới cho pipeline và Tk/worker.
+Đã tạo bundle V3 bằng ONNX tổng hợp qua writer thật; kiểm lỗi/hủy/QA/trùng
+tên/publish rollback, snapshot, ownership và lỗi lưu metadata. Đã xuất ONNX
+thực từ bản sao một checkpoint người dùng trên worker, onnx.checker đạt,
+opset12/thứ tự nhãn đúng và hash PT gốc giữ nguyên; tệp thử ở vùng tạm đã dọn.
+Tk tại1180×720 và1500×900: một nút chính và nút Dừng nằm trong hàng, đúng
+tiêu đề Hydro. Không train mới, không kích hoạt model hoặc nghiệm thu Nano.
+
+Quan sát 09:41 ngày 13/09: project_eb99e9722cff đã có đủ checkpoint của
+plant_presence, yellow_leaf và wilt; không còn worker train. Không cần train
+lại Héo theo ghi chú cũ bên dưới. Mở lại SmartLabel để nạp bản hoàn chỉnh;
+việc đủ checkpoint không thay thế kiểm tra QA và đánh giá độ chính xác.
+
 ## Worker Windows và thứ tự xuất Hydro — 13/09/2026
 
 Sửa regression của4afe44f khi SmartLabel chưa mở lại: parent cũ chưa đặt
@@ -12,12 +49,10 @@ cp1252 và YOLO giả, không train dữ liệu thật. Nhánh sửa
 Full suite Windows đạt142/142;15 test train/GUI tập trung đạt. Không khởi
 động train thật, không ghi đè hai model đã hoàn thành hay năm tệp dirty cũ.
 
-Lượt người dùng project_eb99e9722cff đã lưu model plant_presence và yellow_leaf;
-wilt chưa có run. Không train lại hai nhóm đã hoàn tất. Mở lại app để nạp UI
-log đã sửa, chỉ tick Héo và train nhóm còn thiếu. Sau đó Xuất ONNX Hydro lấy
-đủ model đã lưu của mọi nhóm, rồi Tạo Hydro Model Bundle để tạo ZIP cho Hydro.
-Hai nút là hai bước nối tiếp; ZIP PT tự tạo sau batch chỉ là gói quản lý
-checkpoint, không thay ZIP Hydro. Xem hướng dẫn trong HUONG_DAN_SU_DUNG.md.
+Tại mốc kiểm lỗi lúc 02:15, project_eb99e9722cff đã lưu model plant_presence
+và yellow_leaf; wilt chưa có run. Đây là quan sát lịch sử, đã được cập nhật
+ở phần trên. Luồng xuất hai nút ở mốc này đã được thay bằng một nút. ZIP PT
+tự tạo sau batch chỉ là gói quản lý checkpoint, không thay ZIP Hydro.
 
 ## Nhật ký train/xuất model — 13/09/2026
 

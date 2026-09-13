@@ -94,12 +94,14 @@ class DatasetManager:
         *,
         force_rebalance: bool = False,
         seed: int = 42,
+        persist: bool = True,
     ) -> dict[str, Any]:
         """Create/persist stable capture-group assignments.
 
         Existing groups never move during normal use. Newly imported groups go
         to train by default. A deliberate rebalance is the only operation that
         rewrites the locked benchmark membership.
+        persist=False previews the same assignment for read-only package QA.
         """
         path = self.split_assignment_path(project)
         groups = self._record_groups(project.images)
@@ -141,7 +143,8 @@ class DatasetManager:
             "new_group_policy": "train",
             "groups": assignments,
         }
-        path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        if persist:
+            path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         return result
 
     def split_summary(self, project: Project) -> dict[str, Any]:

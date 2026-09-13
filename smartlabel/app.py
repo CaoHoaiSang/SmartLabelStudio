@@ -4,6 +4,7 @@ from pathlib import Path
 from queue import Empty, Queue
 from threading import Event, Lock, Thread
 from datetime import datetime
+from copy import deepcopy
 import json
 import logging
 from logging.handlers import RotatingFileHandler
@@ -23,16 +24,15 @@ from .dataset_manager import DatasetManager
 from .deployment import build_vision_bundle_manifest, classifier_manifest_entry, write_classifier_pt_bundle
 from .evaluation import evaluate_yolo_model
 from .hardware import inspect_hardware
+from .hydro_export import HydroBundleJob
 from .hydroponic import (
     CaptureRepairConfirmationRequired,
     apply_hydroponic_slot_template,
     describe_hydro_qa_issue,
-    export_jetson_onnx,
     hydro_dataset_qa,
     import_capture_dataset_archive,
     import_capture_manifest,
     is_hydroponic_project,
-    write_hydro_model_bundle,
 )
 from .frame_filter_dialog import SmartFrameFilterDialog
 from .frame_filter import latest_import_records
@@ -240,6 +240,8 @@ class SmartLabelApp(ctk.CTk):
         self.pending_training_note = ""
         self.last_localization_task = "detect"
         self.model_export_job: RknnExportJob | None = None
+        self.hydro_export_job: HydroBundleJob | None = None
+        self.hydro_export_running = False
         self.running_rknn_task = ""
         self.running_rknn_attribute_key = ""
         self.rknn_batch_queue: list[tuple[str, Path]] = []
@@ -831,7 +833,7 @@ class SmartLabelApp(ctk.CTk):
         # subprocess is alive. Those callbacks register models on self.project.
         busy = (self.import_in_progress or self.auto_label_running or self.evaluation_running
                 or self.running_training_task or self.batch_training_active
-                or self.running_rknn_task or self.rknn_batch_active)
+                or self.running_rknn_task or self.rknn_batch_active or self.hydro_export_running)
         if busy:
             messagebox.showinfo("Dự án đang xử lý", "Hãy đợi nhập ảnh, Auto-Label, train hoặc xuất/đánh giá model hoàn tất trước khi đổi dự án. Nếu đã nhấn Dừng, hãy đợi thông báo kết thúc.", parent=self)
         return not busy
@@ -2061,7 +2063,7 @@ class SmartLabelApp(ctk.CTk):
         help_label = getattr(self, "deploy_help_label", None)
         if help_label is not None:
             if is_hydroponic_project(self.project):
-                help_text = "Xuất các classifier toàn ảnh slot sang ONNX tĩnh dùng chung; có thể thử shadow bằng ONNX Runtime trên Windows hoặc build TensorRT trực tiếp trên Jetson."
+                help_text = "Một lần tạo gói: kiểm tra dữ liệu → chuyển các model đã train sang ONNX → đóng gói ZIP để tải lên Hydro. Tiến độ từng bước hiển thị trong nhật ký bên dưới."
             elif enabled:
                 help_text = "Xuất lần lượt các classifier đã tick sang RKNN, sau đó tạo gói triển khai cùng model định vị."
             else:
@@ -2072,10 +2074,14 @@ class SmartLabelApp(ctk.CTk):
         single_export = getattr(self, "deploy_export_button", None)
         batch_export = getattr(self, "batch_rknn_export_button", None)
         bundle_export = getattr(self, "bundle_export_button", None)
-        hydro_onnx = getattr(self, "hydro_onnx_export_button", None)
         hydro_bundle = getattr(self, "hydro_bundle_export_button", None)
         stop_button = getattr(self, "deploy_stop_button", None)
         hydro = is_hydroponic_project(self.project)
+        if hasattr(self, "deploy_title_label"):
+            self.deploy_title_label.configure(text="GÓI MODEL CHO HYDRO" if hydro else "XUẤT RKNN CHO RADXA")
+        if stop_button is not None:
+            stop_button.configure(text="Dừng tạo gói" if hydro else "Dừng xuất RKNN",
+                                  command=self._stop_hydro_export if hydro else self._stop_rknn_export)
         if source_row is not None:
             if enabled:
                 source_row.pack_forget()
@@ -2093,7 +2099,7 @@ class SmartLabelApp(ctk.CTk):
                 pack_before(button, stop_button, side="left", padx=3)
             elif not enabled or hydro:
                 button.pack_forget()
-        for button in (hydro_onnx, hydro_bundle):
+        for button in (hydro_bundle,):
             if button is None:
                 continue
             if enabled and hydro and not button.winfo_manager():
@@ -3464,6 +3470,7 @@ class SmartLabelApp(ctk.CTk):
         right.pack(side="left", fill="both", expand=True, padx=(5, 8), pady=8)
 
         deploy_card = self._card(right, "XUẤT RKNN CHO RADXA")
+        self.deploy_title_label = deploy_card.winfo_children()[0]
         deploy_card.pack(fill="x", pady=(0, 6))
         self.deploy_help_label = ctk.CTkLabel(
             deploy_card,
@@ -3514,22 +3521,13 @@ class SmartLabelApp(ctk.CTk):
             tooltip="Sao chép detector và các classifier RKNN đã xuất vào một thư mục cùng manifest cho Radxa.",
         )
         self.bundle_export_button.pack(side="left", padx=3)
-        self.hydro_onnx_export_button = self._button(
-            self.deploy_action_row,
-            "XUẤT ONNX HYDRO",
-            self._export_hydro_onnx_models,
-            width=205,
-            color=COLORS["good"],
-            tooltip="Xuất tĩnh batch-1 các classifier Hydro sang ONNX dùng chung cho Windows shadow và Jetson TensorRT.",
-        )
-        self.hydro_onnx_export_button.pack(side="left", padx=3)
         self.hydro_bundle_export_button = self._button(
             self.deploy_action_row,
-            "TẠO HYDRO MODEL BUNDLE",
+            "TẠO GÓI MODEL HYDRO",
             self._export_hydro_bundle,
             width=235,
-            color="#48657a",
-            tooltip="Đóng gói ONNX, preprocessing, ngưỡng, checksum, profile và runtime đích. Windows luôn bị khóa ở shadow.",
+            color=COLORS["good"],
+            tooltip="Tự kiểm tra dữ liệu, chuyển ONNX từ model đã train và tạo ZIP đầy đủ cho Hydro; không cần xuất ONNX trước.",
         )
         self.hydro_bundle_export_button.pack(side="left", padx=3)
         self.deploy_stop_button = self._button(
@@ -3950,40 +3948,6 @@ class SmartLabelApp(ctk.CTk):
             raise FileNotFoundError("Thiếu model " + suffix + " cho: " + ", ".join(missing))
         return paths
 
-    def _export_hydro_onnx_models(self) -> None:
-        if not self.project:
-            return
-        try:
-            models = self._hydro_classifier_paths(suffix=".pt")
-        except Exception as exc:
-            messagebox.showerror("Chưa đủ classifier Hydro", str(exc), parent=self)
-            return
-        parent = filedialog.askdirectory(title="Chọn thư mục lưu ONNX Hydro")
-        if not parent:
-            return
-        output = Path(parent) / f"hydro_jetson_onnx_{datetime.now():%Y%m%d_%H%M%S}"
-        if output.exists():
-            messagebox.showerror("Thư mục đã tồn tại", str(output), parent=self)
-            return
-        output.mkdir(parents=True)
-        exported: dict[str, str] = {}
-        try:
-            for key in model_keys(self.project):
-                target = export_jetson_onnx(models[key], output / f"{key}.onnx", input_size=224, opset=12)
-                exported[key] = str(target.resolve())
-            self.project.metadata["hydroOnnxModels"] = exported
-            self.project.metadata["hydroOnnxInputSize"] = 224
-            self.store.save(self.project)
-        except Exception as exc:
-            shutil.rmtree(output, ignore_errors=True)
-            messagebox.showerror("Xuất ONNX Hydro lỗi", str(exc), parent=self)
-            return
-        messagebox.showinfo(
-            "Đã xuất ONNX Hydro",
-            f"Đã xuất {len(exported)} classifier batch-1 tĩnh. Windows chạy shadow; TensorRT engine chỉ build trên Jetson.\n\n" + str(output),
-            parent=self,
-        )
-
     def _source_commit(self) -> str:
         try:
             return subprocess.run(
@@ -3994,22 +3958,15 @@ class SmartLabelApp(ctk.CTk):
             return ""
 
     def _export_hydro_bundle(self) -> None:
-        if not self.project:
+        if not self.project or not is_hydroponic_project(self.project):
+            return
+        if not self._can_change_project():
             return
         try:
-            models = self._hydro_classifier_paths(suffix=".onnx")
+            self._hydro_classifier_paths(suffix=".pt")
         except Exception as exc:
-            messagebox.showerror("Chưa có ONNX Hydro", str(exc) + "\n\nHãy chạy XUẤT ONNX HYDRO trước.", parent=self)
-            return
-        assignment = self.datasets.ensure_split_assignment(self.project)
-        report = hydro_dataset_qa(self.project, self.store, assignment)
-        errors = [issue for issue in report["issues"] if issue["severity"] == "error"]
-        if errors:
-            messagebox.showerror(
-                "Dataset Hydro còn lỗi",
-                f"Có {len(errors)} lỗi QA. Hãy chạy Kiểm tra Dataset Hydro và sửa trước khi tạo bundle.",
-                parent=self,
-            )
+            self._append_log(self.train_log, f"CHƯA TẠO GÓI HYDRO · {exc}")
+            messagebox.showerror("Chưa đủ model Hydro", str(exc) + "\nHãy train các nhóm còn thiếu trước.", parent=self)
             return
         defaults = {
             "modelTitles": {attr["id"]: attr["displayName"] for attr in model_attributes(self.project)},
@@ -4027,44 +3984,68 @@ class SmartLabelApp(ctk.CTk):
         parent = filedialog.askdirectory(title="Chọn nơi lưu gói model Hydro")
         if not parent:
             return
-        output = Path(parent) / f"hydro_model_bundle_{datetime.now():%Y%m%d_%H%M%S}"
+        output = Path(parent) / f"hydro_model_bundle_{datetime.now():%Y%m%d_%H%M%S_%f}"
+        job = HydroBundleJob(self.project, self.store, output, config,
+                             lambda kind, payload: self.event_queue.put((kind, payload)))
+        self.hydro_export_job = job
+        self.hydro_export_running = True
+        self._set_button_enabled(self.hydro_bundle_export_button, False)
+        self._set_button_enabled(self.train_start_button, False)
+        self._set_button_enabled(self.deploy_stop_button, True)
+        self.deploy_status_label.configure(text="Đang chuẩn bị gói Hydro…", text_color=COLORS["warn"])
+        self._append_log(self.train_log, "\nBẮT ĐẦU TẠO GÓI HYDRO · Kiểm tra → ONNX → ZIP")
         try:
-            self.project.metadata["validationStatus"] = report["validationStatus"]
-            bundle = write_hydro_model_bundle(
-                self.project,
-                output,
-                models,
-                config["thresholds"],
-                dataset_version=config["datasetVersion"],
-                source_commit=config["sourceCommit"],
-                camera_profile_ids=config["cameraProfileIds"],
-                geometry_profile_ids=config["geometryProfileIds"],
-                input_size=224,
-                runtime_target=config["runtimeTarget"],
-                deployment_mode=config["deploymentMode"],
-            )
-            self.project.metadata["datasetVersion"] = config["datasetVersion"]
-            self.project.metadata["sourceCommit"] = config["sourceCommit"]
-            self.project.metadata["hydroThresholds"] = config["thresholds"]
-            self.project.metadata["hydroRuntimeTarget"] = config["runtimeTarget"]
-            self.project.metadata["lastHydroBundle"] = str(bundle.resolve())
-            self.store.save(self.project)
+            job.start()
         except Exception as exc:
-            messagebox.showerror("Tạo gói model Hydro lỗi", str(exc), parent=self)
+            self._finish_hydro_export(job, None, str(exc), False)
+
+    def _stop_hydro_export(self) -> None:
+        if self.hydro_export_running and self.hydro_export_job:
+            self.hydro_export_job.stop()
+            self._set_button_enabled(self.deploy_stop_button, False)
+            message = "Đã yêu cầu dừng; chờ bước đang xử lý kết thúc…"
+            self.deploy_status_label.configure(text=message, text_color=COLORS["warn"])
+            self._append_log(self.train_log, message)
+
+    def _finish_hydro_export(self, job, result, error, cancelled) -> None:
+        if job is not self.hydro_export_job:
             return
-        messagebox.showinfo(
-            "Gói model Hydro hoàn tất",
-            (
-                f"Validation: {report['validationStatus']}\nRuntime: {config['runtimeTarget']}\n"
-            f"Mode: {config['deploymentMode']}\nBundle: {bundle}\nZIP để tải lên HydroFlow: {bundle.with_suffix('.zip')}\n\n"
-                + (
-                    "Kích hoạt bằng ONNX Runtime trên Windows chỉ chạy shadow và không được tạo cảnh báo."
-                    if config["runtimeTarget"] == "windows_onnxruntime_cpu"
-                    else "TensorRT engine phải được build trên Jetson."
-                )
-            ),
-            parent=self,
-        )
+        self.hydro_export_running = False
+        self.hydro_export_job = None
+        self._set_button_enabled(self.hydro_bundle_export_button, True)
+        self._set_button_enabled(self.train_start_button, True)
+        self._set_button_enabled(self.deploy_stop_button, False)
+        if cancelled:
+            message = "ĐÃ DỪNG TẠO GÓI HYDRO · Model và các gói trước được giữ nguyên."
+            self.deploy_status_label.configure(text="Đã dừng tạo gói Hydro", text_color=COLORS["warn"])
+            self._append_log(self.train_log, message)
+            return
+        if error:
+            self.deploy_status_label.configure(text="Chưa tạo được gói Hydro · xem nhật ký", text_color=COLORS["bad"])
+            self._append_log(self.train_log, f"TẠO GÓI HYDRO LỖI · {error}")
+            messagebox.showerror("Tạo gói Hydro chưa hoàn tất", error, parent=self)
+            return
+        config = job.config
+        warning = ""
+        if self.project is job.source_project:
+            previous = deepcopy(self.project.metadata)
+            self.project.metadata.update({
+                "validationStatus": result["validationStatus"], "hydroOnnxModels": result["onnxModels"],
+                "hydroOnnxInputSize": 224, "lastHydroBundle": str(result["bundle"]),
+                "datasetVersion": config["datasetVersion"], "sourceCommit": config["sourceCommit"],
+                "hydroThresholds": config["thresholds"], "hydroRuntimeTarget": config["runtimeTarget"],
+            })
+            try:
+                self.store.save(self.project)
+            except Exception as exc:
+                self.project.metadata = previous
+                warning = f"\nGói đã lưu nhưng chưa cập nhật được đường dẫn trong dự án: {exc}"
+        else:
+            warning = "\nDự án hiện tại đã đổi; chỉ lưu gói của dự án nguồn, không cập nhật dự án đang mở."
+        message = f"HOÀN TẤT GÓI HYDRO\nZIP để tải lên Hydro: {result['archive']}{warning}"
+        self.deploy_status_label.configure(text="Gói Hydro đã sẵn sàng · xem đường dẫn trong nhật ký", text_color=COLORS["good"])
+        self._append_log(self.train_log, message)
+        messagebox.showinfo("Gói model Hydro hoàn tất", message, parent=self)
 
     def _export_deployment_bundle(self) -> None:
         if not self.project:
@@ -4270,6 +4251,9 @@ class SmartLabelApp(ctk.CTk):
         return ready
 
     def _start_training_for_current_mode(self) -> None:
+        if self.hydro_export_running:
+            messagebox.showinfo("Đang tạo gói Hydro", "Hãy chờ tạo gói kết thúc trước khi train.", parent=self)
+            return
         if not self.project:
             self._training_error("Chưa có dự án", "Hãy mở dự án trước khi train.")
             return
@@ -5090,6 +5074,13 @@ class SmartLabelApp(ctk.CTk):
                     self._diagnose_sam2()
                 elif kind == "train_line":
                     self._append_log(self.train_log, str(payload))
+                elif kind == "hydro_export_progress":
+                    job, message = payload
+                    if job is self.hydro_export_job:
+                        self._append_log(self.train_log, message)
+                        self.deploy_status_label.configure(text=message, text_color=COLORS["warn"])
+                elif kind == "hydro_export_done":
+                    self._finish_hydro_export(*payload)
                 elif kind == "evaluation_done":
                     self._finish_evaluation(payload)
                 elif kind == "evaluation_error":
@@ -5178,6 +5169,10 @@ class SmartLabelApp(ctk.CTk):
             self.after(100, self._drain_events)
 
     def _on_close(self) -> None:
+        if self.hydro_export_running:
+            self._stop_hydro_export()
+            messagebox.showinfo("Đang dừng tạo gói", "Hãy chờ bước đang xử lý kết thúc rồi đóng ứng dụng.", parent=self)
+            return
         if self.project:
             self.store.save(self.project)
         self.cancel_event.set()

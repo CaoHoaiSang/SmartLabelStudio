@@ -406,30 +406,40 @@ workspace\projects\<project_id>\bundles\classification_models_*.zip
 
 ## 11. Dùng model đã train và triển khai
 
-### Hai bước xuất model cho Hydro
+### Tạo gói model Hydro bằng một nút
 
-Với dự án Hydro, **Xuất ONNX Hydro** và **Tạo Hydro Model Bundle** được dùng
-nối tiếp, sau khi train đủ các nhóm thuộc tính cần thiết.
+Sau khi train đủ các nhóm, dùng **TẠO GÓI MODEL HYDRO**. Ứng dụng tự thực
+hiện cả xuất ONNX và tạo Hydro Model Bundle; không còn cần bấm hai nút.
 
-| Nút | Việc thực hiện | Kết quả |
-| --- | --- | --- |
-| **XUẤT ONNX HYDRO** | Chuyển các classifier `.pt` đã lưu của mọi nhóm sang ONNX tĩnh batch-1. | Thư mục chứa một file `.onnx` cho mỗi nhóm. |
-| **TẠO HYDRO MODEL BUNDLE** | Kiểm tra QA dataset và đóng gói ONNX cùng ý nghĩa/thứ tự nhãn, ngưỡng, checksum, profile camera/hình học và runtime đích. | Thư mục bundle và file `.zip` để tải lên HydroFlow. |
+1. Kiểm tra các nhóm cần thiết đã có model được lưu; đánh giá model trước khi phát hành.
+2. Nhấn **TẠO GÓI MODEL HYDRO**, xác nhận ngưỡng đã hiệu chỉnh, profile và runtime đích.
+3. Chọn nơi lưu một lần. Ứng dụng chạy nền và báo tiến độ trong nhật ký:
 
-Quy trình: **train đủ nhóm → đánh giá model → Xuất ONNX Hydro → Tạo Hydro Model
-Bundle → tải ZIP lên Hydro**. Tạo Bundle không train lại và không tự chuyển
-`.pt` thành ONNX; nếu chưa xuất ONNX, ứng dụng sẽ yêu cầu làm bước đó trước.
-Nếu train lại một nhóm, hãy xuất lại ONNX rồi tạo bundle mới để dùng model mới.
+| Bước | Hệ thống thực hiện |
+| --- | --- |
+| **1/3 · Kiểm tra** | Kiểm đủ checkpoint, cấu hình và QA dữ liệu. Lỗi được ghi rõ trước khi chuyển model. |
+| **2/3 · Chuyển ONNX** | Tự chuyển từng classifier từ `.pt` đã lưu sang `.onnx`, hiện tên nhóm và số model đang xử lý. |
+| **3/3 · Đóng gói** | Kiểm contract nhãn và tạo folder/ZIP chứa model, ý nghĩa nhãn, ngưỡng, checksum, profile cùng runtime đích. |
 
-Nếu train hàng loạt dừng giữa chừng, các classifier đã hoàn thành vẫn được
-lưu trong dự án. Bỏ tick những nhóm đã xong, chỉ tick nhóm lỗi/chưa train rồi
-nhấn Train. Khi đủ nhóm, nút Xuất ONNX lấy cả model mới và model đã lưu trước
-đó. ZIP PT tự tạo sau mỗi lượt batch chỉ để quản lý checkpoint, không phải
-Hydro Model Bundle để cài lên Hydro.
+Khi hoàn tất, nhật ký và hộp thông báo chỉ rõ **file ZIP để tải lên Hydro**.
+ONNX vẫn có trong thư mục `models` của gói để kỹ thuật viên kiểm tra riêng.
+Tạo gói không train lại; mỗi lần tạo đều lấy PT hiện hành, không lấy ONNX cũ.
+
+**Dừng tạo gói** chờ bước đang xử lý kết thúc rồi dọn tệp tạm. Model gốc và
+các gói trước đó được giữ nguyên; lỗi ở một bước không được báo thành công.
+Trong lúc tạo gói, ứng dụng chặn đổi dự án và khởi động Train mới. Đóng ứng
+dụng lúc này sẽ yêu cầu dừng và chờ. Nếu chỉ lưu metadata dự án bị lỗi, ZIP
+đã tạo vẫn còn và đường dẫn được báo trong nhật ký.
+
+Nếu train hàng loạt dừng giữa chừng, bỏ tick các nhóm đã hoàn thành và chỉ
+train nhóm lỗi/chưa train. Khi đủ nhóm, **Tạo gói model Hydro** lấy cả model
+mới và model đã lưu trước đó. ZIP PT tự tạo sau batch chỉ để quản lý
+checkpoint, không phải gói dùng để cài lên Hydro.
 
 Windows hiện dùng ONNX Runtime ở chế độ shadow. Với Nano, chọn runtime Jetson;
 TensorRT engine được build trên Nano. QA dataset khi đóng gói không thay thế
-đánh giá độ chính xác của model trên tập test và ảnh thực tế.
+đánh giá độ chính xác của model trên tập test và ảnh thực tế. Các ngưỡng vẫn
+cần giá trị đã hiệu chỉnh; hệ thống không tự đoán khi gộp hai bước xuất.
 
 ### Auto-Label và triển khai DeltaX/Radxa
 
