@@ -66,6 +66,21 @@ class HydroReviewUiTests(unittest.TestCase):
         self.app.label_filter_value.set(value)
         self.app._change_image_filter()
 
+    def test_overview_counts_hydro_attributes_and_keeps_bottle_geometry(self):
+        self.app.project.images[0].review_status = "reviewed"
+        self.app._refresh_project_statistics()
+        hydro = self.app.project_summary.get("1.0", "end")
+        self.assertIn("Giá trị thuộc tính đã duyệt: 2", hydro)
+        self.assertIn("THUỘC TÍNH TRÊN ẢNH RỌ", hydro)
+        self.assertNotIn("Số nhãn hình học", hydro)
+        self.assertIn("Có 0 · Không 1", hydro)
+        self.assertTrue(self.app.training_supplements_button.winfo_manager())
+        self.app._change_project_context(deepcopy(self.bottle))
+        bottle = self.app.project_summary.get("1.0", "end")
+        self.assertIn("Số nhãn hình học: 0", bottle)
+        self.assertNotIn("THUỘC TÍNH TRÊN ẢNH RỌ", bottle)
+        self.assertFalse(self.app.training_supplements_button.winfo_manager())
+
     def test_filter_navigation_and_edit_reconcile_without_clearing_filter(self):
         self.filter_yellow()
         self.assertEqual([r.id for r in self.app.filtered_images], ["1", "3"])

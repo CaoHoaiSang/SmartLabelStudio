@@ -1,5 +1,27 @@
 # Trạng thái tích hợp HydroFlow ngày 10 tháng 9 năm 2026
 
+## Tổng quan thuộc tính và ảnh bổ trợ train — 13/09/2026
+
+Nhánh `feat/hydro-attribute-overview-yellow-training`, kế thừa `427a734`.
+Kiểm thử Windows: **199/199 đạt** (89,031 giây), gồm 15 ca mới cho thống kê,
+UI và các ràng buộc dữ liệu bổ trợ; giữ các regression Hydro/Chai có sẵn.
+Tổng quan Hydro thay số khung bằng số giá trị thuộc tính đã duyệt, phân bố
+Có/Không/Chưa chắc/Không áp dụng và TRAIN/VAL/TEST đủ nhãn; mặc định chưa duyệt
+không được tính thành nhãn đã duyệt. Chai nhựa vẫn đếm hình học/Class.
+Ảnh bổ trợ có manifest nguồn riêng trong project, chỉ vào TRAIN của thuộc tính
+được gán; kiểm hash, ảnh gốc TRAIN và trùng RGB, không tạo capture giả hoặc
+đổi benchmark. Nút Xem ảnh bổ trợ train mở thư mục để kiểm ảnh/nguồn, nhật ký
+train ghi số ảnh bổ trợ. [Thiết kế và cách dùng](HYDRO_TRAINING_SUPPLEMENTS.md).
+
+Project Cải ngọt trên máy có thêm 4 ảnh vàng tổng hợp + 2 ảnh xanh đối chứng,
+chỉ cho Lá vàng: TRAIN 84 Có/757 Không, VAL 21/219, TEST 0/126. Đã thử export
+trên dữ liệu thật với output tạm: ảnh VAL/TEST và ảnh TRAIN cũ giữ nguyên từng
+byte, project/split/PT không đổi. Chưa train model mới, chưa chứng minh cải
+thiện; TEST thật vẫn thiếu Có. Đã tìm nguồn mạng/Roboflow và kiểm 8 thumbnail,
+chưa nhập ảnh ngoài vì mẫu chưa xác minh cùng giống/bối cảnh. Dữ liệu nằm local,
+không push ảnh/dataset. Không mở dịch vụ trả phí.
+
+
 ## Lọc nhãn, ngưỡng và công cụ model Hydro — 13/09/2026
 
 Nhánh `feat/hydro-review-and-model-tools`, kế thừa `596eb23`:

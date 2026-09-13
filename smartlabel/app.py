@@ -580,6 +580,9 @@ class SmartLabelApp(ctk.CTk):
             tooltip=self._project_action_tooltip("project_settings", False),
         )
         self.project_settings_button.pack(fill="x", padx=8, pady=(4, 8))
+        self.training_supplements_button = self._button(
+            settings_group, "Xem ảnh bổ trợ train", self._open_training_supplements,
+            width=220, tooltip="Mở ảnh tổng hợp/nguồn ngoài và danh sách nguồn. Chỉ dùng bổ trợ TRAIN Hydro.")
         lifecycle_group = self._project_action_group(project_tools, "lifecycle")
         self._button(lifecycle_group, "Xóa dự án…", self._trash_current_project,
                      width=220, color="#a94747",
@@ -1243,6 +1246,12 @@ class SmartLabelApp(ctk.CTk):
 
     def _apply_project_context_visibility(self) -> None:
         hydro = is_hydroponic_project(self.project)
+        supplements_button = getattr(self, "training_supplements_button", None)
+        if supplements_button is not None:
+            if hydro and not supplements_button.winfo_manager():
+                supplements_button.pack(fill="x", padx=8, pady=(0, 8))
+            elif not hydro:
+                supplements_button.pack_forget()
         contextual_buttons = (
             (getattr(self, "hydro_archive_import_button", None), getattr(self, "hydro_import_button", None)),
             (getattr(self, "hydro_import_button", None), getattr(self, "import_folder_button", None)),
@@ -4547,6 +4556,9 @@ class SmartLabelApp(ctk.CTk):
                     self.train_log,
                     f"✓ {title}: {metadata.get('exported_crops', 0)} crop · {len(populated)} nhãn",
                 )
+                if metadata.get("supplement_count", 0):
+                    self._append_log(self.train_log,
+                        f"  Gồm {metadata['supplement_count']} ảnh bổ trợ chỉ vào TRAIN; VAL/TEST giữ dữ liệu giàn.")
             except Exception as exc:
                 problems.append(f"{title}: {exc}")
         if problems:
@@ -5031,6 +5043,19 @@ class SmartLabelApp(ctk.CTk):
         if layout_error:
             self._set_status("Đã nạp dữ liệu dự án, nhưng một số nút chưa hiển thị đúng. Xem workspace/logs/smartlabel.log.", COLORS["bad"])
 
+    def _open_training_supplements(self) -> None:
+        if not is_hydroponic_project(self.project):
+            return
+        from .training_supplements import manifest_path
+        path = manifest_path(self.store, self.project)
+        if not path.is_file():
+            messagebox.showinfo("Ảnh bổ trợ train", "Dự án chưa có ảnh bổ trợ. Ảnh giàn vẫn được train bình thường.", parent=self)
+            return
+        try:
+            os.startfile(str(path.parent))
+        except (AttributeError, OSError) as exc:
+            messagebox.showerror("Không mở được thư mục", str(exc), parent=self)
+
     def _refresh_project_statistics(self) -> None:
         if not self.project or not hasattr(self, "project_summary") or not hasattr(self, "dataset_info"):
             return
@@ -5042,15 +5067,22 @@ class SmartLabelApp(ctk.CTk):
             f"ID           : {self.project.id}",
             f"Bài toán     : {task_text}",
             f"Số ảnh       : {summary['images']}",
-            f"Số nhãn      : {summary['annotations']}",
+            *([] if hydro else [f"Số nhãn hình học: {summary['annotations']}"]),
             "",
             "TRẠNG THÁI",
         ]
         text.extend(f"  {key:12}: {value}" for key, value in summary["statuses"].items())
-        text.append("\nTHEO CLASS")
-        text.extend(f"  {key:20}: {value}" for key, value in summary["classes"].items())
-        text.append("\nNGUỒN NHÃN")
-        text.extend(f"  {key:20}: {value}" for key, value in summary["sources"].items())
+        if hydro:
+            from .hydro_statistics import overview_lines
+            from .training_supplements import summary_lines
+            text.append("")
+            text.extend(overview_lines(summary["image_attributes"]))
+            text.extend(summary_lines(self.store, self.project))
+        else:
+            text.append("\nTHEO CLASS")
+            text.extend(f"  {key:20}: {value}" for key, value in summary["classes"].items())
+            text.append("\nNGUỒN NHÃN")
+            text.extend(f"  {key:20}: {value}" for key, value in summary["sources"].items())
         self._replace_text(self.project_summary, "\n".join(text))
         self._replace_text(self.dataset_info, "\n".join(text[3:]))
         if hasattr(self, "project_guidance_label"):

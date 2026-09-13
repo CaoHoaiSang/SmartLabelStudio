@@ -34,13 +34,18 @@ class DatasetManager:
             for ann in image.annotations:
                 class_counts[ann.class_id] += 1
                 sources[ann.source] += 1
-        return {
+        result = {
             "images": len(project.images),
             "annotations": sum(class_counts.values()),
             "statuses": dict(statuses),
             "classes": {item.name: class_counts[item.id] for item in project.classes},
             "sources": dict(sources),
         }
+        if project.metadata.get("template") == "Hydroponic Slot Condition":
+            from .hydro_statistics import attribute_summary
+            result["image_attributes"] = attribute_summary(
+                project, self.ensure_split_assignment(project, persist=False)["groups"])
+        return result
 
     def split_assignment_path(self, project: Project) -> Path:
         return self.store.project_dir(project) / "split_assignment.json"
@@ -404,6 +409,13 @@ class DatasetManager:
         train_values = [value for value in values if value not in excluded_values]
         if not train_values:
             raise ValueError("Nhóm Classification không còn nhãn train sau khi loại uncertain/not_applicable.")
+        supplements = []
+        if hydro_attribute and scope == "image":
+            from .training_supplements import validated_samples
+            supplements = validated_samples(self.store, project, hydro_attribute,
+                                            self.ensure_split_assignment(project, persist=False)["groups"])
+            if any(value not in train_values for _, value, _ in supplements):
+                raise ValueError("Nhãn ảnh bổ trợ đang bị loại khỏi train; cần kiểm tra lại cấu hình thuộc tính.")
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         export_dir = self._unique_directory(
             self.store.project_dir(project) / "exports",
@@ -482,6 +494,15 @@ class DatasetManager:
                             if not (synthetic_validation and split == "val"):
                                 counts[value] += 1
 
+        supplement_manifest = []
+        for source, value, provenance in supplements:
+            # Added after any compatibility VAL mirror: supplements are TRAIN only.
+            target = export_dir / "train" / class_folders[value] / f"supplement_{provenance['sha256']}.jpg"
+            with Image.open(source) as opened:
+                opened.convert("RGB").save(target, quality=95)
+            counts[value] += 1
+            physical_crops += 1
+            supplement_manifest.append({**provenance, "exportedFile": target.relative_to(export_dir).as_posix()})
         exported = sum(counts.values())
         if not exported:
             raise ValueError(
@@ -506,6 +527,8 @@ class DatasetManager:
             },
             "exported_crops": exported,
             "physical_crops": physical_crops,
+            "training_supplements": supplement_manifest,
+            "supplement_count": len(supplement_manifest),
             "skipped_missing_attribute": skipped_missing,
             "skipped_invalid_geometry": skipped_geometry,
             "seed": seed,
