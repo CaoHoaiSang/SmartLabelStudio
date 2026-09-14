@@ -19,11 +19,14 @@ def filter_fields(project):
     return fields
 
 
-def filter_values(project, field):
+def filter_values(project, field, records=None):
     kind, key = field
-    values = {ANY: None, MISSING: ""}
+    values = {ANY: None}
     if not project or kind == "all":
         return {ANY: None}
+    if any(matches_image(project, record, field=field, value="")
+           for record in (project.images if records is None else records)):
+        values[MISSING] = ""
     if kind == "class":
         values.update({f"{item.name} · #{item.id}": item.id for item in project.classes})
     else:

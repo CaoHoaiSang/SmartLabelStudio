@@ -4,7 +4,7 @@ from unittest.mock import patch
 import unittest
 
 import test_training_supplements as fixtures
-from smartlabel.supplement_review import load_review, preview_path, review_state, save_review, materialize_confirmed_presence
+from smartlabel.supplement_review import load_review, preview_path, review_state, save_review, materialize_confirmed_presence, form_attributes, materialize_missing_defaults
 from smartlabel.training_supplements import sha256, validated_samples, review_attributes
 
 
@@ -14,6 +14,54 @@ class SupplementReviewTests(unittest.TestCase):
 
     def update(self, decision, **kwargs):
         return save_review(self.store, self.project, self.assignment, "s1", decision, sha256(self.path), **kwargs)
+
+    def test_defaults_require_review_before_export_and_repair_is_idempotent(self):
+        self.project.attribute_settings['wilt']['default'] = 'absent'
+        before = deepcopy(self.row)
+        source = self.path.read_bytes()
+        self.assertEqual(form_attributes(self.project, self.row)['wilt'], 'absent')
+        self.assertNotIn('wilt', review_attributes(self.project, self.row))
+        self.assertEqual(source, self.path.read_bytes())
+        data, revision, changed = materialize_missing_defaults(self.store, self.project, sha256(self.path))
+        self.assertEqual(changed, ['s1'])
+        row = data['images'][0]
+        self.assertEqual(row['attributes'], {'plant_presence': 'present', 'yellow_leaf': 'present', 'wilt': 'absent'})
+        self.assertEqual(row['reviewStatus'], 'draft')
+        self.assertFalse(row['enabled'])
+        self.assertEqual(row['reviewHistory'][-1]['previous']['attributes'], before['attributes'])
+        self.assertEqual(validated_samples(self.store, self.project, self.yellow, self.assignment), [])
+        self.assertEqual(materialize_missing_defaults(self.store, self.project, revision)[2], [])
+        self.update('reviewed', attributes=row['attributes'])
+        wilt = next(a for a in self.attrs if a['id'] == 'wilt')
+        self.assertEqual(validated_samples(self.store, self.project, wilt, self.assignment)[0][1], 'absent')
+
+    def test_defaults_preserve_archive_reject_explicit_uncertain_and_conflicts(self):
+        for status in ('archived', 'rejected', 'explicit'):
+            self.row.update(archived=status == 'archived', reviewStatus='rejected' if status == 'rejected' else 'reviewed')
+            if status == 'explicit':
+                self.row['attributes'].update(plant_presence='present', wilt='uncertain')
+            self.save()
+            before = self.path.read_bytes()
+            self.assertEqual(materialize_missing_defaults(self.store, self.project, sha256(self.path))[2], [])
+            self.assertEqual(before, self.path.read_bytes())
+        with self.assertRaisesRegex(ValueError, 'đã thay đổi'):
+            materialize_missing_defaults(self.store, self.project, 'stale')
+        self.path.with_suffix('.review.lock').write_text('other')
+        with self.assertRaisesRegex(ValueError, 'phiên SmartLabel'):
+            materialize_missing_defaults(self.store, self.project, sha256(self.path))
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_preview_cache_does_not_bypass_modified_file_or_approval_verification(self):
+        cache = {}
+        path = preview_path(self.store, self.project, self.row, cache=cache)
+        with patch('smartlabel.supplement_review.sha256', wraps=sha256) as digest:
+            self.assertEqual(preview_path(self.store, self.project, self.row, cache=cache), path)
+            digest.assert_not_called()
+        path.write_bytes(b'changed image')
+        with self.assertRaises(ValueError):
+            preview_path(self.store, self.project, self.row, cache=cache)
+        with self.assertRaises(ValueError):
+            self.update('reviewed')
 
     def test_review_exclusion_reapproval_and_label_correction_reach_export(self):
         project_before = deepcopy(self.project.to_dict())

@@ -102,15 +102,15 @@ class SupplementReviewUiTests(unittest.TestCase):
                    self.app.image_filter, self.app.label_filter_field, self.app.label_filter_value)
         self.assertEqual(len(self.view.rows), 27)
         self.assertIs(self.view.preview, self.app.canvas)
-        self.assertEqual(self.view.values(), {'plant_presence': 'present', 'yellow_leaf': 'present'})
+        self.assertEqual(self.view.values(), {'plant_presence': 'present', 'yellow_leaf': 'present', 'wilt': 'not_applicable'})
         self.assertFalse(hasattr(self.view, 'batch_filter'))
         self.assertFalse(hasattr(self.view, 'stage_filter'))
-        self.filter_attribute('wilt', '')
+        self.filter_attribute('wilt', 'not_applicable')
         self.assertEqual(len(self.view.filtered), 27)
+        self.assertNotIn('', self.app.label_filter_values.values())
         self.filter_attribute('plant_presence', 'present')
         self.assertEqual(len(self.view.filtered), 27)
-        self.filter_attribute('plant_presence', '')
-        self.assertEqual(self.view.filtered, [])
+        self.assertNotIn('', self.app.label_filter_values.values())
         self.app._show_label_workspace('Giàn')
         self.assertFalse(self.view.active)
         self.assertEqual(widgets, (self.app.canvas, self.app.image_list, self.app.attribute_panel,
@@ -244,3 +244,43 @@ class SupplementReviewUiTests(unittest.TestCase):
         self.assertFalse(self.view.active)
         self.assertEqual(self.app.canvas.record.id, 'parent')
         self.assertFalse(self.app.canvas.read_only)
+
+    def test_pending_defaults_review_button_and_shortcut_no_duplicate_approval(self):
+        self.assertEqual(self.view.record_for(self.view.selected).review_status, 'draft')
+        self.assertEqual(self.app.approve_image_button.cget('state'), 'normal')
+        self.view.save('reviewed')
+        self.complete_save()
+        self.assertEqual(self.app.approve_image_button.cget('state'), 'disabled')
+        self.assertEqual(self.app.unapprove_image_button.cget('state'), 'normal')
+        original = manifest_path(self.store, self.hydro).read_bytes()
+        self.app._approve_image_next()
+        self.assertFalse(self.view.busy)
+        self.assertEqual(original, manifest_path(self.store, self.hydro).read_bytes())
+        self.app._next_image()
+        self.assertEqual(self.view.selected['id'], 's1')
+        self.assertEqual(self.app.approve_image_button.cget('state'), 'normal')
+
+    def test_warm_source_switch_reuses_rows_and_never_prompts_for_capture_labels(self):
+        widgets = {row['key']: row['frame'] for row in self.app.image_list.rows}
+        with patch('smartlabel.supplement_review_view.messagebox.askyesno', return_value=False) as confirm:
+            for _ in range(3):
+                self.app._show_label_workspace('Giàn')
+                self.assertEqual(self.app.canvas.record.id, 'parent')
+                self.app._show_label_workspace('Bổ trợ')
+                self.assertEqual(self.app.canvas.record.id, 's0')
+            confirm.assert_not_called()
+        self.assertEqual(widgets, {row['key']: row['frame'] for row in self.app.image_list.rows})
+
+    def test_explicit_clear_survives_reload_and_missing_filter_is_source_specific(self):
+        self.choose('wilt', '')
+        self.assertNotIn('wilt', self.view.values())
+        self.view.reload()
+        self.assertNotIn('wilt', self.view.values())
+        self.filter_attribute('wilt', '')
+        self.assertEqual([r['id'] for r in self.view.filtered], ['s0'])
+        self.app._show_label_workspace('Giàn')
+        self.filter_attribute('wilt', 'absent')
+        self.assertNotIn('', self.app.label_filter_values.values())
+        self.app._show_label_workspace('Bổ trợ')
+        self.assertIn('', self.app.label_filter_values.values())
+        self.assertEqual([r['id'] for r in self.view.filtered], ['s0'])

@@ -6,6 +6,8 @@ from typing import Callable
 import re
 import copy
 import unicodedata
+import os
+from collections import OrderedDict
 
 import customtkinter as ctk
 from PIL import Image
@@ -347,8 +349,17 @@ class ThumbnailList(ctk.CTkScrollableFrame):
         self.rows: list[dict] = []
         self.selected_index = -1
         self.selected_key = None
-        self._row_by_key: dict[object, dict] = {}
-        self._thumbnail_cache: dict[str, ctk.CTkImage] = {}
+        self.cache_limit = 120
+        self._row_by_key = OrderedDict()
+        self._thumbnail_cache = {}
+
+    def clear_cache(self):
+        for row in self._row_by_key.values():
+            row["frame"].destroy()
+        self._row_by_key.clear()
+        self._thumbnail_cache.clear()
+        self.rows = []
+        self.selected_index, self.selected_key = -1, None
 
     def set_items(self, items: list[dict]) -> None:
         """Reconcile visible rows without rebuilding thumbnail widgets.
@@ -359,6 +370,8 @@ class ThumbnailList(ctk.CTkScrollableFrame):
         previous_key = self.selected_key
         previous_keys = [row["key"] for row in self.rows]
         desired_keys = [item["key"] for item in items]
+        if previous_key in self._row_by_key:
+            self._style_selected(self._row_by_key[previous_key], False)
         visible_rows: list[dict] = []
         for item in items:
             key = item["key"]
@@ -368,28 +381,19 @@ class ThumbnailList(ctk.CTkScrollableFrame):
                 self._row_by_key[key] = row
             else:
                 self._configure_item(row, item)
+            self._row_by_key.move_to_end(key)
             visible_rows.append(row)
         if desired_keys != previous_keys:
-            desired = set(desired_keys)
-            # Pagination supplies only the current page. Destroy rows and
-            # thumbnails outside it so browsing a large video never grows the
-            # Tk widget/image cache to thousands of items.
-            for key, row in list(self._row_by_key.items()):
-                if key not in desired:
-                    row["frame"].destroy()
-                    self._row_by_key.pop(key, None)
-                    self._thumbnail_cache.pop(row.get("path", ""), None)
-            # Existing visible rows already keep project order. Insert newly
-            # visible rows immediately before the next desired row.
-            anchor = None
-            for row in reversed(visible_rows):
-                frame = row["frame"]
-                if not frame.winfo_manager():
-                    options = {"fill": "x", "padx": 3, "pady": 4}
-                    if anchor is not None:
-                        options["before"] = anchor
-                    frame.pack(**options)
-                anchor = frame
+            # Keep the two source pages warm, bounded independently of dataset
+            # size. Hidden rows cannot receive selection/delete callbacks.
+            for row in self.rows:
+                row["frame"].pack_forget()
+            for row in visible_rows:
+                row["frame"].pack(fill="x", padx=3, pady=4)
+        while len(self._row_by_key) > max(self.cache_limit, len(items)):
+            _, row = self._row_by_key.popitem(last=False)
+            row["frame"].destroy()
+            self._thumbnail_cache.pop(row["path"], None)
         self.rows = visible_rows
         self.selected_index = -1
         self.selected_key = None
@@ -400,16 +404,26 @@ class ThumbnailList(ctk.CTkScrollableFrame):
                 self.selected_key = previous_key
                 self._style_selected(self.rows[restored], True)
 
+    @staticmethod
+    def _image_signature(image_path):
+        try:
+            stat = os.stat(image_path)
+            return stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size
+        except OSError:
+            return None
+
     def _thumbnail(self, image_path: str):
-        thumbnail = self._thumbnail_cache.get(image_path)
-        if thumbnail is not None:
-            return thumbnail
+        signature = self._image_signature(image_path)
+        cached = self._thumbnail_cache.get(image_path)
+        if cached is not None and cached[0] == signature:
+            return cached[1]
+        self._thumbnail_cache.pop(image_path, None)
         try:
             with Image.open(image_path) as source:
                 preview = source.convert("RGB")
                 preview.thumbnail((78, 62), Image.Resampling.LANCZOS)
             thumbnail = ctk.CTkImage(light_image=preview, dark_image=preview, size=preview.size)
-            self._thumbnail_cache[image_path] = thumbnail
+            self._thumbnail_cache[image_path] = (signature, thumbnail)
             return thumbnail
         except Exception:
             return None
@@ -479,6 +493,7 @@ class ThumbnailList(ctk.CTkScrollableFrame):
             "count": item.get("count", 0),
             "display_name": display_name,
             "path": image_path,
+            "image_signature": self._image_signature(image_path),
         }
         for widget in (row, thumb_label, center, name_label, info_label, actions, badge):
             widget.bind("<Button-1>", lambda _event, key=item["key"]: self._select_key(key), add="+")
@@ -501,10 +516,13 @@ class ThumbnailList(ctk.CTkScrollableFrame):
             row["status_tooltip"].set_text(f"Trạng thái ảnh: {status_style['label']}")
             row["status"] = status
         image_path = str(item["path"])
-        if image_path != row["path"]:
+        signature = self._image_signature(image_path)
+        if image_path != row["path"] or signature != row["image_signature"]:
+            self._thumbnail_cache.pop(row["path"], None)
             thumbnail = self._thumbnail(image_path)
             row["thumb"].configure(image=thumbnail, text="" if thumbnail else "Không có ảnh")
             row["path"] = image_path
+            row["image_signature"] = signature
 
     def _select_key(self, key) -> None:
         index = next((i for i, row in enumerate(self.rows) if row["key"] == key), -1)

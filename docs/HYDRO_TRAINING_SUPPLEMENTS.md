@@ -15,7 +15,8 @@ Mở **GÁN NHÃN → Bổ trợ** ở bên phải **DANH SÁCH ẢNH**. Hai ngu
 chính các widget hiện hữu: danh sách thumbnail/phân trang, bộ lọc, canvas,
 zoom %, căn giữa, thuộc tính, ghi chú và các nút duyệt. Không còn màn hình
 Bổ trợ riêng hoặc bộ lọc Đợt/tuổi cây. Ba ô lọc giống Giàn: **trạng thái →
-nhãn/thuộc tính → giá trị**, gồm Chưa gán giá trị. Bổ trợ giữ thêm lựa chọn
+nhãn/thuộc tính → giá trị**. Chỉ có **Chưa gán giá trị** khi nguồn ảnh đang
+xem còn thiếu giá trị của thuộc tính đã chọn. Bổ trợ giữ thêm lựa chọn
 **Đã lưu trữ** trong bộ lọc trạng thái để khôi phục ảnh đã ẩn.
 
 Dữ liệu Bổ trợ vẫn đọc sidecar, không đưa ảnh gốc hoặc biến thể vào
@@ -28,6 +29,8 @@ hình học và phím Delete/Undo không tác động vào ảnh Giàn đang ch�
   Dùng cùng dropdown/ngữ nghĩa của Giàn. Chọn Không có cây/Chưa chắc/bỏ Hiện
   diện đưa tình trạng về Không áp dụng; không suy Héo=Không từ ảnh gốc.
 - **Duyệt & tiếp** lưu các nhãn đủ điều kiện, bật train và chuyển ảnh kế tiếp.
+  Ảnh đã duyệt khóa nút này; dùng **Ảnh sau** để đi tiếp. Sửa nhãn hoặc bỏ
+  duyệt mới mở lại thao tác duyệt, tránh lưu lại lịch sử không có thay đổi.
   Bổ trợ giữ contract duyệt từng thuộc tính: mỗi classifier chỉ nhận giá trị
   Có/Không của chính nó. Mục thiếu/Chưa chắc/Không áp dụng không train.
 - **Bỏ duyệt / Từ chối** giữ nhãn đã lưu và tắt train. **Khôi phục** đưa về
@@ -38,6 +41,42 @@ hình học và phím Delete/Undo không tác động vào ảnh Giàn đang ch�
 - Lưu chạy ở worker, khóa đổi ảnh/nguồn/dự án trong khi ghi. Xung đột revision
   hoặc lỗi ghi giữ thay đổi trên form và báo lỗi; không ghi đè phiên khác.
   Ghi chú chưa lưu được hỏi trước khi chuyển nguồn/dự án hoặc đóng.
+
+### Mặc định và chuyển nguồn ảnh — cập nhật 14/09/2026
+
+Bổ trợ điền thuộc tính ảnh còn thiếu theo mặc định hợp lệ tại **Quản lý nhãn,
+thuộc tính**. Giữ giá trị đã gán, kể cả Chưa chắc/Không áp dụng. Hiện diện
+thực tế của bản ghi quyết định giá trị Không áp dụng cho tình trạng mới
+được điền; không chép thuộc tính từ ảnh gốc và không dùng tên mã cố định.
+Không có mặc định hợp lệ thì để trống. Người dùng chủ động bỏ một giá trị
+vẫn được giữ trống khi tải lại; lúc đó bộ lọc Chưa gán giá trị xuất hiện.
+
+Mặc định mới là nhãn chờ xác nhận. Ảnh thiếu nhãn có mặc định hiển thị Bản
+nháp; duyệt trong UI mới lưu và bật dữ liệu cho train. API sửa dữ liệu cũ
+`materialize_missing_defaults` lưu nhãn còn thiếu, tắt train/chuyển nháp,
+giữ nhãn cũ/lịch sử/ảnh lưu trữ và kiểm revision/lock trước khi thay manifest.
+Không tự đổi nhãn đã lưu khi đổi giá trị mặc định. Export không lấy mặc định
+chưa lưu từ UI làm bằng chứng; snapshot/model cũ không thay đổi.
+
+Áp dụng dữ liệu ngày 14/09: giữ yellow_01 đã được người dùng gán đủ nhãn và
+7 hàng lưu trữ. Điền Héo=`absent` theo cấu hình cho 107 hàng còn thiếu,
+chuyển 107 hàng về nháp/tắt train; một hàng đã duyệt giữ bật. Giữ mọi nhãn
+đã lưu trước đó và hash 1.422 tệp ảnh/project/split/model/workspace. Có
+backup manifest và lịch sử từng hàng; không chạy train. Cần xem ảnh và duyệt
+lại nhãn mới trước lần train tiếp theo, không khôi phục manifest cũ ghi đè.
+
+Danh sách chung giữ tối đa 120 hàng thumbnail gần dùng (hoặc số hàng của
+trang hiện hành nếu lớn hơn), ẩn/tái sử dụng khi chuyển nguồn; xóa cache khi
+đổi project, làm mới thumbnail khi tệp thay đổi. Cache kiểm preview tối đa
+150 đường dẫn có SHA và thời điểm/kích thước tệp; tải lại chủ động làm mới.
+Duyệt/export vẫn kiểm hash và nguồn đầy đủ. Không so nhãn Giàn với ảnh Bổ
+trợ cũ để hỏi nhầm chưa lưu. Không dựng danh sách hai lần khi chọn ảnh.
+
+Đo đọc dữ liệu thật, 50 ảnh/trang tại 1180×720 với cProfile: median chuyển
+Bổ trợ từ 4,7427 xuống 0,6309 giây, Giàn từ 2,5022 xuống 0,3783 giây qua
+ba vòng. Lượt Bổ trợ đầu chưa có cache vẫn 4,412 giây; các lượt dùng lại
+trang đã tải 0,1347–0,6309 giây. Đây là đo tại Windows hiện tại, không phải
+cam kết thời gian cho mọi máy/dataset. Lỗi hỏi nhãn chưa lưu giảm từ 2 về 0.
 
 ### Hiện diện và nhãn tình trạng
 
@@ -50,10 +89,10 @@ Giá trị hiện diện đã gán rõ luôn được giữ; nếu mâu thuẫn 
 Khi người dùng sửa/bỏ Hiện diện, xác nhận cũ được cập nhật hoặc xóa theo,
 không tự xuất hiện trở lại từ trường cũ.
 
-Dữ liệu hiện hành: 108 ảnh làm việc, 7 đối chứng xanh lưu trữ. Một ảnh đã có
+Dữ liệu ở mốc sửa Hiện diện trước bổ sung mặc định: 108 ảnh làm việc, 7 đối chứng xanh lưu trữ. Một ảnh đã có
 nhãn Hiện diện do người dùng gán; sửa một lần chuyển 107 xác nhận cũ còn lại
 thành nhãn Có cây, giữ nguyên Lá vàng, trạng thái duyệt và enablement. Có
-backup, revision, history và kiểm hash ảnh/project/split/model. Preflight mới:
+backup, revision, history và kiểm hash ảnh/project/split/model. Preflight lúc đó:
 Hiện diện 108, Lá vàng 108, Héo 0. Không chạy train hoặc thay model hiện hành.
 Ảnh tổng hợp chỉ vào TRAIN; VAL/TEST vẫn giữ nguồn ảnh thật độc lập.
 

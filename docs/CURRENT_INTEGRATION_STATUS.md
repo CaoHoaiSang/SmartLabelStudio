@@ -1,6 +1,28 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 14/09/2026
 
-## Hiện hành: Một giao diện gán nhãn, hai nguồn ảnh — 14/09/2026
+## Hiện hành: Mặc định, duyệt và tốc độ chuyển nguồn ảnh — 14/09/2026
+
+Nhánh `fix/supplement-defaults-and-switch-performance`, từ `d357be2`.
+Bổ trợ khóa Duyệt & tiếp khi ảnh đã duyệt; phím tắt không ghi lịch sử trùng.
+Điền thuộc tính còn thiếu theo mặc định cấu hình, giữ nhãn đã gán/chủ động
+xóa. Nhãn mặc định mới cần duyệt trước train; không suy Héo từ ảnh gốc.
+Chưa gán giá trị chỉ hiện khi nguồn đang xem thực sự thiếu giá trị tương ứng.
+Giàn/Chai giữ nhãn cũ và bộ lọc đúng phạm vi ảnh/vật thể.
+
+Sửa hỏi nhầm chưa lưu khi trở lại Bổ trợ, bỏ render lặp, giữ cache có giới
+hạn cho thumbnail và kiểm preview. Duyệt/export vẫn kiểm nguồn/hash đầy đủ.
+Median 3 vòng chuyển Bổ trợ 4,7427 → 0,6309 giây, Giàn 2,5022 → 0,3783 giây.
+Lượt Bổ trợ đầu chưa có cache vẫn 4,412 giây. Mở lại Studio để nạp code mới.
+Đã bổ sung Héo=Không theo cấu hình vào 107 ảnh còn thiếu, chuyển nháp/tắt
+train để duyệt lại; giữ nguyên yellow_01 đã có đủ nhãn và 7 ảnh lưu trữ.
+1.422 tệp ảnh/project/split/model/workspace ngoài tác vụ giữ hash; có backup
+manifest và lịch sử từng hàng. Model/snapshot cũ không đổi, chưa chạy train.
+Full suite 239/239 đạt (199,523 giây), gồm defaults không ghi đè nhãn, duyệt/
+export, Hydro/Chai, nguồn ảnh/bộ lọc, cache giới hạn và tệp đổi/xóa.
+Sau guard render cuối, 11/11 test UI đạt (38,944 giây).
+[Quy tắc mặc định, thao tác và giới hạn](HYDRO_TRAINING_SUPPLEMENTS.md).
+
+## Mốc trước: Một giao diện gán nhãn, hai nguồn ảnh — 14/09/2026
 
 Nhánh `fix/supplement-shared-label-workspace`, kế thừa `8f6e4ac`.
 Giàn/Bổ trợ dùng cùng widget danh sách, bộ lọc trạng thái/thuộc tính/giá trị,

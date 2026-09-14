@@ -890,6 +890,8 @@ class SmartLabelApp(ctk.CTk):
 
     def _prepare_project_context(self, project: Project) -> None:
         self._show_label_workspace("Danh sách ảnh", force=True)
+        if self.project is None or self.project.id != project.id:
+            self.image_list.clear_cache()
         self.supplement_view.set_project(project if is_hydroponic_project(project) else None)
         self.project = project
         view = self.project_views.get(project.id, {})
@@ -1704,13 +1706,22 @@ class SmartLabelApp(ctk.CTk):
 
     def _refresh_label_filters(self):
         self.label_filter_fields = image_filters.filter_fields(self.project)
-        self.label_filter_field.configure(values=list(self.label_filter_fields))
+        fields = list(self.label_filter_fields)
+        if self.label_filter_field.cget("values") != fields:
+            self.label_filter_field.configure(values=fields)
         if self.label_filter_field.get() not in self.label_filter_fields:
             self.label_filter_field.set(image_filters.ALL)
         field = self.label_filter_fields[self.label_filter_field.get()]
-        self.label_filter_values = image_filters.filter_values(self.project, field)
-        self.label_filter_value.configure(values=list(self.label_filter_values),
-                                          state="disabled" if field[0] == "all" else "normal")
+        records = None
+        if self._supplement_active():
+            archived = self.image_filter.get() == "Đã lưu trữ"
+            records = (self.supplement_view.record_for(row) for row in self.supplement_view.rows
+                       if bool(row.get("archived")) == archived)
+        self.label_filter_values = image_filters.filter_values(self.project, field, records)
+        values = list(self.label_filter_values)
+        state = "disabled" if field[0] == "all" else "normal"
+        if self.label_filter_value.cget("values") != values or self.label_filter_value.cget("state") != state:
+            self.label_filter_value.configure(values=values, state=state)
         if self.label_filter_value.get() not in self.label_filter_values:
             self.label_filter_value.set(image_filters.ANY)
 

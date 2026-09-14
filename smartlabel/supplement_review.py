@@ -9,6 +9,7 @@ import tempfile
 
 from .hydro_labels import model_attributes
 from .label_schema import meaning_for
+from .attribute_defaults import configured_image_defaults, fill_missing_image_defaults
 from .training_supplements import manifest_path, read_manifest, review_attributes, sha256, validate_manifest_samples, validate_review_labels
 
 
@@ -102,13 +103,71 @@ def load_review(store, project):
     return data, before
 
 
-def preview_path(store, project, row):
+def form_attributes(project, row):
+    """UI defaults are pending labels, never implicit training evidence."""
+    return fill_missing_image_defaults(project, review_attributes(project, row),
+                                       suppressed=row.get("defaultSuppressedAttributes", ()))
+
+
+def materialize_missing_defaults(store, project, expected_revision):
+    """Explicitly fill missing configured defaults and require another review."""
+    if project is None or project.metadata.get("template") != "Hydroponic Slot Condition":
+        raise ValueError("Chỉ áp dụng cho dự án Hydro.")
+    path = manifest_path(store, project)
+    lock = path.with_suffix(".review.lock")
+    try:
+        handle = lock.open("x", encoding="utf-8")
+    except FileExistsError:
+        raise ValueError("Một phiên SmartLabel khác đang lưu ảnh bổ trợ.") from None
+    try:
+        with handle:
+            handle.write(str(os.getpid()))
+        data, revision = load_review(store, project)
+        if data is None or revision != expected_revision:
+            raise ValueError("Danh sách đã thay đổi; chưa bổ sung mặc định.")
+        changed = []
+        for row in data["images"]:
+            if row.get("archived") or row.get("reviewStatus") == "rejected":
+                continue
+            values = form_attributes(project, row)
+            if values == review_attributes(project, row):
+                continue
+            previous = {key: deepcopy(row.get(key)) for key in
+                        ("attributes", "presenceMeaning", "reviewStatus", "enabled")}
+            row.update(attributes=values, reviewStatus="draft", enabled=False)
+            presence = next(a for a in model_attributes(project) if a['role'] == 'presence')
+            row['presenceMeaning'] = meaning_for(presence, values.get(presence['id']))
+            validate_review_labels(project, row)
+            history = row.setdefault("reviewHistory", [])
+            if not isinstance(history, list):
+                raise ValueError("Lịch sử duyệt không hợp lệ; chưa lưu thay đổi.")
+            history.append({"at": datetime.now(timezone.utc).isoformat(), "decision": "fill_missing_defaults",
+                            "by": "SmartLabel configured defaults", "previous": previous,
+                            "reason": "Bổ sung giá trị mặc định còn thiếu; cần duyệt lại trước khi train."})
+            changed.append(row['id'])
+        if changed:
+            revision = _replace_manifest(path, data, revision)
+        return data, revision, changed
+    finally:
+        lock.unlink(missing_ok=True)
+
+
+def preview_path(store, project, row, *, cache=None):
     root = manifest_path(store, project).parent.resolve()
     path = (root / str(row.get("file", ""))).resolve()
     if not path.is_relative_to(root) or not path.is_file() or path == manifest_path(store, project):
         raise ValueError("Không tìm thấy ảnh bổ trợ hợp lệ trong dự án.")
+    stat = path.stat()
+    signature = (row.get("sha256"), stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size)
+    # Only preview may cache. Approval/export still hash original files fully.
+    if cache is not None and cache.get(path) == signature:
+        return path
     if sha256(path) != row.get("sha256"):
         raise ValueError("Tệp ảnh đã thay đổi so với ảnh được ghi nhận; chưa thể duyệt.")
+    if cache is not None:
+        if len(cache) >= 150:
+            cache.pop(next(iter(cache)))
+        cache[path] = signature
     return path
 
 
@@ -139,7 +198,7 @@ def save_review(store, project, assignments, row_id, decision, expected_revision
         if row is None:
             raise ValueError("Ảnh không còn trong danh sách bổ trợ.")
         previous = {key: deepcopy(row.get(key)) for key in
-                    ("enabled", "archived", "reviewStatus", "attributes", "presenceMeaning", "reviewNote", "reviewedBy", "reviewedAt", "otherAbnormal")}
+                    ("enabled", "archived", "reviewStatus", "attributes", "presenceMeaning", "reviewNote", "reviewedBy", "reviewedAt", "otherAbnormal", "defaultSuppressedAttributes")}
         # Exclusion stays possible even for a damaged source. Only approval or
         # an explicit draft-save accepts form changes; other decisions keep labels.
         if attributes is not None and (decision == "reviewed" or (decision == "draft" and save_draft_labels)):
@@ -147,6 +206,9 @@ def save_review(store, project, assignments, row_id, decision, expected_revision
             presence = next(a for a in model_attributes(project) if a["role"] == "presence")
             row["presenceMeaning"] = meaning_for(presence, attributes.get(presence["id"])) if isinstance(attributes, dict) else None
             validate_review_labels(project, row)
+            # A deliberate clear must survive reload even when a default exists.
+            row["defaultSuppressedAttributes"] = sorted(
+                key for key in configured_image_defaults(project) if not attributes.get(key))
             if other_abnormal is not None:
                 row["otherAbnormal"] = str(other_abnormal).strip()
         row.update(enabled=decision == "reviewed", archived=decision == "archived",

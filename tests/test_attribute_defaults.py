@@ -5,7 +5,7 @@ import unittest
 
 from PIL import Image
 
-from smartlabel.attribute_defaults import image_attribute_defaults
+from smartlabel.attribute_defaults import image_attribute_defaults, fill_missing_image_defaults
 from smartlabel.hydro_labels import install_label_schema, model_attributes
 from smartlabel.hydroponic import apply_hydroponic_slot_template
 from smartlabel.label_schema import make_label_schema
@@ -60,6 +60,24 @@ class AttributeDefaultsTests(unittest.TestCase):
                 defaults = image_attribute_defaults(self.project)
                 self.assertEqual(defaults["yellow_leaf"], "custom_not_applicable")
                 self.assertEqual(defaults["wilt"], "custom_not_applicable")
+
+    def test_fill_only_missing_valid_image_defaults_and_keep_explicit_values(self):
+        self.project.attribute_schema = {'scene': ['bright', 'dark'], 'object': ['ok'], 'bad': ['ok']}
+        self.project.attribute_settings = {'scene': {'scope': 'image', 'default': 'bright'},
+            'object': {'scope': 'annotation_crop', 'default': 'ok'}, 'bad': {'scope': 'image', 'default': 'invalid'}}
+        self.assertEqual(fill_missing_image_defaults(self.project, {}), {'scene': 'bright'})
+        self.assertEqual(fill_missing_image_defaults(self.project, {'scene': 'dark'}), {'scene': 'dark'})
+        self.assertEqual(fill_missing_image_defaults(self.project, {}, suppressed=['scene']), {})
+
+    def test_actual_presence_controls_only_new_condition_defaults(self):
+        apply_hydroponic_slot_template(self.project)
+        self.project.attribute_settings['wilt']['default'] = 'absent'
+        values = {'plant_presence': 'present', 'yellow_leaf': 'uncertain'}
+        self.assertEqual(fill_missing_image_defaults(self.project, values), {**values, 'wilt': 'absent'})
+        self.assertNotIn('wilt', values)
+        self.assertEqual(fill_missing_image_defaults(self.project, {'plant_presence': 'absent'})['wilt'], 'not_applicable')
+        self.project.attribute_settings['wilt']['default'] = ''
+        self.assertNotIn('wilt', fill_missing_image_defaults(self.project, values))
 
 
 if __name__ == "__main__":
