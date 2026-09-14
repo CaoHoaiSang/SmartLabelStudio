@@ -39,7 +39,7 @@ def summary_lines(store, project):
         return ["", f"ẢNH BỔ TRỢ TRAIN: {len(active)} đang bật"
                 f" · Tổng hợp {counts['synthetic']} · Nguồn ngoài {counts['external']}",
                 "  Tách khỏi ảnh giàn và thống kê TEST; kiểm tra nguồn, nhãn và tệp khi xuất train.",
-                f"  Xem ảnh / bật tắt: {manifest_path(store, project)}"]
+                "  Xem và duyệt tại GÁN NHÃN → Ảnh bổ trợ."]
     except (OSError, ValueError, TypeError, AttributeError) as exc:
         return ["", f"Ảnh bổ trợ cần kiểm tra: {exc}"]
 
@@ -58,6 +58,13 @@ def validated_samples(store, project, attribute, assignments):
     if project.metadata.get("template") != "Hydroponic Slot Condition":
         return []
     data = read_manifest(store, project)
+    return validate_manifest_samples(store, project, attribute, assignments, data)
+
+
+def validate_manifest_samples(store, project, attribute, assignments, data):
+    """Validate a candidate sidecar without writing it, using the export contract."""
+    if project.metadata.get("template") != "Hydroponic Slot Condition":
+        return []
     if data is None:
         return []
     if not any(row.get("enabled") is True for row in data["images"]):

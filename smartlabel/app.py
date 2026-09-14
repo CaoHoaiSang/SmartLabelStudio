@@ -42,6 +42,8 @@ from .frame_filter import latest_import_records
 from .model_export import RknnExportConfig, RknnExportJob, diagnose_rknn_environment
 from .models import Annotation, Project
 from .project_store import ProjectStore
+from .supplement_review_view import SupplementReviewView
+from .hydro_overview import HydroOverview
 from .quality import inspect_project
 from .split_dialog import SplitManagerDialog
 from .training import TrainingConfig, TrainingJob
@@ -219,6 +221,7 @@ class SmartLabelApp(ctk.CTk):
         self.app_settings = self._load_app_settings()
         self.project: Project | None = None
         self.import_in_progress = False
+        self.supplement_review_running = False
         self.current_index = -1
         self.image_page_size = 50
         self.image_page = 0
@@ -594,6 +597,7 @@ class SmartLabelApp(ctk.CTk):
         center.pack(side="left", fill="both", expand=True, padx=5, pady=8)
         self.project_summary = ctk.CTkTextbox(center, font=("Consolas", 14), fg_color="#0a131c", corner_radius=10)
         self.project_summary.pack(fill="both", expand=True, padx=14, pady=(4, 14))
+        self.hydro_overview = HydroOverview(center, COLORS, self._open_training_supplements)
 
         right = self._card(tab, "NGUYÊN TẮC")
         right.pack(side="right", fill="y", padx=(5, 8), pady=8)
@@ -842,11 +846,11 @@ class SmartLabelApp(ctk.CTk):
     def _can_change_project(self) -> bool:
         # Keep ownership through completion callbacks, not just while the
         # subprocess is alive. Those callbacks register models on self.project.
-        busy = (self.import_in_progress or self.auto_label_running or self.evaluation_running
+        busy = (self.import_in_progress or self.supplement_review_running or self.auto_label_running or self.evaluation_running
                 or self.running_training_task or self.batch_training_active
                 or self.running_rknn_task or self.rknn_batch_active or self.hydro_export_running)
         if busy:
-            messagebox.showinfo("Dự án đang xử lý", "Hãy đợi nhập ảnh, Auto-Label, train hoặc xuất/đánh giá model hoàn tất trước khi đổi dự án. Nếu đã nhấn Dừng, hãy đợi thông báo kết thúc.", parent=self)
+            messagebox.showinfo("Dự án đang xử lý", "Hãy đợi nhập/duyệt ảnh bổ trợ, Auto-Label, train hoặc xuất/đánh giá model hoàn tất trước khi đổi dự án. Nếu đã nhấn Dừng, hãy đợi thông báo kết thúc.", parent=self)
         return not busy
 
     def _remember_project_view(self) -> None:
@@ -863,6 +867,8 @@ class SmartLabelApp(ctk.CTk):
         }
 
     def _prepare_project_context(self, project: Project) -> None:
+        self._show_label_workspace("Danh sách ảnh", force=True)
+        self.supplement_view.set_project(project if is_hydroponic_project(project) else None)
         self.project = project
         view = self.project_views.get(project.id, {})
         self.image_filter.set(view.get("filter", "Tất cả"))
@@ -903,6 +909,9 @@ class SmartLabelApp(ctk.CTk):
         self.deploy_status_label.configure(text="Chưa xuất model trong phiên này", text_color=COLORS["muted"])
 
     def _change_project_context(self, project: Project) -> None:
+        if not self.supplement_view.allow_leave():
+            self._refresh_project_menu()
+            return
         previous = self.project
         self._remember_project_view()
         try:
@@ -931,6 +940,10 @@ class SmartLabelApp(ctk.CTk):
                 logger.exception("Previous project cannot be displayed either; clearing editing context")
             if not restored:
                 self.project = None
+                self.supplement_view.set_project(None)
+                self._apply_project_context_visibility()
+                self.hydro_overview.pack_forget()
+                self.project_summary.pack(fill="both", expand=True, padx=14, pady=(4, 14))
                 self.canvas.active_class_id = None
                 self.show_attribute_panel.set(False)
                 self._clear_current_image()
@@ -1246,6 +1259,13 @@ class SmartLabelApp(ctk.CTk):
 
     def _apply_project_context_visibility(self) -> None:
         hydro = is_hydroponic_project(self.project)
+        if hydro:
+            if not self.label_workspace_switch.winfo_manager():
+                self.label_workspace_switch.pack(fill="x", padx=8, pady=(6, 4), before=self.label_workspace_host)
+        else:
+            self._show_label_workspace("Danh sách ảnh", force=True)
+            self.label_workspace_switch.pack_forget()
+            self.supplement_view.set_project(None)
         supplements_button = getattr(self, "training_supplements_button", None)
         if supplements_button is not None:
             if hydro and not supplements_button.winfo_manager():
@@ -1313,7 +1333,17 @@ class SmartLabelApp(ctk.CTk):
 
     # ---------- labeling ----------
     def _build_label_tab(self) -> None:
-        tab = self.tabs.tab("GÁN NHÃN")
+        label_tab = self.tabs.tab("GÁN NHÃN")
+        self.label_workspace_switch = ctk.CTkSegmentedButton(label_tab,
+            values=["Danh sách ảnh", "Ảnh bổ trợ"], command=self._show_label_workspace,
+            selected_color="#256481", selected_hover_color="#327b9c", height=34)
+        self.label_workspace_switch.set("Danh sách ảnh")
+        self.label_workspace_host = ctk.CTkFrame(label_tab, fg_color="transparent")
+        self.label_workspace_host.pack(fill="both", expand=True)
+        self.capture_workspace = ctk.CTkFrame(self.label_workspace_host, fg_color="transparent")
+        self.capture_workspace.pack(fill="both", expand=True)
+        self.supplement_view = SupplementReviewView(self.label_workspace_host, self, COLORS)
+        tab = self.capture_workspace
         geometry_bar = ctk.CTkFrame(tab, height=44, corner_radius=10, fg_color="#0d1924")
         geometry_bar.pack(fill="x", padx=8, pady=(8, 3))
         ctk.CTkLabel(geometry_bar, text="LOẠI NHÃN", text_color=COLORS["muted"], font=("Segoe UI Semibold", 11)).pack(side="left", padx=(12, 8))
@@ -4405,6 +4435,9 @@ class SmartLabelApp(ctk.CTk):
         return ready
 
     def _start_training_for_current_mode(self) -> None:
+        if self.supplement_review_running:
+            messagebox.showinfo("Đang lưu ảnh bổ trợ", "Hãy chờ duyệt ảnh bổ trợ hoàn tất trước khi train.", parent=self)
+            return
         if self.auto_label_running or self.evaluation_running:
             messagebox.showinfo("Dự án đang xử lý", "Hãy chờ Auto-Label/Đánh giá kết thúc trước khi train.", parent=self)
             return
@@ -5037,6 +5070,8 @@ class SmartLabelApp(ctk.CTk):
             self.canvas.active_class_id = None
             self._clear_current_image()
             self._apply_hydro_metadata_visibility()
+            self.hydro_overview.pack_forget()
+            self.project_summary.pack(fill="both", expand=True, padx=14, pady=(4, 14))
             self._replace_text(self.project_summary, "Chưa có dự án. Nhấn Dự án mới để bắt đầu.")
             self._replace_text(self.dataset_info, "Chưa có dữ liệu.")
         self._refresh_hardware()
@@ -5046,15 +5081,26 @@ class SmartLabelApp(ctk.CTk):
     def _open_training_supplements(self) -> None:
         if not is_hydroponic_project(self.project):
             return
-        from .training_supplements import manifest_path
-        path = manifest_path(self.store, self.project)
-        if not path.is_file():
-            messagebox.showinfo("Ảnh bổ trợ train", "Dự án chưa có ảnh bổ trợ. Ảnh giàn vẫn được train bình thường.", parent=self)
+        self.tabs.set("GÁN NHÃN")
+        self._show_label_workspace("Ảnh bổ trợ")
+
+    def _show_label_workspace(self, name, *, force=False):
+        if not force and not self.supplement_view.allow_leave():
+            self.label_workspace_switch.set("Ảnh bổ trợ")
             return
-        try:
-            os.startfile(str(path.parent))
-        except (AttributeError, OSError) as exc:
-            messagebox.showerror("Không mở được thư mục", str(exc), parent=self)
+        supplemental = name == "Ảnh bổ trợ" and is_hydroponic_project(self.project)
+        self.label_workspace_switch.set("Ảnh bổ trợ" if supplemental else "Danh sách ảnh")
+        self.capture_workspace.pack_forget()
+        self.supplement_view.pack_forget()
+        if supplemental:
+            self.supplement_view.set_project(self.project)
+            self.supplement_view.pack(fill="both", expand=True, padx=8, pady=(4, 8))
+            self.supplement_view.reload()
+            # Hidden capture-canvas shortcuts (Delete / Undo) must not edit a
+            # real annotation while the operator is reviewing a supplement.
+            self.supplement_view.preview.focus_set()
+        else:
+            self.capture_workspace.pack(fill="both", expand=True)
 
     def _refresh_project_statistics(self) -> None:
         if not self.project or not hasattr(self, "project_summary") or not hasattr(self, "dataset_info"):
@@ -5084,6 +5130,13 @@ class SmartLabelApp(ctk.CTk):
             text.append("\nNGUỒN NHÃN")
             text.extend(f"  {key:20}: {value}" for key, value in summary["sources"].items())
         self._replace_text(self.project_summary, "\n".join(text))
+        if hydro:
+            self.project_summary.pack_forget()
+            self.hydro_overview.pack(fill="both", expand=True, padx=14, pady=(4, 14))
+            self.hydro_overview.render(self.store, self.project, summary)
+        else:
+            self.hydro_overview.pack_forget()
+            self.project_summary.pack(fill="both", expand=True, padx=14, pady=(4, 14))
         self._replace_text(self.dataset_info, "\n".join(text[3:]))
         if hasattr(self, "project_guidance_label"):
             if hydro:
@@ -5407,6 +5460,11 @@ class SmartLabelApp(ctk.CTk):
             self.after(100, self._drain_events)
 
     def _on_close(self) -> None:
+        if self.supplement_review_running:
+            messagebox.showinfo("Đang lưu ảnh bổ trợ", "Hãy chờ lưu kết quả duyệt hoàn tất rồi đóng ứng dụng.", parent=self)
+            return
+        if not self.supplement_view.allow_leave():
+            return
         if self.auto_label_running or self.evaluation_running:
             if self.auto_label_running:
                 self._stop_auto_label()

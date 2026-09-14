@@ -1,6 +1,31 @@
-# Trạng thái tích hợp HydroFlow ngày 10 tháng 9 năm 2026
+# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 14/09/2026
 
-## Thêm 64 ảnh vàng từ ảnh gốc khác nhau — 14/09/2026
+## Xem/duyệt ảnh bổ trợ trong SmartLabel và Tổng quan mới — 14/09/2026
+
+Nhánh `feat/supplement-review-and-overview`, kế thừa `9235460`.
+GÁN NHÃN có chuyển đổi **Danh sách ảnh / Ảnh bổ trợ** riêng cho Hydro.
+Ảnh bổ trợ đọc sidecar hiện có, không nhập trùng ảnh gốc: thumbnail phân trang,
+lọc trạng thái/đợt/tuổi/nhãn, preview phóng to/kéo, nguồn và trạng thái duyệt.
+Cho sửa giá trị nhãn đã có rồi Duyệt & dùng train; Từ chối/Chờ duyệt tắt ảnh
+khỏi export mới. Snapshot/model cũ giữ nguyên. Ghi sidecar atomic, kiểm revision,
+giữ lịch sử duyệt và dùng lại validator export; không sửa project/split/ảnh.
+
+Tổng quan Hydro thay văn bản dày bằng số chính và thẻ thuộc tính Có/Không,
+chi tiết Train/Val/Test có thể mở, ảnh bổ trợ thống kê riêng. Chai vẫn dùng
+thống kê hình học và không hiện chuyển đổi bổ trợ. Không đổi contract model.
+Chi tiết thao tác và kiểm chứng tại [hướng dẫn](HYDRO_TRAINING_SUPPLEMENTS.md).
+
+Kiểm Windows: 212/212 test toàn bộ đạt (164,867 giây); 13 test mới bao gồm
+duyệt/từ chối/sửa nhãn tới export, xung đột revision, tệp lỗi, ghi atomic,
+chuyển Hydro/Chai và bố cục Tk ở 1180×720, 1600×900. Kiểm đọc dữ liệu thật:
+1.297 ảnh giàn, đúng 115 ảnh tổng hợp/115 đường dẫn riêng; Lá vàng nhận 115,
+Hiện diện/Héo nhận 0; project/split/manifest/các PT giữ hash. Chưa train mới.
+Công cụ chụp cửa sổ Windows báo `SetIsBorderRequired` / `0x80004002`, nên
+chưa đối chiếu ảnh chụp UI; không coi kiểm bố cục Tk là nghiệm thu thị giác.
+Sau bổ sung chặn phím tắt của canvas ảnh giàn khi chuyển sang ảnh bổ trợ,
+chạy lại 13/13 test chức năng mới đạt (15,150 giây).
+
+## Mốc trước: thêm 64 ảnh vàng từ ảnh gốc khác nhau — 14/09/2026
 
 Nhánh `feat/hydro-yellow-mature-diversity-64`, kế thừa `82aac1d`.
 Đã tạo/duyệt/cài 64 ảnh vàng, một biến thể mỗi ảnh gốc chưa dùng; 48 ảnh

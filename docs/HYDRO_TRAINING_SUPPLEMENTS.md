@@ -1,6 +1,6 @@
 # Tổng quan thuộc tính và ảnh bổ trợ Hydro
 
-Ngày 13/09/2026. Source tiếp nối công cụ Hydro/Chai hiện có, không đổi contract model/bundle.
+Ngày 14/09/2026. Source tiếp nối công cụ Hydro/Chai hiện có, không đổi contract model/bundle.
 
 Tổng quan Hydro đếm **giá trị thuộc tính trên ảnh rọ đã duyệt**, thay cho số
 khung hình học thường bằng 0. Mỗi thuộc tính có Có/Không/Chưa chắc/Không áp dụng,
@@ -9,15 +9,44 @@ thiếu giá trị và số ảnh chưa duyệt/bị loại. Bảng TRAIN/VAL/TE
 Mặc định trên ảnh chưa duyệt không được coi là nhãn đã duyệt. Tập TEST thiếu
 một lớp được nhắc rõ. Chai nhựa giữ thống kê hình học/Class/nguồn nhãn.
 
+## Giao diện xem và duyệt — 14/09/2026
+
+Mở **GÁN NHÃN → Ảnh bổ trợ**, ngay sau **Danh sách ảnh**. Nút **Xem ảnh bổ trợ
+train** ở Dự án và liên kết ở Tổng quan cũng mở cùng vùng này. Danh sách chỉ
+đọc các ảnh trong sidecar, không đưa ảnh gốc trở lại danh sách và không tạo
+capture mới. Có lọc trạng thái, đợt ảnh, tuổi cây, nhãn; mỗi trang tối đa 24
+thumbnail. Xem ảnh lớn, cuộn để phóng to, kéo để di chuyển, nhấn **Vừa ảnh**
+để khôi phục vùng xem. Thông tin nguồn và lần duyệt nằm bên phải.
+
+- **Duyệt & dùng train**: xác nhận ảnh và giá trị nhãn đang chọn, bật ảnh cho
+  lần export mới. Chỉ sửa thuộc tính đã được ghi nhận trên ảnh; không tự suy
+  thêm nhãn Héo/Hiện diện. Chưa chắc/Không áp dụng không được duyệt vào train.
+- **Từ chối ảnh** hoặc **Chuyển về chờ duyệt**: giữ ảnh và nhãn đã lưu, tắt
+  ảnh khỏi lần export mới. Hai thao tác này không lưu thay đổi nhãn còn trên form.
+- Có thể duyệt lại ảnh đã tắt. Thay đổi nhãn chỉ lưu khi nhấn Duyệt; chuyển ảnh/
+  đổi dự án/đóng ứng dụng khi nhãn chưa lưu sẽ hỏi trước khi bỏ thay đổi đó.
+
+Trạng thái 115 ảnh đã có được giữ nguyên khi nâng source; người dùng có thể
+duyệt lại hoặc loại từng ảnh. Không cần import thủ công. Snapshot/model cũ
+không đổi. Trong lúc kiểm tra/lưu, ứng dụng giữ quyền xử lý để tránh đổi dự án,
+train hoặc đóng cửa sổ giữa chừng; kiểm tra nguồn chạy ở worker để UI phản hồi.
+
+Tổng quan Hydro hiển thị ba số chính **Ảnh giàn / Đã duyệt / Chưa duyệt** và
+thẻ riêng cho mỗi thuộc tính, nhấn mạnh **Có / Không**. Chỉ hiện nhóm chưa
+chắc/không áp dụng/thiếu nhãn/chưa duyệt khi có dữ liệu. Chi tiết phân tập nằm
+trong **Xem chi tiết Train / Val / Test**. Ảnh bổ trợ có ô thống kê riêng,
+không cộng vào số ảnh giàn hay bảng thuộc tính. Dự án Chai giữ giao diện thống
+kê hình học và không có mục Ảnh bổ trợ.
+
 ## Dùng ảnh bổ trợ
 
 Ảnh tổng hợp hoặc ảnh ngoài giàn nằm trong `training_supplements/` của project,
 không import thành ảnh capture có lineage giả. Nút **Xem ảnh bổ trợ train** tại
-Dự án mở thư mục ảnh và manifest. Tổng quan báo riêng số ảnh đang bật; nhấn Train
+Dự án mở giao diện duyệt trong SmartLabel. Tổng quan báo riêng số ảnh đang bật; nhấn Train
 vẫn dùng exporter Classification hiện có, tự thêm ảnh phù hợp vào TRAIN đúng
 thuộc tính. Nhật ký train ghi số ảnh bổ trợ. Chưa chạy train khi chỉ xem Tổng quan.
 
-Đặt `enabled: false` cho ảnh cần bỏ trước lần Train tiếp theo. Không chỉnh nhãn
+Chuyển ảnh về chờ duyệt hoặc từ chối để đặt `enabled: false` trước lần Train tiếp theo. Không chỉnh nhãn
 hay bật/tắt bằng cách sửa snapshot đã export. Các snapshot giữ độc lập; thay
 manifest chỉ ảnh hưởng lần export/Train mới. Dữ liệu supplement không được tính
 vào QA capture thực địa, không dùng vá số lượng TEST hoặc chứng minh chất lượng.
@@ -37,6 +66,14 @@ Manifest local v1:
 - Ảnh external cần URL, tác giả, giấy phép, URL giấy phép, ngày truy cập.
   Người nhập phải kiểm quyền sử dụng, đúng giống cây và nhãn thị giác;
   việc có chuỗi giấy phép trong manifest không tự xác minh quyền tác giả.
+
+Duyệt qua UI dùng lại validator của exporter (nhãn, nguồn, hash, parent TRAIN,
+trùng RGB). Không ghi lại SHA để hợp thức hóa ảnh đã bị sửa. Lưu bằng tệp tạm
+và atomic replace; khóa `.review.lock` ngăn hai phiên Studio cùng ghi, kiểm
+revision trước/sau xác minh để phát hiện manifest đã đổi bên ngoài. Mỗi lần
+lưu thêm `reviewHistory` gồm trạng thái/nhãn trước đó; không sửa project.json,
+ảnh, split hoặc model. Nếu ứng dụng bị tắt cưỡng bức đúng lúc lưu, có thể còn
+`.review.lock`; chỉ gỡ khóa sau khi xác minh không còn phiên đang ghi.
 
 Export kiểm hash ảnh và trùng nội dung RGB nguyên kích thước với ảnh trong
 project/các supplement; không có bộ tìm near-duplicate của ảnh bị crop/đổi kích
@@ -62,9 +99,9 @@ bắt đầu, hoàn tất ngày 14/09. `generation-jobs.json` lưu prompt chính
 trực tiếp ảnh thật; gân/viền có thể được dựng lại. Chỉ duyệt nhãn thị giác
 `yellow_leaf=present`, không suy thêm nhãn Héo, nguyên nhân bệnh hoặc số lá.
 
-Trong dự án **Phân Loại Cải Ngọt**, chọn **Dự án → Xem ảnh bổ trợ train**,
-mở `XEM_ANH.html`. Gallery có 115 cặp gốc/tổng hợp, lọc theo lô, cây và mức
-vàng; mặc định xem 64 ảnh mới, ưu tiên trưởng thành. Ảnh đã nằm trong dự án,
+Trong dự án **Phân Loại Cải Ngọt**, chọn **GÁN NHÃN → Ảnh bổ trợ** để xem và
+duyệt 115 ảnh bổ trợ. `XEM_ANH.html` là gallery tĩnh cũ để đối chiếu nguồn,
+không tự cập nhật quyết định duyệt mới; UI SmartLabel đọc manifest hiện hành. Ảnh đã nằm trong dự án,
 lần Train Lá vàng mới tự đọc manifest; không cần nhập từng ảnh vào danh sách
 capture. Snapshot/model đã train trước đó không tự thay đổi khi thêm ảnh.
 
