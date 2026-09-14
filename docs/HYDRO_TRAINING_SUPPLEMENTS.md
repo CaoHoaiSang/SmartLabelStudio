@@ -45,7 +45,51 @@ ghi vào `export.json`; ảnh chỉ vào TRAIN, kể cả các thư mục VAL t�
 ở chế độ Final/Train All. Ảnh chỉ có nhãn Lá vàng không vào classifier Hiện diện/Héo.
 Project không có sidecar hoặc tắt mọi ảnh vẫn train theo luồng trước.
 
-## Lô đa dạng 40 ảnh vàng — 13/09/2026
+## Hiện hành: thêm 64 ảnh vàng, ưu tiên trưởng thành — 14/09/2026
+
+Đã tạo, xem từng ảnh và cài **64 ảnh vàng mới từ 64 ảnh gốc chưa dùng**, mỗi
+ảnh gốc một biến thể. Theo lựa chọn của chủ hệ thống: 48 ảnh tuổi 32–39 ngày,
+10 ảnh tuổi 24–28 ngày, 6 ảnh tuổi 19–23 ngày. Vàng một phần lá, trọn một lá,
+nhiều lá, toàn cây: mỗi mức 16 ảnh. Không dùng lại ID/hash ảnh gốc hoặc cặp
+cây/ngày của các lô trước. Vẫn là **7 nhóm cây TRAIN trong cùng vụ**, không
+phải 64 cây độc lập; tuổi trưởng thành không bảo đảm tán lớn ở mọi ảnh.
+
+Giữ nguyên 51 ảnh và bản ghi cũ. Tổng hiện hành **115 ảnh bổ trợ: 108 vàng,
+7 xanh đối chứng**. Lô mới ở
+`training_supplements/batches/yellow_mature_64_20260913/`; tên batch giữ ngày
+bắt đầu, hoàn tất ngày 14/09. `generation-jobs.json` lưu prompt chính xác,
+ảnh gốc, kết quả và ghi chú duyệt. Dùng OpenAI built-in ImageGen tham chiếu
+trực tiếp ảnh thật; gân/viền có thể được dựng lại. Chỉ duyệt nhãn thị giác
+`yellow_leaf=present`, không suy thêm nhãn Héo, nguyên nhân bệnh hoặc số lá.
+
+Trong dự án **Phân Loại Cải Ngọt**, chọn **Dự án → Xem ảnh bổ trợ train**,
+mở `XEM_ANH.html`. Gallery có 115 cặp gốc/tổng hợp, lọc theo lô, cây và mức
+vàng; mặc định xem 64 ảnh mới, ưu tiên trưởng thành. Ảnh đã nằm trong dự án,
+lần Train Lá vàng mới tự đọc manifest; không cần nhập từng ảnh vào danh sách
+capture. Snapshot/model đã train trước đó không tự thay đổi khi thêm ảnh.
+
+Kiểm ngày 14/09: 14/14 test adapter đạt; preflight cả ba classifier; cài lại
+không nhân đôi; xuất dữ liệu thật qua output tạm cho kết quả:
+
+| Bộ dữ liệu Lá vàng | TRAIN Có/Không | VAL Có/Không | TEST Có/Không |
+| --- | ---: | ---: | ---: |
+| Ảnh thật | 2/833 | 0/238 | 0/125 |
+| Kèm 51 bổ trợ cũ | 46/840 | 0/238 | 0/125 |
+| Kèm toàn bộ 115 bổ trợ | **110/840** | **0/238** | **0/125** |
+
+Ảnh TRAIN cũ và VAL/TEST giữ nguyên từng byte khi export. Project/split/ba PT
+giữ hash từ ngay trước cài; project.json đã đổi ngoài tác vụ kể từ lúc chọn
+nguồn nên installer kiểm trạng thái hiện hành và bảo toàn thay đổi đó.
+Hiện diện/Héo nhận 0 supplement. Gallery đã kiểm cấu trúc/230 đường dẫn ảnh;
+chưa kiểm render bằng browser do URL file bị công cụ chặn ở đợt trước.
+
+Chưa chạy train hoặc triển khai model, chưa chứng minh chất lượng tăng.
+VAL/TEST vẫn thiếu ảnh vàng thật độc lập: cần bổ sung trước khi đánh giá
+hai phía hoặc hiệu chỉnh ngưỡng. Không dùng ảnh tổng hợp để vá benchmark.
+Source runtime không đổi. Nhánh `feat/hydro-yellow-mature-diversity-64`
+kế thừa `82aac1d`; Git chỉ lưu tài liệu, bộ ảnh lưu local trong project.
+
+## Lịch sử: lô đa dạng 40 ảnh vàng — 13/09/2026
 
 Theo yêu cầu mở rộng của chủ hệ thống, đã tạo và kiểm từng ảnh bằng mắt:
 **40 ảnh vàng mới + 5 ảnh xanh đối chứng**, từ 10 ảnh giàn có sẵn ở mốc

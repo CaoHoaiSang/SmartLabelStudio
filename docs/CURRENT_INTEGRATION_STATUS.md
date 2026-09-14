@@ -1,6 +1,24 @@
 # Trạng thái tích hợp HydroFlow ngày 10 tháng 9 năm 2026
 
-## 40 ảnh vàng đa dạng từ ảnh giàn — 13/09/2026
+## Thêm 64 ảnh vàng từ ảnh gốc khác nhau — 14/09/2026
+
+Nhánh `feat/hydro-yellow-mature-diversity-64`, kế thừa `82aac1d`.
+Đã tạo/duyệt/cài 64 ảnh vàng, một biến thể mỗi ảnh gốc chưa dùng; 48 ảnh
+tuổi 32–39 ngày, 10 ảnh 24–28 ngày, 6 ảnh 19–23 ngày. Bốn mức vàng mỗi mức
+16 ảnh. Không dùng lại ảnh gốc hoặc cặp cây/ngày trước đó; 7 nhóm cây cùng
+vụ TRAIN hiện có theo lựa chọn của chủ hệ thống, không nhận là 64 cây mới.
+Giữ 51 bổ trợ cũ: tổng **115 (108 vàng/7 xanh)**, chỉ classifier Lá vàng.
+Đã nằm trong project Phân Loại Cải Ngọt; lần Train mới tự đọc. Xem ảnh bổ trợ
+train → XEM_ANH.html có lọc lô/cây/mức vàng, gốc cạnh biến thể, lô mới ở đầu.
+
+14/14 test adapter đạt (0,167 giây), preflight cả ba classifier và cài lại
+không nhân đôi. Export thật trong output tạm: TRAIN **110 Có/840 Không**,
+VAL 0/238, TEST 0/125; toàn bộ TRAIN cũ và VAL/TEST giữ từng byte. Project/
+split/ba PT giữ hash từ ngay trước cài. Không đổi runtime source, không train
+hay phát hành model. VAL/TEST vẫn thiếu vàng thật độc lập, chưa đo chất lượng
+hai phía. [Chi tiết và cách dùng](HYDRO_TRAINING_SUPPLEMENTS.md).
+
+## Mốc trước: 40 ảnh vàng đa dạng từ ảnh giàn — 13/09/2026
 
 Nhánh `feat/hydro-yellow-diversity-40`, kế thừa `fe6bc35`.
 Đã tạo/duyệt/cài **40 ảnh vàng mới + 5 xanh đối chứng**, giữ 6 ảnh lô trước:
