@@ -9,42 +9,53 @@ thiếu giá trị và số ảnh chưa duyệt/bị loại. Bảng TRAIN/VAL/TE
 Mặc định trên ảnh chưa duyệt không được coi là nhãn đã duyệt. Tập TEST thiếu
 một lớp được nhắc rõ. Chai nhựa giữ thống kê hình học/Class/nguồn nhãn.
 
-## Giao diện xem và duyệt — 14/09/2026
+## Giao diện dùng chung Giàn / Bổ trợ — 14/09/2026
 
-Mở **GÁN NHÃN → Bổ trợ** bằng chuyển đổi **Giàn / Bổ trợ** ở bên phải tiêu đề
-**DANH SÁCH ẢNH** trong ô trái. Nút **Xem ảnh bổ trợ
-train** ở Dự án và liên kết ở Tổng quan cũng mở cùng vùng này. Danh sách chỉ
-đọc các ảnh trong sidecar, không đưa ảnh gốc trở lại danh sách và không tạo
-capture mới. Có lọc trạng thái, đợt ảnh, tuổi cây, nhãn; mỗi trang tối đa 24
-thumbnail. Bố cục ba cột dùng kích thước/viền/tiêu đề giống vùng ảnh giàn:
-danh sách trái, ảnh lớn giữa, chi tiết nhãn phải. Cuộn để phóng to, kéo để di
-chuyển, dùng −/+ hoặc **Vừa** để chỉnh vùng xem. Thông tin nguồn/lần duyệt ở phải.
+Mở **GÁN NHÃN → Bổ trợ** ở bên phải **DANH SÁCH ẢNH**. Hai nguồn dùng
+chính các widget hiện hữu: danh sách thumbnail/phân trang, bộ lọc, canvas,
+zoom %, căn giữa, thuộc tính, ghi chú và các nút duyệt. Không còn màn hình
+Bổ trợ riêng hoặc bộ lọc Đợt/tuổi cây. Ba ô lọc giống Giàn: **trạng thái →
+nhãn/thuộc tính → giá trị**, gồm Chưa gán giá trị. Bổ trợ giữ thêm lựa chọn
+**Đã lưu trữ** trong bộ lọc trạng thái để khôi phục ảnh đã ẩn.
 
-- **Duyệt & dùng train**: xác nhận ảnh và giá trị nhãn đang chọn, bật ảnh cho
-  lần export mới. Hiện tất cả thuộc tính từ schema dự án, cho thêm/sửa/bỏ giá
-  trị từng mục, gồm Cây hiện diện/Lá vàng/Héo. Không chép nhãn từ ảnh gốc hay
-  mặc định Héo=Không. Mỗi classifier chỉ nhận nhãn Có/Không được xác nhận của
-  chính nó; Chưa gán/Chưa chắc/Không áp dụng bị bỏ qua. Nếu tất cả đều chưa đủ
-  để train, dùng Lưu nháp. Tình trạng Có/Không vẫn cần xác nhận có cây.
-- **Lưu nháp**: lưu cả các thuộc tính vừa thêm, thiếu hoặc chưa chắc; tắt ảnh
-  khỏi train đến khi duyệt. Hình và các mục khác đã lưu được giữ nguyên.
-- **Từ chối** hoặc **Bỏ duyệt**: giữ ảnh và nhãn đã lưu, tắt
-  ảnh khỏi lần export mới. Hai thao tác này không lưu thay đổi nhãn còn trên form.
-- Có thể duyệt lại ảnh đã tắt. Thay đổi nhãn chỉ lưu khi nhấn Duyệt hoặc Lưu nháp; chuyển ảnh/
-  đổi dự án/đóng ứng dụng khi nhãn chưa lưu sẽ hỏi trước khi bỏ thay đổi đó.
-- **Lưu trữ**: đưa ảnh ra khỏi danh sách làm việc và train, giữ tệp/nhãn/lịch
-  sử. Xem bằng bộ lọc **Đã lưu trữ**, duyệt lại để khôi phục. Không suy ra
-  “trùng ảnh gốc” chỉ từ nhãn Lá vàng=Không; ảnh sửa có nhãn Không vẫn được giữ.
+Dữ liệu Bổ trợ vẫn đọc sidecar, không đưa ảnh gốc hoặc biến thể vào
+project.images. Thumbnail dùng cùng thành phần với Giàn; số nhãn Hydro
+đếm thuộc tính đã gán. Canvas chỉ xem/phóng/kéo đối với Bổ trợ; các thao tác
+hình học và phím Delete/Undo không tác động vào ảnh Giàn đang chọn trước đó.
+Đổi về Giàn khôi phục bộ lọc, trang và ảnh đang xem; bài Chai giữ luồng cũ.
 
-Ngày 14/09 đã lưu trữ đúng **7 đối chứng xanh** từ các lô trước theo yêu cầu
-chủ hệ thống. Danh sách làm việc còn **108 ảnh sửa lá vàng**, 7 ảnh lưu trữ có
-thể xem lại; không xóa ảnh gốc hoặc sửa nhãn của 108 ảnh còn lại. Đối chiếu
-115 ảnh với 1297 ảnh giàn không thấy trùng RGB ở cùng kích thước, nhưng đối
-chứng xanh giữ nội dung rất gần ảnh gốc và không phải biến thể vàng cần duyệt.
-Đây là xử lý một lần có backup/revision/history, không lọc tự động theo tên
-nhãn hoặc chạy migration mỗi lần mở. Snapshot/model cũ
-không đổi. Trong lúc kiểm tra/lưu, ứng dụng giữ quyền xử lý để tránh đổi dự án,
-train hoặc đóng cửa sổ giữa chừng; kiểm tra nguồn chạy ở worker để UI phản hồi.
+- Đổi thuộc tính **tự lưu bản nháp**, tắt ảnh khỏi export mới tới khi duyệt.
+  Dùng cùng dropdown/ngữ nghĩa của Giàn. Chọn Không có cây/Chưa chắc/bỏ Hiện
+  diện đưa tình trạng về Không áp dụng; không suy Héo=Không từ ảnh gốc.
+- **Duyệt & tiếp** lưu các nhãn đủ điều kiện, bật train và chuyển ảnh kế tiếp.
+  Bổ trợ giữ contract duyệt từng thuộc tính: mỗi classifier chỉ nhận giá trị
+  Có/Không của chính nó. Mục thiếu/Chưa chắc/Không áp dụng không train.
+- **Bỏ duyệt / Từ chối** giữ nhãn đã lưu và tắt train. **Khôi phục** đưa về
+  bản nháp để kiểm lại, chưa bật train. Ghi chú bất thường lưu riêng, không train.
+- Nút **×** trên thumbnail Bổ trợ hỏi xác nhận **Lưu trữ**, giữ ảnh/nhãn/lịch
+  sử. Chọn Đã lưu trữ → Khôi phục hoặc Duyệt & tiếp để đưa ảnh trở lại.
+  Không suy ảnh trùng chỉ vì Lá vàng=Không.
+- Lưu chạy ở worker, khóa đổi ảnh/nguồn/dự án trong khi ghi. Xung đột revision
+  hoặc lỗi ghi giữ thay đổi trên form và báo lỗi; không ghi đè phiên khác.
+  Ghi chú chưa lưu được hỏi trước khi chuyển nguồn/dự án hoặc đóng.
+
+### Hiện diện và nhãn tình trạng
+
+Sidecar cũ có `presenceMeaning=positive` để xác nhận cây trước khi gán Lá
+vàng/Héo nhưng thiếu thuộc tính hiện diện tương ứng. Adapter nay biểu diễn
+xác nhận này bằng đúng mã Có cây của schema, dùng nhất quán ở form, bộ lọc,
+validator và snapshot train. Chỉ chuyển khi có xác nhận dương cũ cùng nhãn
+tình trạng Có/Không; không đoán từ tên nhãn, ảnh gốc hoặc ảnh chưa xác nhận.
+Giá trị hiện diện đã gán rõ luôn được giữ; nếu mâu thuẫn thì validator chặn.
+Khi người dùng sửa/bỏ Hiện diện, xác nhận cũ được cập nhật hoặc xóa theo,
+không tự xuất hiện trở lại từ trường cũ.
+
+Dữ liệu hiện hành: 108 ảnh làm việc, 7 đối chứng xanh lưu trữ. Một ảnh đã có
+nhãn Hiện diện do người dùng gán; sửa một lần chuyển 107 xác nhận cũ còn lại
+thành nhãn Có cây, giữ nguyên Lá vàng, trạng thái duyệt và enablement. Có
+backup, revision, history và kiểm hash ảnh/project/split/model. Preflight mới:
+Hiện diện 108, Lá vàng 108, Héo 0. Không chạy train hoặc thay model hiện hành.
+Ảnh tổng hợp chỉ vào TRAIN; VAL/TEST vẫn giữ nguồn ảnh thật độc lập.
 
 Tổng quan và Dataset dùng chung thành phần hiển thị có vùng cuộn tự cập nhật
 khi mở/đóng chi tiết. Dataset mặc định mở chi tiết Train/Val/Test; Tổng quan có
@@ -104,7 +115,8 @@ Export kiểm hash ảnh và trùng nội dung RGB nguyên kích thước với 
 project/các supplement; không có bộ tìm near-duplicate của ảnh bị crop/đổi kích
 thước. Nguồn ngoài cần kiểm gần trùng riêng. Manifest và nguồn từng ảnh được
 ghi vào `export.json`; ảnh chỉ vào TRAIN, kể cả các thư mục VAL tương thích
-ở chế độ Final/Train All. Ảnh chỉ có nhãn Lá vàng không vào classifier Hiện diện/Héo.
+ở chế độ Final/Train All. Ảnh có xác nhận Có cây và nhãn Lá vàng được dùng cho đúng hai classifier
+Hiện diện/Lá vàng; Héo chỉ nhận khi người dùng đã gán nhãn Héo đủ điều kiện.
 Project không có sidecar hoặc tắt mọi ảnh vẫn train theo luồng trước.
 
 ## Mốc lịch sử: thêm 64 ảnh vàng, ưu tiên trưởng thành — 14/09/2026

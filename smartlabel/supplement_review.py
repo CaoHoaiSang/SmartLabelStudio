@@ -9,7 +9,71 @@ import tempfile
 
 from .hydro_labels import model_attributes
 from .label_schema import meaning_for
-from .training_supplements import manifest_path, read_manifest, sha256, validate_manifest_samples, validate_review_labels
+from .training_supplements import manifest_path, read_manifest, review_attributes, sha256, validate_manifest_samples, validate_review_labels
+
+
+def _replace_manifest(path, data, revision):
+    """Caller holds the sidecar lock; preserve an external edit detected by CAS."""
+    temporary = None
+    try:
+        raw = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8") + b"\n"
+        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".review-", suffix=".tmp", delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if sha256(path) != revision:
+            raise ValueError("Danh sách vừa được cập nhật bên ngoài. Hãy tải lại; thay đổi này chưa được lưu.")
+        os.replace(temporary, path)
+        return hashlib.sha256(raw).hexdigest()
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def materialize_confirmed_presence(store, project, assignments, expected_revision):
+    """Explicit repair of reviewed legacy evidence; no inference from pixels/parent.
+
+    Archived rows and explicit presence labels remain unchanged. Review status,
+    enablement and other labels are preserved; each repaired row records history.
+    """
+    if project.metadata.get("template") != "Hydroponic Slot Condition":
+        raise ValueError("Chỉ áp dụng cho dự án Hydro.")
+    path = manifest_path(store, project)
+    lock = path.with_suffix(".review.lock")
+    try:
+        handle = lock.open("x", encoding="utf-8")
+    except FileExistsError:
+        raise ValueError("Một phiên SmartLabel khác đang lưu ảnh bổ trợ.") from None
+    try:
+        with handle:
+            handle.write(str(os.getpid()))
+        data, revision = load_review(store, project)
+        if data is None or revision != expected_revision:
+            raise ValueError("Danh sách đã thay đổi; chưa đồng bộ hiện diện.")
+        changed = []
+        for row in data["images"]:
+            if row.get("archived") or row.get("reviewStatus") != "reviewed":
+                continue
+            normalized = review_attributes(project, row)
+            if normalized == row.get("attributes", {}):
+                continue
+            previous = deepcopy(row["attributes"])
+            row["attributes"] = normalized
+            validate_review_labels(project, row)
+            history = row.setdefault("reviewHistory", [])
+            if not isinstance(history, list):
+                raise ValueError("Lịch sử duyệt không hợp lệ; chưa lưu thay đổi.")
+            history.append({"at": datetime.now(timezone.utc).isoformat(), "decision": "materialize_confirmed_presence",
+                            "by": "SmartLabel compatibility repair", "previousAttributes": previous,
+                            "reason": "Chuyển xác nhận presenceMeaning cũ thành nhãn hiện diện theo schema."})
+            changed.append(row["id"])
+        if changed:
+            validate_manifest_samples(store, project, model_attributes(project)[0], assignments, data)
+            revision = _replace_manifest(path, data, revision)
+        return data, revision, changed
+    finally:
+        lock.unlink(missing_ok=True)
 
 
 def review_state(row):
@@ -49,7 +113,7 @@ def preview_path(store, project, row):
 
 
 def save_review(store, project, assignments, row_id, decision, expected_revision,
-                *, attributes=None, note="", save_draft_labels=False):
+                *, attributes=None, note="", save_draft_labels=False, other_abnormal=None):
     """Atomic sidecar-only save with revision check and export validation on approval.
 
     An exclusive lock serializes cooperating Studio instances. A second hash
@@ -65,7 +129,6 @@ def save_review(store, project, assignments, row_id, decision, expected_revision
         handle = lock.open("x", encoding="utf-8")
     except FileExistsError:
         raise ValueError("Một phiên SmartLabel khác đang lưu ảnh bổ trợ. Hãy thử lại sau.") from None
-    temporary = None
     try:
         with handle:
             handle.write(str(os.getpid()))
@@ -76,15 +139,16 @@ def save_review(store, project, assignments, row_id, decision, expected_revision
         if row is None:
             raise ValueError("Ảnh không còn trong danh sách bổ trợ.")
         previous = {key: deepcopy(row.get(key)) for key in
-                    ("enabled", "archived", "reviewStatus", "attributes", "presenceMeaning", "reviewNote", "reviewedBy", "reviewedAt")}
+                    ("enabled", "archived", "reviewStatus", "attributes", "presenceMeaning", "reviewNote", "reviewedBy", "reviewedAt", "otherAbnormal")}
         # Exclusion stays possible even for a damaged source. Only approval or
         # an explicit draft-save accepts form changes; other decisions keep labels.
         if attributes is not None and (decision == "reviewed" or (decision == "draft" and save_draft_labels)):
             row["attributes"] = deepcopy(attributes)
             presence = next(a for a in model_attributes(project) if a["role"] == "presence")
-            if isinstance(attributes, dict) and presence["id"] in attributes:
-                row["presenceMeaning"] = meaning_for(presence, attributes[presence["id"]])
+            row["presenceMeaning"] = meaning_for(presence, attributes.get(presence["id"])) if isinstance(attributes, dict) else None
             validate_review_labels(project, row)
+            if other_abnormal is not None:
+                row["otherAbnormal"] = str(other_abnormal).strip()
         row.update(enabled=decision == "reviewed", archived=decision == "archived",
                    reviewStatus=row.get("reviewStatus", "draft") if decision == "archived" else decision,
                    reviewNote=note.strip() or {"reviewed": "Người dùng đã xem ảnh và xác nhận nhãn trong SmartLabel.",
@@ -98,17 +162,6 @@ def save_review(store, project, assignments, row_id, decision, expected_revision
         if not isinstance(history, list):
             raise ValueError("Lịch sử duyệt không hợp lệ; chưa lưu thay đổi.")
         history.append({"at": row["reviewedAt"], "by": row["reviewedBy"], "decision": decision, "previous": previous})
-        raw = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8") + b"\n"
-        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".review-", suffix=".tmp", delete=False) as stream:
-            temporary = Path(stream.name)
-            stream.write(raw)
-            stream.flush()
-            os.fsync(stream.fileno())
-        if sha256(path) != revision:
-            raise ValueError("Danh sách vừa được cập nhật bên ngoài. Hãy tải lại; thay đổi này chưa được lưu.")
-        os.replace(temporary, path)
-        return data, hashlib.sha256(raw).hexdigest()
+        return data, _replace_manifest(path, data, revision)
     finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
         lock.unlink(missing_ok=True)

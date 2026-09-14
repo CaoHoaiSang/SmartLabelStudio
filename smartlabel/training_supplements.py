@@ -11,7 +11,7 @@ from pathlib import Path
 from PIL import Image
 
 from .hydro_labels import model_attributes
-from .label_schema import meaning_for, training_identity
+from .label_schema import label_for, meaning_for, training_identity
 
 
 def manifest_path(store, project):
@@ -54,10 +54,30 @@ def pixel_hash(path):
         return hashlib.sha256(str(image.size).encode() + image.tobytes()).hexdigest()
 
 
+def review_attributes(project, row):
+    """Read legacy presence evidence as a label, never inherit parent labels.
+
+    Old sidecars stored confirmed plant presence separately from condition
+    labels. Explicit labels always win, including an explicit contradiction
+    which must be rejected by validation rather than silently overwritten.
+    """
+    values = row.get("attributes", {})
+    if not isinstance(values, dict):
+        return values
+    values = dict(values)
+    attrs = model_attributes(project)
+    presence = next(a for a in attrs if a["role"] == "presence")
+    if (presence["id"] not in values and row.get("presenceMeaning") == "positive"
+            and any(a["role"] == "condition" and meaning_for(a, values.get(a["id"]))
+                    in {"positive", "negative"} for a in attrs)):
+        values[presence["id"]] = label_for(presence, "positive")
+    return values
+
+
 def validate_review_labels(project, row):
     """Partial review is valid; only explicit binary labels are training samples."""
     attributes = {a["id"]: a for a in model_attributes(project)}
-    values = row.get("attributes", {})
+    values = review_attributes(project, row)
     if not isinstance(values, dict) or any(
             key not in attributes or meaning_for(attributes[key], value) is None
             for key, value in values.items()):
@@ -145,5 +165,5 @@ def validate_manifest_samples(store, project, attribute, assignments, data):
         elif not all(provenance.get(k) for k in ("url", "author", "license", "licenseUrl", "retrievedAt")):
             raise ValueError(f"{identifier}: thiếu giấy phép hoặc thông tin trích nguồn.")
         if attribute["id"] in values:
-            result.append((source, values[attribute["id"]], dict(row)))
+            result.append((source, values[attribute["id"]], {**row, "attributes": review_attributes(project, row)}))
     return result

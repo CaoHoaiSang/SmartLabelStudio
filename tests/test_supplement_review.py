@@ -4,8 +4,8 @@ from unittest.mock import patch
 import unittest
 
 import test_training_supplements as fixtures
-from smartlabel.supplement_review import load_review, preview_path, review_state, save_review
-from smartlabel.training_supplements import sha256, validated_samples
+from smartlabel.supplement_review import load_review, preview_path, review_state, save_review, materialize_confirmed_presence
+from smartlabel.training_supplements import sha256, validated_samples, review_attributes
 
 
 class SupplementReviewTests(unittest.TestCase):
@@ -23,13 +23,13 @@ class SupplementReviewTests(unittest.TestCase):
             self.assertFalse(data['images'][0]['enabled'])
             self.assertEqual(validated_samples(self.store, self.project, self.yellow, self.assignment), [])
             self.assertEqual(revision, sha256(self.path))
-        data, _ = self.update("reviewed", attributes={"yellow_leaf": "absent"})
+        data, _ = self.update("reviewed", attributes={"plant_presence": "present", "yellow_leaf": "absent"})
         self.assertEqual(project_before, self.project.to_dict())
         self.assertEqual(split, self.manager.split_assignment_path(self.project).read_bytes())
         export = self.manager.export_classification(self.project, "yellow_leaf")
         meta = json.loads((export / "export.json").read_text(encoding="utf-8"))
         self.assertEqual(meta['supplement_count'], 1)
-        self.assertEqual(meta['training_supplements'][0]['attributes'], {'yellow_leaf': 'absent'})
+        self.assertEqual(meta['training_supplements'][0]['attributes'], {'plant_presence': 'present', 'yellow_leaf': 'absent'})
         self.assertEqual(len(list((export / 'train' / 'absent').iterdir())), 2)
         row = data['images'][0]
         self.assertEqual(row['provenance'], self.row['provenance'])
@@ -81,14 +81,14 @@ class SupplementReviewTests(unittest.TestCase):
 
     def test_bad_labels_and_conflicting_presence_are_not_written(self):
         before = self.path.read_bytes()
-        for attributes in ({'yellow_leaf': 'bogus'}, {'unknown': 'present'},
+        for attributes in ({'yellow_leaf': 'bogus'}, {'unknown': 'present'}, {'yellow_leaf': 'present'},
                            {'plant_presence': 'absent', 'yellow_leaf': 'present'}):
             with self.assertRaises(ValueError): self.update('reviewed', attributes=attributes)
             self.assertEqual(before, self.path.read_bytes())
 
     def test_add_remove_and_uncertain_attributes_route_each_classifier_independently(self):
         before = deepcopy(self.project.to_dict())
-        self.update('reviewed', attributes={'yellow_leaf': 'present', 'wilt': 'present'})
+        self.update('reviewed', attributes={'plant_presence': 'present', 'yellow_leaf': 'present', 'wilt': 'present'})
         for key in ('yellow_leaf', 'wilt'):
             out = self.manager.export_classification(self.project, key)
             metadata = json.loads((out / 'export.json').read_text(encoding='utf-8'))
@@ -96,10 +96,10 @@ class SupplementReviewTests(unittest.TestCase):
             self.assertEqual(len(list((out / 'train' / 'present').iterdir())), 1)
             self.assertFalse(list((out / 'val' / 'present').iterdir()))
             self.assertFalse(list((out / 'test' / 'present').iterdir()))
-        self.assertEqual(validated_samples(self.store, self.project, self.attrs[0], self.assignment), [])
-        self.update('reviewed', attributes={'yellow_leaf': 'uncertain', 'wilt': 'present'})
+        self.assertEqual(len(validated_samples(self.store, self.project, self.attrs[0], self.assignment)), 1)
+        self.update('reviewed', attributes={'plant_presence': 'present', 'yellow_leaf': 'uncertain', 'wilt': 'present'})
         self.assertEqual(validated_samples(self.store, self.project, self.yellow, self.assignment), [])
-        data, _ = self.update('reviewed', attributes={'wilt': 'present'})
+        data, _ = self.update('reviewed', attributes={'plant_presence': 'present', 'wilt': 'present'})
         self.assertNotIn('yellow_leaf', data['images'][0]['attributes'])
         self.assertEqual(before, self.project.to_dict())
 
@@ -132,7 +132,7 @@ class SupplementReviewTests(unittest.TestCase):
         self.assertEqual(row['reviewHistory'][-1]['decision'], 'archived')
         self.assertEqual(image.read_bytes(), before)
         self.assertEqual(validated_samples(self.store, self.project, self.yellow, self.assignment), [])
-        restored, _ = self.update('reviewed', attributes={'yellow_leaf': 'present'})
+        restored, _ = self.update('reviewed', attributes={'plant_presence': 'present', 'yellow_leaf': 'present'})
         self.assertFalse(restored['images'][0]['archived'])
         self.assertEqual(len(validated_samples(self.store, self.project, self.yellow, self.assignment)), 1)
 
@@ -163,3 +163,59 @@ class SupplementReviewTests(unittest.TestCase):
         self.manifest['images'].append(deepcopy(self.row))
         self.save()
         with self.assertRaisesRegex(ValueError, 'trùng'): load_review(self.store, self.project)
+
+    def test_legacy_presence_is_consistent_in_display_training_and_explicit_repair(self):
+        before = deepcopy(self.row)
+        original = self.path.read_bytes()
+        self.assertEqual(review_attributes(self.project, self.row), {'plant_presence': 'present', 'yellow_leaf': 'present'})
+        samples = validated_samples(self.store, self.project, self.attrs[0], self.assignment)
+        self.assertEqual(samples[0][1], 'present')
+        self.assertEqual(samples[0][2]['attributes']['plant_presence'], 'present')
+        self.assertEqual(original, self.path.read_bytes())
+        data, revision, changed = materialize_confirmed_presence(self.store, self.project, self.assignment, sha256(self.path))
+        self.assertEqual(changed, ['s1'])
+        row = data['images'][0]
+        self.assertEqual(row['attributes'], {'plant_presence': 'present', 'yellow_leaf': 'present'})
+        for key in before.keys() - {'attributes'}:
+            self.assertEqual(before[key], row[key])
+        self.assertEqual(row['reviewHistory'][-1]['previousAttributes'], before['attributes'])
+        self.assertEqual(materialize_confirmed_presence(self.store, self.project, self.assignment, revision)[2], [])
+
+    def test_repair_preserves_explicit_presence_archives_and_detects_conflicts(self):
+        self.row['attributes']['plant_presence'] = 'absent'
+        self.save()
+        self.assertEqual(review_attributes(self.project, self.row)['plant_presence'], 'absent')
+        with self.assertRaises(ValueError):
+            validated_samples(self.store, self.project, self.yellow, self.assignment)
+        self.row['attributes'].pop('plant_presence')
+        self.row.update(archived=True, enabled=False)
+        self.save()
+        before = self.path.read_bytes()
+        self.assertEqual(materialize_confirmed_presence(self.store, self.project, self.assignment, sha256(self.path))[2], [])
+        self.assertEqual(before, self.path.read_bytes())
+        with self.assertRaisesRegex(ValueError, 'đã thay đổi'):
+            materialize_confirmed_presence(self.store, self.project, self.assignment, 'outdated')
+        lock = self.path.with_suffix('.review.lock')
+        lock.write_text('other')
+        with self.assertRaisesRegex(ValueError, 'phiên SmartLabel'):
+            materialize_confirmed_presence(self.store, self.project, self.assignment, sha256(self.path))
+        self.assertEqual(lock.read_text(), 'other')
+
+    def test_custom_ids_use_semantics_and_no_condition_does_not_infer_presence(self):
+        from smartlabel.label_schema import legacy_label_schema, schema_id
+        schema = legacy_label_schema()
+        presence = next(a for a in schema['attributes'] if a['role'] == 'presence')
+        presence['id'] = 'crop_in_slot'
+        presence['displayName'] = 'Custom presence'
+        for value in presence['values']:
+            value['id'] = 'custom_' + value['meaning']
+        for attr in schema['attributes']:
+            if attr['role'] == 'condition':
+                attr['requires'] = presence['id']
+        schema['schemaId'] = schema_id(schema)
+        self.project.metadata['labelSchema'] = schema
+        self.assertEqual(review_attributes(self.project, self.row)['crop_in_slot'], 'custom_positive')
+        row = {**self.row, 'presenceMeaning': None}
+        self.assertNotIn('crop_in_slot', review_attributes(self.project, row))
+        row = {**self.row, 'attributes': {'yellow_leaf': 'uncertain'}}
+        self.assertNotIn('crop_in_slot', review_attributes(self.project, row))

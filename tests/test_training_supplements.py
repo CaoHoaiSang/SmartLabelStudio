@@ -63,7 +63,9 @@ class SupplementTests(unittest.TestCase):
         self.assertFalse(list((out / "test" / "present").iterdir()))
         self.assertEqual(meta["training_supplements"][0]["provenance"], self.row["provenance"])
         presence = self.manager.export_classification(self.project, "plant_presence")
-        self.assertEqual(json.loads((presence / "export.json").read_text(encoding="utf-8"))["supplement_count"], 0)
+        self.assertEqual(json.loads((presence / "export.json").read_text(encoding="utf-8"))["supplement_count"], 1)
+        wilt = self.manager.export_classification(self.project, "wilt")
+        self.assertEqual(json.loads((wilt / "export.json").read_text(encoding="utf-8"))["supplement_count"], 0)
 
     def test_supplements_never_enter_compatibility_validation_mirrors(self):
         for strategy in ("final_keep_test", "train_all"):

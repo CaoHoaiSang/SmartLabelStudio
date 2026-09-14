@@ -785,6 +785,10 @@ class SmartLabelApp(ctk.CTk):
         index = next((i for i, record in enumerate(self.project.images) if record.id == image_id), None)
         if index is None:
             return
+        if self._supplement_active():
+            self._show_label_workspace("Giàn")
+            if self._supplement_active():
+                return
         if not self._image_matches_filters(self.project.images[index]):
             self.image_filter.set("Tất cả")
             self.label_filter_field.set(image_filters.ALL)
@@ -880,6 +884,9 @@ class SmartLabelApp(ctk.CTk):
             "localization_task": self.last_localization_task,
             "train_model": self.train_model_entry.get(),
         }
+        if self._supplement_active() and self.supplement_view.capture_view:
+            (status, field, value), page = self.supplement_view.capture_view
+            self.project_views[self.project.id].update(filter=status, label_field=field, label_value=value, page=page)
 
     def _prepare_project_context(self, project: Project) -> None:
         self._show_label_workspace("Danh sách ảnh", force=True)
@@ -1359,7 +1366,6 @@ class SmartLabelApp(ctk.CTk):
         self.label_workspace_host.pack(fill="both", expand=True)
         self.capture_workspace = ctk.CTkFrame(self.label_workspace_host, fg_color="transparent")
         self.capture_workspace.pack(fill="both", expand=True)
-        self.supplement_view = SupplementReviewView(self.label_workspace_host, self, COLORS)
         tab = self.capture_workspace
         geometry_bar = ctk.CTkFrame(tab, height=44, corner_radius=10, fg_color="#0d1924")
         geometry_bar.pack(fill="x", padx=8, pady=(8, 3))
@@ -1458,6 +1464,8 @@ class SmartLabelApp(ctk.CTk):
             width=286,
         )
         self.image_list.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.label_reload_button = self._button(left, "Tải lại danh sách", self._reload_label_source, width=260, color="#415466")
+        self.label_reload_button.pack(padx=10, pady=(0, 8))
 
         center = ctk.CTkFrame(body, corner_radius=12, fg_color="#091119", border_width=1, border_color=COLORS["border"])
         center.pack(side="left", fill="both", expand=True, padx=5)
@@ -1592,6 +1600,17 @@ class SmartLabelApp(ctk.CTk):
             justify="left", wraplength=240, text_color=COLORS["muted"],
         ).pack(anchor="w", padx=12, pady=14)
 
+        self.supplement_view = SupplementReviewView(self, COLORS)
+
+    def _supplement_active(self):
+        return bool(getattr(getattr(self, "supplement_view", None), "active", False))
+
+    def _reload_label_source(self):
+        if self._supplement_active():
+            return self.supplement_view.reload()
+        self._refresh_image_list()
+        self._sync_image_list_to_current()
+
     def _geometry_changed(self, value: str) -> None:
         normalized = value.lower()
         if normalized not in {"rect", "seg", "obb", "ori"}:
@@ -1673,6 +1692,8 @@ class SmartLabelApp(ctk.CTk):
             self.zoom_percent_label.configure(text=f"{round(scale * 100)}%")
 
     def _change_image_filter(self, _value: str | None = None) -> None:
+        if self._supplement_active():
+            return self.supplement_view.apply_filters()
         self.image_page = 0
         self._refresh_image_list()
         if self.project and self.paged_images:
@@ -1705,6 +1726,8 @@ class SmartLabelApp(ctk.CTk):
                                            self.label_filter_values.get(self.label_filter_value.get()))
 
     def _change_image_page(self, delta: int) -> None:
+        if self._supplement_active():
+            return self.supplement_view.change_page(delta)
         total_pages = max(1, (len(getattr(self, "filtered_images", [])) + self.image_page_size - 1) // self.image_page_size)
         target = min(max(self.image_page + delta, 0), total_pages - 1)
         if target == self.image_page:
@@ -1717,6 +1740,8 @@ class SmartLabelApp(ctk.CTk):
             self._load_current_image()
 
     def _refresh_image_list(self) -> None:
+        if self._supplement_active():
+            return self.supplement_view.refresh_list()
         self._refresh_label_filters()
         self.filtered_images = []
         if not self.project:
@@ -1747,7 +1772,7 @@ class SmartLabelApp(ctk.CTk):
                 "display_name": display_name,
                 "path": self.store.image_path(self.project, record),
                 "status": record.review_status,
-                "count": len(record.annotations),
+                "count": len(record.attributes) if is_hydroponic_project(self.project) else len(record.annotations),
             })
         self.image_list.set_items(items)
         if hasattr(self, "image_page_label"):
@@ -1757,6 +1782,8 @@ class SmartLabelApp(ctk.CTk):
             self._set_button_enabled(self.image_page_next_button, self.image_page + 1 < total_pages)
 
     def _on_thumbnail_selected(self, index: int) -> None:
+        if self._supplement_active():
+            return self.supplement_view.select_index(index)
         if not self.project or not (0 <= index < len(self.paged_images)):
             return
         record = self.paged_images[index]
@@ -1764,6 +1791,8 @@ class SmartLabelApp(ctk.CTk):
         self._load_current_image()
 
     def _load_current_image(self) -> None:
+        if self._supplement_active():
+            return self.supplement_view.show_row(self.supplement_view.selected)
         if not self.project or not (0 <= self.current_index < len(self.project.images)):
             return
         # A point-only SAM result must never land on an image selected later.
@@ -1786,6 +1815,8 @@ class SmartLabelApp(ctk.CTk):
         self._set_status(f"Ảnh {self.current_index + 1}/{len(self.project.images)} · {record.width}×{record.height}")
 
     def _clear_current_image(self) -> None:
+        if self._supplement_active():
+            return self.supplement_view.show_row(None)
         self.current_index = -1
         self.sam_click_request_version += 1
         self.sam_click_busy = False
@@ -1800,6 +1831,8 @@ class SmartLabelApp(ctk.CTk):
             self._set_button_enabled(button, False)
 
     def _sync_image_list_to_current(self, focus: bool = False) -> None:
+        if self._supplement_active():
+            return
         if not self.project or not (0 <= self.current_index < len(self.project.images)):
             return
         record = self.project.images[self.current_index]
@@ -1828,6 +1861,8 @@ class SmartLabelApp(ctk.CTk):
         self._navigate_filtered_image(1)
 
     def _navigate_filtered_image(self, delta):
+        if self._supplement_active():
+            return self.supplement_view.navigate(delta)
         records = getattr(self, "filtered_images", [])
         if self.project and records:
             current = self.project.images[self.current_index] if self.current_index >= 0 else None
@@ -1839,6 +1874,8 @@ class SmartLabelApp(ctk.CTk):
             self._clear_current_image()
 
     def _delete_image_from_thumbnail(self, image_id: object) -> None:
+        if self._supplement_active():
+            return self.supplement_view.archive(image_id)
         if not self.project:
             return
         record = self.project.image_by_id(str(image_id))
@@ -1848,6 +1885,8 @@ class SmartLabelApp(ctk.CTk):
         self._delete_current_image()
 
     def _delete_current_image(self) -> None:
+        if self._supplement_active():
+            return self.supplement_view.archive()
         if self.import_in_progress:
             messagebox.showinfo(
                 "Đang nhập dữ liệu",
@@ -1928,6 +1967,8 @@ class SmartLabelApp(ctk.CTk):
         self._refresh_project_statistics()
 
     def _selected_annotation(self) -> Annotation | None:
+        if self._supplement_active():
+            return None
         if not self.project or not (0 <= self.current_index < len(self.project.images)) or not self.selected_annotation_id:
             return None
         return next((ann for ann in self.project.images[self.current_index].annotations if ann.id == self.selected_annotation_id), None)
@@ -2296,6 +2337,8 @@ class SmartLabelApp(ctk.CTk):
 
     def _annotation_selected(self, annotation_id: str | None) -> None:
         self._apply_label_detail_visibility()
+        if self._supplement_active():
+            return self.supplement_view.sync_details()
         self.selected_annotation_id = annotation_id
         if annotation_id and self.project and 0 <= self.current_index < len(self.project.images):
             self.last_selected_by_image[self.project.images[self.current_index].id] = annotation_id
@@ -2344,6 +2387,8 @@ class SmartLabelApp(ctk.CTk):
         self.annotation_info.configure(state="disabled")
 
     def _annotation_changed(self) -> None:
+        if self._supplement_active():
+            return
         record = None
         if self.project and 0 <= self.current_index < len(self.project.images):
             record = self.project.images[self.current_index]
@@ -2430,6 +2475,8 @@ class SmartLabelApp(ctk.CTk):
 
     def _attribute_changed(self, key: str, value: str) -> None:
         value = getattr(self, "attribute_display_to_value", {}).get(key, {}).get(value, value)
+        if self._supplement_active():
+            return self.supplement_view.attribute_changed(key, value)
         if self.project and 0 <= self.current_index < len(self.project.images) and self._attribute_config(key)["scope"] == "image":
             record = self.project.images[self.current_index]
             if value:
@@ -2466,6 +2513,8 @@ class SmartLabelApp(ctk.CTk):
             self._annotation_changed()
 
     def _save_other_abnormal(self) -> None:
+        if self._supplement_active():
+            return self.supplement_view.save("draft", save_draft_labels=True)
         if not is_hydroponic_project(self.project) or not (0 <= self.current_index < len(self.project.images)):
             return
         record = self.project.images[self.current_index]
@@ -2478,9 +2527,17 @@ class SmartLabelApp(ctk.CTk):
         self._set_status("Đã lưu ghi chú bất thường khác", COLORS["good"])
 
     def _open_hydro_parent_asset(self) -> None:
-        if not is_hydroponic_project(self.project) or not (0 <= self.current_index < len(self.project.images)):
+        if not is_hydroponic_project(self.project):
             return
-        record = self.project.images[self.current_index]
+        record = self.project.images[self.current_index] if 0 <= self.current_index < len(self.project.images) else None
+        if self._supplement_active():
+            row = self.supplement_view.selected
+            record = self.project.image_by_id(row.get("provenance", {}).get("parentImageId")) if row else None
+            if record is None:
+                messagebox.showinfo("Không có ảnh giàn nguồn", "Ảnh bổ trợ này không có full frame nguồn trong dự án.", parent=self)
+                return
+        if record is None:
+            return
         relative = record.lineage.get("fullFrameRelativePath")
         if not isinstance(relative, str) or not relative or Path(relative).is_absolute() or ".." in Path(relative).parts:
             messagebox.showerror("Không có ảnh nguồn", "Lineage full frame không hợp lệ.", parent=self)
@@ -2516,6 +2573,8 @@ class SmartLabelApp(ctk.CTk):
             self._annotation_changed()
 
     def _approve_image_next(self) -> None:
+        if self._supplement_active():
+            return self.supplement_view.save("reviewed", advance=True)
         if not self.project or not (0 <= self.current_index < len(self.project.images)):
             return
         record = self.project.images[self.current_index]
@@ -2537,6 +2596,8 @@ class SmartLabelApp(ctk.CTk):
         self._next_image()
 
     def _unapprove_image(self) -> None:
+        if self._supplement_active():
+            return self.supplement_view.save("draft")
         if not self.project or not (0 <= self.current_index < len(self.project.images)):
             return
         record = self.project.images[self.current_index]
@@ -2550,6 +2611,8 @@ class SmartLabelApp(ctk.CTk):
         self._update_image_status_controls()
 
     def _reject_image(self) -> None:
+        if self._supplement_active():
+            return self.supplement_view.save("rejected")
         if self.project and 0 <= self.current_index < len(self.project.images):
             record = self.project.images[self.current_index]
             record.review_status = "rejected"
@@ -2559,6 +2622,8 @@ class SmartLabelApp(ctk.CTk):
             self._update_image_status_controls()
 
     def _restore_image(self) -> None:
+        if self._supplement_active():
+            return self.supplement_view.save("draft")
         if not self.project or not (0 <= self.current_index < len(self.project.images)):
             return
         record = self.project.images[self.current_index]
@@ -2573,6 +2638,8 @@ class SmartLabelApp(ctk.CTk):
         self._update_image_status_controls()
 
     def _update_image_status_controls(self) -> None:
+        if self._supplement_active():
+            return self.supplement_view.update_controls()
         if not self.project or not (0 <= self.current_index < len(self.project.images)):
             return
         status = self.project.images[self.current_index].review_status
@@ -2594,7 +2661,8 @@ class SmartLabelApp(ctk.CTk):
             self._refresh_image_list()
         elif record in getattr(self, "paged_images", []):
             index = self.paged_images.index(record)
-            self.image_list.update_item(index, status=record.review_status, count=len(record.annotations))
+            count = len(record.attributes) if is_hydroponic_project(self.project) else len(record.annotations)
+            self.image_list.update_item(index, status=record.review_status, count=count)
         self._refresh_project_statistics()
 
     # ---------- auto label ----------
@@ -5145,17 +5213,10 @@ class SmartLabelApp(ctk.CTk):
             return
         supplemental = name in {"Ảnh bổ trợ", "Bổ trợ"} and is_hydroponic_project(self.project)
         self.label_source.set("Bổ trợ" if supplemental else "Giàn")
-        self.capture_workspace.pack_forget()
-        self.supplement_view.pack_forget()
         if supplemental:
-            self.supplement_view.set_project(self.project)
-            self.supplement_view.pack(fill="both", expand=True, padx=8, pady=(4, 8))
-            self.supplement_view.reload()
-            # Hidden capture-canvas shortcuts (Delete / Undo) must not edit a
-            # real annotation while the operator is reviewing a supplement.
-            self.supplement_view.preview.focus_set()
+            self.supplement_view.activate()
         else:
-            self.capture_workspace.pack(fill="both", expand=True)
+            self.supplement_view.deactivate(render=not force)
 
     def _refresh_project_statistics(self) -> None:
         if not self.project or not hasattr(self, "project_summary") or not hasattr(self, "dataset_info"):

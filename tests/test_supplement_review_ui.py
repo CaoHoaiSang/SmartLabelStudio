@@ -62,6 +62,9 @@ class SupplementReviewUiTests(unittest.TestCase):
 
     def setUp(self):
         manifest_path(self.store, self.hydro).write_text(json.dumps(self.manifest), encoding='utf-8')
+        self.app.image_page_size = 50
+        self.app.supplement_view.active = False
+        self.app.supplement_view.selected = None
         self.app._change_project_context(deepcopy(self.hydro))
         self.app._open_training_supplements()
         self.view = self.app.supplement_view
@@ -79,141 +82,165 @@ class SupplementReviewUiTests(unittest.TestCase):
         self.assertFalse(self.view.busy)
         self.assertFalse(self.app.supplement_review_running)
 
-    def test_gallery_only_sidecar_rows_filter_navigation_and_no_project_mutation(self):
+    def choose(self, key, value):
+        menu, choices = self.view.form[key]
+        caption = next(c for c, v in choices.items() if v == value)
+        menu.set(caption)
+        self.app._attribute_changed(key, caption)
+        self.complete_save()
+
+    def filter_attribute(self, key, value):
+        from smartlabel import image_filters
+        self.app.label_filter_field.set(next(c for c, f in self.app.label_filter_fields.items() if f == ('attribute', key)))
+        self.app._label_filter_changed()
+        self.app.label_filter_value.set(next(c for c, v in self.app.label_filter_values.items() if v == value))
+        self.app._change_image_filter()
+
+    def test_same_widgets_filters_and_source_only_records(self):
         before = deepcopy(self.app.project.to_dict())
+        widgets = (self.app.canvas, self.app.image_list, self.app.attribute_panel,
+                   self.app.image_filter, self.app.label_filter_field, self.app.label_filter_value)
         self.assertEqual(len(self.view.rows), 27)
-        self.assertNotIn('parent', [r['id'] for r in self.view.rows])
-        self.assertEqual(len(self.view.list_buttons), 24)
-        self.view.change_page(1)
-        self.assertEqual(self.view.selected['id'], 's24')
-        self.view.navigate(1)
-        self.assertEqual(self.view.selected['id'], 's25')
-        self.view.stage_filter.set('Cây nhỏ')
-        self.view.apply_filters()
-        self.assertEqual([r['id'] for r in self.view.filtered], ['s24', 's25', 's26'])
+        self.assertIs(self.view.preview, self.app.canvas)
+        self.assertEqual(self.view.values(), {'plant_presence': 'present', 'yellow_leaf': 'present'})
+        self.assertFalse(hasattr(self.view, 'batch_filter'))
+        self.assertFalse(hasattr(self.view, 'stage_filter'))
+        self.filter_attribute('wilt', '')
+        self.assertEqual(len(self.view.filtered), 27)
+        self.filter_attribute('plant_presence', 'present')
+        self.assertEqual(len(self.view.filtered), 27)
+        self.filter_attribute('plant_presence', '')
+        self.assertEqual(self.view.filtered, [])
+        self.app._show_label_workspace('Giàn')
+        self.assertFalse(self.view.active)
+        self.assertEqual(widgets, (self.app.canvas, self.app.image_list, self.app.attribute_panel,
+                         self.app.image_filter, self.app.label_filter_field, self.app.label_filter_value))
+        self.assertEqual(self.app.image_list.rows[0]['key'], 'parent')
         self.assertEqual(before, self.app.project.to_dict())
 
-    def test_async_reject_reapprove_and_draft_reconcile_filters(self):
-        self.view.status_filter.set('Đang dùng train')
-        self.view.apply_filters()
-        self.view.save('rejected')
-        self.assertFalse(self.app._can_change_project())
-        self.complete_save()
-        self.assertEqual(len(self.view.filtered), 26)
-        self.view.status_filter.set('Từ chối')
-        self.view.apply_filters()
-        self.assertEqual(self.view.selected['id'], 's0')
-        menu, choices = self.view.form['yellow_leaf']
-        menu.set(next(k for k, v in choices.items() if v == 'absent'))
-        self.view.save('reviewed')
-        self.complete_save()
-        data = json.loads(manifest_path(self.store, self.hydro).read_text(encoding='utf-8'))
-        self.assertEqual(data['images'][0]['attributes']['yellow_leaf'], 'absent')
-        self.assertTrue(data['images'][0]['enabled'])
-        self.assertIsNone(self.view.selected)
-
-    def test_all_project_attributes_can_be_added_then_saved_as_draft_and_approved(self):
+    def test_shared_edit_autosaves_draft_and_approve_next_and_export(self):
         before = deepcopy(self.app.project.to_dict())
-        self.assertEqual(set(self.view.form), {'plant_presence', 'yellow_leaf', 'wilt'})
-        self.assertEqual(self.view.values(), {'yellow_leaf': 'present'})
-        menu, choices = self.view.form['wilt']
-        menu.set(next(caption for caption, value in choices.items() if value == 'present'))
-        self.view.save('draft', save_draft_labels=True)
-        self.complete_save()
+        self.choose('wilt', 'present')
         self.assertFalse(self.view.selected['enabled'])
-        self.assertEqual(self.view.selected['attributes']['wilt'], 'present')
-        self.assertIn(('wilt', 'present'), self.view.attribute_map.values())
-        self.view.save('reviewed')
+        self.assertEqual(self.view.selected['attributes'], {'plant_presence': 'present', 'yellow_leaf': 'present', 'wilt': 'present'})
+        self.app._approve_image_next()
         self.complete_save()
-        self.assertTrue(self.view.selected['enabled'])
+        self.assertEqual(self.view.selected['id'], 's1')
+        data = json.loads(manifest_path(self.store, self.hydro).read_text(encoding='utf-8'))
+        self.assertTrue(data['images'][0]['enabled'])
         self.assertEqual(before, self.app.project.to_dict())
-        self.assertNotIn('plant_presence', self.view.selected['attributes'])
+        from smartlabel.training_supplements import validated_samples
+        attr = next(a for a in model_attributes(self.hydro) if a['id'] == 'wilt')
+        self.assertEqual(len(validated_samples(self.store, self.hydro, attr, {'plant': 'train'})), 1)
 
-    def test_presence_change_updates_condition_fields_without_inheriting_parent_labels(self):
-        menu, choices = self.view.form['plant_presence']
-        menu.set(next(caption for caption, value in choices.items() if value == 'absent'))
-        self.view.attribute_changed('plant_presence')
+    def test_absent_or_unassigned_presence_clears_conditions_like_capture(self):
+        self.choose('plant_presence', 'absent')
         self.assertEqual(self.view.values(), {'plant_presence': 'absent', 'yellow_leaf': 'not_applicable', 'wilt': 'not_applicable'})
-        self.view.save('reviewed')
-        self.complete_save()
         self.assertEqual(self.view.selected['presenceMeaning'], 'negative')
+        self.choose('plant_presence', '')
+        self.assertNotIn('plant_presence', self.view.values())
+        self.assertEqual(self.view.values()['yellow_leaf'], 'not_applicable')
+        self.assertIsNone(self.view.selected['presenceMeaning'])
 
-    def test_archived_images_are_outside_default_list_and_can_be_restored(self):
-        self.view.save('archived')
+    def test_archive_reject_restore_and_filter_membership(self):
+        with patch('smartlabel.supplement_review_view.messagebox.askyesno', return_value=True):
+            self.app._delete_image_from_thumbnail('supplement:s0')
         self.complete_save()
         self.assertEqual(len(self.view.filtered), 26)
-        self.assertNotIn('s0', [row['id'] for row in self.view.filtered])
-        self.view.status_filter.set('Đã lưu trữ')
-        self.view.apply_filters()
+        self.app.image_filter.set('Đã lưu trữ')
+        self.app._change_image_filter()
         self.assertEqual(self.view.selected['id'], 's0')
-        self.view.save('reviewed')
+        self.app._restore_image()
         self.complete_save()
         self.assertFalse(self.view.filtered)
-        self.view.status_filter.set('Tất cả')
-        self.view.apply_filters()
-        self.assertEqual(len(self.view.filtered), 27)
-
-    def test_unsaved_form_preserved_on_cancel_and_bottle_context_has_no_supplements(self):
-        menu, choices = self.view.form['yellow_leaf']
-        menu.set(next(k for k, v in choices.items() if v == 'absent'))
-        with patch('smartlabel.supplement_review_view.messagebox.askyesno', return_value=False):
-            self.view.select(self.view.rows[1])
-            self.app._change_project_context(self.bottle)
+        self.app.image_filter.set('Bản nháp')
+        self.app._change_image_filter()
         self.assertEqual(self.view.selected['id'], 's0')
-        self.assertEqual(self.app.project.id, self.hydro.id)
-        with patch('smartlabel.supplement_review_view.messagebox.askyesno', return_value=True):
-            self.app._change_project_context(self.bottle)
-        self.assertFalse(self.app.label_workspace_switch.winfo_manager())
-        self.assertFalse(self.view.winfo_manager())
-        self.assertIsNone(self.view.project)
-        self.assertFalse(self.view.rows)
-        self.assertFalse(self.app.project_summary.winfo_manager())
-        self.assertTrue(self.app.project_overview._parent_frame.winfo_manager())
-        self.assertTrue(self.app.capture_workspace.winfo_manager())
+        self.app._reject_image()
+        self.complete_save()
+        self.app.image_filter.set('Từ chối')
+        self.app._change_image_filter()
+        self.assertEqual(self.view.selected['id'], 's0')
+        self.assertEqual(len(self.app.project.images), 1)
 
-    def test_visible_layout_at_minimum_and_large_window_and_overview_expansion(self):
+    def test_unsaved_note_cancel_busy_switch_and_bottle_isolation(self):
+        self.app.other_abnormal_var.set('Rách lá')
+        with patch('smartlabel.supplement_review_view.messagebox.askyesno', return_value=False):
+            self.app._show_label_workspace('Giàn')
+            self.app._change_project_context(self.bottle)
+        self.assertTrue(self.view.active)
+        self.assertEqual(self.app.project.id, self.hydro.id)
+        self.app._save_other_abnormal()
+        self.assertTrue(self.view.busy)
+        self.app._show_label_workspace('Giàn')
+        self.assertTrue(self.view.active)
+        self.complete_save()
+        self.assertEqual(self.view.selected['otherAbnormal'], 'Rách lá')
+        self.app._change_project_context(self.bottle)
+        self.assertFalse(self.view.active)
+        self.assertFalse(self.app.canvas.read_only)
+        self.assertIsNone(self.view.project)
+        self.assertFalse(self.app.label_workspace_switch.winfo_manager())
+
+    def test_same_geometry_at_minimum_large_zoom_navigation_and_shortcuts(self):
         self.app.deiconify()
         try:
             for geometry in ('1180x720', '1600x900'):
                 self.app.geometry(geometry)
-                self.app.update()
-                self.app.canvas.focus_force()
-                self.app._show_label_workspace('Ảnh bổ trợ')
-                self.assertEqual(self.app.focus_get(), self.view.preview)
-                header = self.view.source_switch.master
-                title = next(w for w in header.winfo_children() if hasattr(w, 'cget') and w.cget('text') == 'DANH SÁCH ẢNH')
-                self.assertGreaterEqual(self.view.source_switch.winfo_rootx(), title.winfo_rootx() + title.winfo_width())
-                self.assertLessEqual(self.view.source_switch.winfo_rootx() + self.view.source_switch.winfo_width(),
-                                     self.view.list_card.winfo_rootx() + self.view.list_card.winfo_width())
-                self.assertEqual(self.app.label_source.get(), 'Bổ trợ')
-                self.assertGreater(self.view.preview.winfo_width(), 250)
-                self.assertGreater(self.view.preview.winfo_height(), 260)
-                self.assertLessEqual(self.view.details.winfo_rootx() + self.view.details.winfo_width(),
-                                     self.app.winfo_rootx() + self.app.winfo_width())
-                self.app.tabs.set('DỰ ÁN')
-                self.app.update()
-                time.sleep(.15)  # CTkTabview finishes its delayed tab transition.
-                self.app.update()
-                self.assertTrue(self.app.project_overview.winfo_ismapped())
-                self.assertFalse(self.app.project_summary.winfo_ismapped())
-                self.app.project_overview.toggle_details()
-                self.app.update()
-                for frame in self.app.project_overview.split_frames:
-                    self.assertEqual(bool(frame.winfo_manager()), self.app.project_overview.details_visible)
                 self.app.tabs.set('GÁN NHÃN')
                 self.app.update()
                 time.sleep(.15)
                 self.app.update()
+                self.assertGreater(self.app.canvas.winfo_width(), 250)
+                self.assertGreater(self.app.canvas.winfo_height(), 260)
+                shared = (self.app.canvas.winfo_geometry(), self.app.attribute_panel.winfo_geometry())
+                self.app._show_label_workspace('Giàn')
+                self.app.update()
+                self.assertEqual(shared, (self.app.canvas.winfo_geometry(), self.app.attribute_panel.winfo_geometry()))
+                self.app._show_label_workspace('Bổ trợ')
+                self.app.update()
+            before = deepcopy(self.app.project.to_dict())
+            self.app.canvas.undo()
+            self.app.canvas.delete_selected()
+            self.app._annotation_changed()
+            self.assertEqual(before, self.app.project.to_dict())
+            self.app._next_image()
+            self.assertEqual(self.view.selected['id'], 's1')
+            self.app._previous_image()
+            self.assertEqual(self.view.selected['id'], 's0')
+            self.app.canvas.zoom(1.2)
+            self.assertEqual(self.app.zoom_percent_label.cget('text'), f'{round(self.app.canvas.scale * 100)}%')
         finally:
             self.app.withdraw()
 
-    def test_thread_start_failure_releases_guard_and_stale_manifest_save_is_visible(self):
+    def test_failure_keeps_edits_and_stale_revision_cannot_overwrite(self):
         with patch('smartlabel.supplement_review_view.Thread.start', side_effect=RuntimeError('thread unavailable')):
-            self.view.save('draft')
-            self.complete_save()
-        self.assertIn('thread unavailable', self.view.feedback.cget('text'))
+            self.choose('wilt', 'present')
+        self.assertIn('thread unavailable', self.app.title())
+        self.assertEqual(self.view.values()['wilt'], 'present')
+        self.assertFalse(self.view.busy)
         manifest_path(self.store, self.hydro).write_text(json.dumps({**self.manifest, 'externalEdit': True}), encoding='utf-8')
-        self.view.save('draft')
+        self.view.save('draft', save_draft_labels=True)
         self.complete_save()
-        self.assertIn('thay đổi', self.view.feedback.cget('text'))
+        self.assertIn('thay đổi', self.app.title())
         self.assertTrue(self.view.selected['enabled'])
+
+    def test_shared_pager_and_qa_return_to_capture_with_unsaved_guard(self):
+        self.app.image_page_size = 10
+        self.view.refresh_list()
+        self.app._change_image_page(1)
+        self.assertEqual(self.view.selected['id'], 's10')
+        self.assertEqual(len(self.app.image_list.rows), 10)
+        self.app._change_image_page(1)
+        self.assertEqual(self.view.selected['id'], 's20')
+        self.assertEqual(len(self.app.image_list.rows), 7)
+        self.app.other_abnormal_var.set('Chưa lưu')
+        with patch('smartlabel.supplement_review_view.messagebox.askyesno', return_value=False):
+            self.app._open_qa_image('parent')
+        self.assertTrue(self.view.active)
+        self.assertEqual(self.view.selected['id'], 's20')
+        with patch('smartlabel.supplement_review_view.messagebox.askyesno', return_value=True):
+            self.app._open_qa_image('parent')
+        self.assertFalse(self.view.active)
+        self.assertEqual(self.app.canvas.record.id, 'parent')
+        self.assertFalse(self.app.canvas.read_only)

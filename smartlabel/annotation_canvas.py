@@ -25,6 +25,7 @@ class AnnotationCanvas(tk.Canvas):
         self.offset_x = 0.0
         self.offset_y = 0.0
         self.mode = "select"
+        self.read_only = False
         self.geometry_mode = "rect"
         self.active_class_id: int | None = None
         self.default_attributes: dict[str, str] = {}
@@ -104,12 +105,16 @@ class AnnotationCanvas(tk.Canvas):
         self._notify_view()
 
     def undo(self) -> None:
+        if self.read_only:
+            return
         if not self.record or not self.history:
             return
         self.future.append([ann.to_dict() for ann in self.record.annotations])
         self._restore(self.history.pop())
 
     def redo(self) -> None:
+        if self.read_only:
+            return
         if not self.record or not self.future:
             return
         self.history.append([ann.to_dict() for ann in self.record.annotations])
@@ -272,6 +277,9 @@ class AnnotationCanvas(tk.Canvas):
     def _press(self, event) -> None:
         self.focus_set()
         if not self.record:
+            return
+        if self.read_only:
+            self._pan_press(event)
             return
         if self.mode == "select":
             handle = self._handle_at(event.x, event.y)
@@ -470,6 +478,8 @@ class AnnotationCanvas(tk.Canvas):
         self.configure(cursor="arrow" if self.mode == "select" else "crosshair")
 
     def _double_click(self, _event) -> None:
+        if self.read_only:
+            return
         if self.mode != "polygon" or not self.record or len(self.polygon_points) < 3:
             return
         if not self.project or self.active_class_id not in {item.id for item in self.project.classes}:
@@ -503,6 +513,8 @@ class AnnotationCanvas(tk.Canvas):
         self._notify_view()
 
     def delete_selected(self) -> None:
+        if self.read_only:
+            return
         if not self.record or not self.selected_id:
             return
         self.checkpoint()

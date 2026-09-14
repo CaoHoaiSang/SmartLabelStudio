@@ -1,6 +1,26 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 14/09/2026
 
-## Hiện hành: Ảnh bổ trợ gán nhiều thuộc tính và lưu trữ đối chứng — 14/09/2026
+## Hiện hành: Một giao diện gán nhãn, hai nguồn ảnh — 14/09/2026
+
+Nhánh `fix/supplement-shared-label-workspace`, kế thừa `8f6e4ac`.
+Giàn/Bổ trợ dùng cùng widget danh sách, bộ lọc trạng thái/thuộc tính/giá trị,
+canvas, zoom, thuộc tính, ghi chú và nút duyệt. Bỏ UI Bổ trợ riêng và bộ lọc
+đợt/tuổi cây. Bộ lọc trạng thái Bổ trợ có Đã lưu trữ để xem lại 7 đối chứng.
+Adapter riêng chỉ đọc/ghi sidecar; không đưa biến thể vào danh sách ảnh giàn.
+Sửa nhãn tự lưu nháp; Duyệt & tiếp bật nhãn đủ điều kiện vào TRAIN. Giữ
+atomic/lock/revision/source validation, nhãn partial và các guard tác vụ.
+
+Hiện diện cũ từng lưu riêng tại presenceMeaning. Nay xác nhận dương có nhãn
+tình trạng được đọc nhất quán thành nhãn hiện diện theo schema; không chép
+Héo từ parent. Sửa một lần 107 hàng thiếu nhãn, giữ hàng người dùng đã gán và
+7 hàng lưu trữ; 108 Có cây / 108 Lá vàng / 0 Héo vào preflight bổ trợ. Không
+train, đổi model, sửa ảnh hoặc phân tập. Các mục dưới là lịch sử trước sửa.
+Kiểm thử: full suite 227/227 đạt (204,851 giây); sau guard QA cuối, 8/8 test
+UI đạt (53,716 giây), gồm cùng widget/geometry, phân trang, lưu và chuyển nguồn.
+Mở lại SmartLabel để nạp code mới; không cưỡng bức đóng phiên đang làm việc.
+[Thao tác, ý nghĩa dữ liệu và giới hạn](HYDRO_TRAINING_SUPPLEMENTS.md).
+
+## Mốc trước: Ảnh bổ trợ gán nhiều thuộc tính và lưu trữ đối chứng — 14/09/2026
 
 Nhánh `feat/supplement-multi-attribute-workspace`, kế thừa `410ccad`.
 Chuyển đổi **Giàn / Bổ trợ** nằm cạnh phải tiêu đề **DANH SÁCH ẢNH** trong

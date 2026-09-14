@@ -461,7 +461,7 @@ class ThumbnailList(ctk.CTkScrollableFrame):
             fg_color=status_style["indicator"],
         )
         badge.pack(anchor="center")
-        ToolTip(delete_button, "Xóa ảnh này cùng toàn bộ nhãn và thuộc tính liên quan.")
+        ToolTip(delete_button, item.get("delete_tooltip", "Xóa ảnh này cùng toàn bộ nhãn và thuộc tính liên quan."))
         name_tooltip = ToolTip(name_label, display_name)
         status_tooltip = ToolTip(badge, f"Trạng thái ảnh: {status_style['label']}")
         data = {
