@@ -8,10 +8,13 @@ from pathlib import Path
 import tempfile
 
 from .hydro_labels import model_attributes
-from .training_supplements import manifest_path, read_manifest, sha256, validate_manifest_samples
+from .label_schema import meaning_for
+from .training_supplements import manifest_path, read_manifest, sha256, validate_manifest_samples, validate_review_labels
 
 
 def review_state(row):
+    if row.get("archived") is True:
+        return "Đã lưu trữ"
     if row.get("reviewStatus") == "rejected":
         return "Từ chối"
     if row.get("reviewStatus") != "reviewed":
@@ -46,7 +49,7 @@ def preview_path(store, project, row):
 
 
 def save_review(store, project, assignments, row_id, decision, expected_revision,
-                *, attributes=None, note=""):
+                *, attributes=None, note="", save_draft_labels=False):
     """Atomic sidecar-only save with revision check and export validation on approval.
 
     An exclusive lock serializes cooperating Studio instances. A second hash
@@ -54,7 +57,7 @@ def save_review(store, project, assignments, row_id, decision, expected_revision
     """
     if project is None or project.metadata.get("template") != "Hydroponic Slot Condition":
         raise ValueError("Duyệt ảnh bổ trợ chỉ áp dụng cho dự án Hydro.")
-    if decision not in {"reviewed", "draft", "rejected"}:
+    if decision not in {"reviewed", "draft", "rejected", "archived"}:
         raise ValueError("Trạng thái duyệt không hợp lệ.")
     path = manifest_path(store, project)
     lock = path.with_suffix(".review.lock")
@@ -73,17 +76,21 @@ def save_review(store, project, assignments, row_id, decision, expected_revision
         if row is None:
             raise ValueError("Ảnh không còn trong danh sách bổ trợ.")
         previous = {key: deepcopy(row.get(key)) for key in
-                    ("enabled", "reviewStatus", "attributes", "reviewNote", "reviewedBy", "reviewedAt")}
-        # Rejection/draft must always be possible, even for a damaged source.
-        # They preserve the old labels instead of silently saving form changes.
-        if decision == "reviewed" and attributes is not None:
-            if set(attributes) != set(row.get("attributes", {})):
-                raise ValueError("Chỉ sửa giá trị của thuộc tính đã có trên ảnh bổ trợ.")
+                    ("enabled", "archived", "reviewStatus", "attributes", "presenceMeaning", "reviewNote", "reviewedBy", "reviewedAt")}
+        # Exclusion stays possible even for a damaged source. Only approval or
+        # an explicit draft-save accepts form changes; other decisions keep labels.
+        if attributes is not None and (decision == "reviewed" or (decision == "draft" and save_draft_labels)):
             row["attributes"] = deepcopy(attributes)
-        row.update(enabled=decision == "reviewed", reviewStatus=decision,
+            presence = next(a for a in model_attributes(project) if a["role"] == "presence")
+            if isinstance(attributes, dict) and presence["id"] in attributes:
+                row["presenceMeaning"] = meaning_for(presence, attributes[presence["id"]])
+            validate_review_labels(project, row)
+        row.update(enabled=decision == "reviewed", archived=decision == "archived",
+                   reviewStatus=row.get("reviewStatus", "draft") if decision == "archived" else decision,
                    reviewNote=note.strip() or {"reviewed": "Người dùng đã xem ảnh và xác nhận nhãn trong SmartLabel.",
                        "draft": "Chuyển về chờ duyệt trong SmartLabel.",
-                       "rejected": "Người dùng loại khỏi train trong SmartLabel."}[decision],
+                       "rejected": "Người dùng loại khỏi train trong SmartLabel.",
+                       "archived": "Lưu trữ khỏi danh sách làm việc và train; giữ ảnh cùng lịch sử."}[decision],
                    reviewedBy="SmartLabel operator", reviewedAt=datetime.now(timezone.utc).isoformat())
         if decision == "reviewed":
             validate_manifest_samples(store, project, model_attributes(project)[0], assignments, data)

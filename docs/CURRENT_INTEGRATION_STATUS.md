@@ -1,6 +1,35 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 14/09/2026
 
-## Hiện hành: Tổng quan/Dataset, model Auto-Label và Windows operational — 14/09/2026
+## Hiện hành: Ảnh bổ trợ gán nhiều thuộc tính và lưu trữ đối chứng — 14/09/2026
+
+Nhánh `feat/supplement-multi-attribute-workspace`, kế thừa `410ccad`.
+Chuyển đổi **Giàn / Bổ trợ** nằm cạnh phải tiêu đề **DANH SÁCH ẢNH** trong
+ô trái, cùng header cho hai vùng. Bổ trợ dùng bố cục ba cột/chi tiết nhãn như
+ảnh giàn; hiện tất cả thuộc tính trong schema, cho thêm Héo/Hiện diện, sửa
+hoặc bỏ nhãn. Không chép nhãn từ ảnh gốc hoặc tự gán giá trị còn thiếu.
+
+Lưu nháp giữ chỉnh sửa, tắt train; Duyệt bật nhãn đủ điều kiện vào TRAIN của
+từng classifier. Mục chưa gán/chưa chắc/không áp dụng không train; không cây
+đặt tình trạng không áp dụng, backend vẫn chặn mâu thuẫn. Có thể lưu trữ để
+ẩn khỏi danh sách làm việc và train, xem/khôi phục bằng bộ lọc Đã lưu trữ.
+Sidecar vẫn atomic/revision/lock/history, kiểm nguồn/hash/parent TRAIN khi duyệt.
+Không đổi contract bundle/runtime hoặc luồng gán nhãn của bài vật thể.
+
+Đã lưu trữ 7 đối chứng xanh cũ trong project Phân Loại Cải Ngọt, giữ tệp/lịch
+sử. Hiện 108 ảnh làm việc/108 bật train, 7 lưu trữ. Đối chiếu 115 bổ trợ/1297 ảnh giàn
+không có RGB trùng ở cùng kích thước; các đối chứng xanh được tạo gần nội dung
+gốc, không gọi chúng là biến thể vàng mới. Từng byte ảnh giàn/bổ trợ, project,
+split và 3 PT giữ nguyên; 108 bản ghi khác giữ nguyên. Chưa tự gán Héo hay train:
+preflight hiện Lá vàng 108, Hiện diện 0, Héo 0, người dùng bổ sung nhãn sau khi xem.
+
+225/225 test đầy đủ đạt 205,712s, gồm nhiều thuộc tính tới export, loại nhãn
+chưa chắc, chỉ TRAIN, lưu nháp, lưu trữ/khôi phục, revision/atomic và Hydro/Chai.
+Bố cục Tk 1180×720 và 1600×900 đạt; Computer Use capture vẫn lỗi
+`SetIsBorderRequired`/`0x80004002`, chưa có ảnh chụp nghiệm thu thị giác.
+Mở lại Studio để dùng source mới, Tải lại danh sách nếu phiên đã nạp code mới.
+[Thao tác và contract](HYDRO_TRAINING_SUPPLEMENTS.md).
+
+## Mốc trước: Tổng quan/Dataset, model Auto-Label và Windows operational — 14/09/2026
 
 Nhánh `fix/studio-workflow-runtime-consistency`, kế thừa `4de4813`.
 Tổng quan và Dataset dùng chung `ProjectOverview`; giữ handler cập nhật

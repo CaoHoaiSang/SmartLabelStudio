@@ -79,11 +79,62 @@ class SupplementReviewTests(unittest.TestCase):
         self.assertEqual(data['images'][0]['attributes'], {'yellow_leaf': 'present'})
         self.assertEqual(review_state(data['images'][0]), 'Từ chối')
 
-    def test_bad_labels_and_added_attributes_are_not_written(self):
+    def test_bad_labels_and_conflicting_presence_are_not_written(self):
         before = self.path.read_bytes()
-        for attributes in ({'yellow_leaf': 'uncertain'}, {'yellow_leaf': 'present', 'wilt': 'absent'}):
+        for attributes in ({'yellow_leaf': 'bogus'}, {'unknown': 'present'},
+                           {'plant_presence': 'absent', 'yellow_leaf': 'present'}):
             with self.assertRaises(ValueError): self.update('reviewed', attributes=attributes)
             self.assertEqual(before, self.path.read_bytes())
+
+    def test_add_remove_and_uncertain_attributes_route_each_classifier_independently(self):
+        before = deepcopy(self.project.to_dict())
+        self.update('reviewed', attributes={'yellow_leaf': 'present', 'wilt': 'present'})
+        for key in ('yellow_leaf', 'wilt'):
+            out = self.manager.export_classification(self.project, key)
+            metadata = json.loads((out / 'export.json').read_text(encoding='utf-8'))
+            self.assertEqual(metadata['supplement_count'], 1)
+            self.assertEqual(len(list((out / 'train' / 'present').iterdir())), 1)
+            self.assertFalse(list((out / 'val' / 'present').iterdir()))
+            self.assertFalse(list((out / 'test' / 'present').iterdir()))
+        self.assertEqual(validated_samples(self.store, self.project, self.attrs[0], self.assignment), [])
+        self.update('reviewed', attributes={'yellow_leaf': 'uncertain', 'wilt': 'present'})
+        self.assertEqual(validated_samples(self.store, self.project, self.yellow, self.assignment), [])
+        data, _ = self.update('reviewed', attributes={'wilt': 'present'})
+        self.assertNotIn('yellow_leaf', data['images'][0]['attributes'])
+        self.assertEqual(before, self.project.to_dict())
+
+    def test_draft_saves_partial_labels_and_approval_requires_training_label(self):
+        self.update('draft', attributes={'wilt': 'uncertain'}, save_draft_labels=True)
+        data, _ = load_review(self.store, self.project)
+        self.assertEqual(data['images'][0]['attributes'], {'wilt': 'uncertain'})
+        self.assertFalse(data['images'][0]['enabled'])
+        with self.assertRaisesRegex(ValueError, 'lưu nháp'):
+            self.update('reviewed', attributes={'wilt': 'uncertain'})
+        self.update('draft', attributes={}, save_draft_labels=True)
+        self.assertEqual(load_review(self.store, self.project)[0]['images'][0]['attributes'], {})
+
+    def test_no_plant_updates_semantics_and_does_not_train_conditions(self):
+        data, _ = self.update('reviewed', attributes={'plant_presence': 'absent',
+                              'yellow_leaf': 'not_applicable', 'wilt': 'not_applicable'})
+        self.assertEqual(data['images'][0]['presenceMeaning'], 'negative')
+        self.assertEqual(validated_samples(self.store, self.project, self.yellow, self.assignment), [])
+        samples = validated_samples(self.store, self.project, self.attrs[0], self.assignment)
+        self.assertEqual(len(samples), 1)
+        self.assertEqual(samples[0][1], 'absent')
+
+    def test_archive_keeps_image_labels_history_and_can_be_restored(self):
+        image = preview_path(self.store, self.project, self.row)
+        before = image.read_bytes()
+        data, _ = self.update('archived', attributes={'yellow_leaf': 'absent'})
+        row = data['images'][0]
+        self.assertEqual(review_state(row), 'Đã lưu trữ')
+        self.assertEqual(row['attributes'], self.row['attributes'])
+        self.assertEqual(row['reviewHistory'][-1]['decision'], 'archived')
+        self.assertEqual(image.read_bytes(), before)
+        self.assertEqual(validated_samples(self.store, self.project, self.yellow, self.assignment), [])
+        restored, _ = self.update('reviewed', attributes={'yellow_leaf': 'present'})
+        self.assertFalse(restored['images'][0]['archived'])
+        self.assertEqual(len(validated_samples(self.store, self.project, self.yellow, self.assignment)), 1)
 
     def test_atomic_replace_failure_cleans_own_temporary_files_and_preserves_manifest(self):
         before = self.path.read_bytes()

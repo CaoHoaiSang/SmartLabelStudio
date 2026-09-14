@@ -34,7 +34,7 @@ def summary_lines(store, project):
         data = read_manifest(store, project)
         if data is None:
             return []
-        active = [r for r in data["images"] if r.get("enabled") is True]
+        active = [r for r in data["images"] if r.get("enabled") is True and r.get("archived") is not True]
         counts = Counter(r.get("kind", "unknown") for r in active)
         return ["", f"ẢNH BỔ TRỢ TRAIN: {len(active)} đang bật"
                 f" · Tổng hợp {counts['synthetic']} · Nguồn ngoài {counts['external']}",
@@ -52,6 +52,24 @@ def pixel_hash(path):
     with Image.open(path) as opened:
         image = opened.convert("RGB")
         return hashlib.sha256(str(image.size).encode() + image.tobytes()).hexdigest()
+
+
+def validate_review_labels(project, row):
+    """Partial review is valid; only explicit binary labels are training samples."""
+    attributes = {a["id"]: a for a in model_attributes(project)}
+    values = row.get("attributes", {})
+    if not isinstance(values, dict) or any(
+            key not in attributes or meaning_for(attributes[key], value) is None
+            for key, value in values.items()):
+        raise ValueError(f"{row.get('id')}: nhãn bổ trợ không hợp lệ.")
+    presence = next(a for a in attributes.values() if a["role"] == "presence")
+    if presence["id"] in values and meaning_for(presence, values[presence["id"]]) != row.get("presenceMeaning"):
+        raise ValueError(f"{row.get('id')}: hiện diện mâu thuẫn.")
+    trainable = {key: value for key, value in values.items()
+                 if meaning_for(attributes[key], value) in {"positive", "negative"}}
+    if any(attributes[key]["role"] == "condition" for key in trainable) and row.get("presenceMeaning") != "positive":
+        raise ValueError(f"{row.get('id')}: phải xác nhận có cây trước khi gán tình trạng.")
+    return trainable
 
 
 def validated_samples(store, project, attribute, assignments):
@@ -74,7 +92,6 @@ def validate_manifest_samples(store, project, attribute, assignments, data):
     # JSON round-trip normalizes tuples in the contract identity.
     if data.get("labelIdentities") != json.loads(json.dumps(identities)):
         raise ValueError("Ý nghĩa nhãn ảnh bổ trợ khác dự án; cần duyệt lại manifest.")
-    presence = next(a for a in attributes.values() if a["role"] == "presence")
     records = {r.id: r for r in project.images}
     root = manifest_path(store, project).parent.resolve()
     seen_ids, seen_hashes = set(), set()
@@ -84,6 +101,8 @@ def validate_manifest_samples(store, project, attribute, assignments, data):
         if row.get("enabled") is not True:
             continue
         identifier = row.get("id")
+        if row.get("archived") is True:
+            raise ValueError(f"{identifier}: ảnh lưu trữ không được bật train.")
         if not isinstance(identifier, str) or not identifier or identifier in seen_ids:
             raise ValueError("Mã ảnh bổ trợ thiếu hoặc trùng.")
         seen_ids.add(identifier)
@@ -93,14 +112,9 @@ def validate_manifest_samples(store, project, attribute, assignments, data):
             raise ValueError(f"{identifier}: thiếu nguồn ảnh bổ trợ.")
         if not row.get("cropCode") or row.get("cropCode") != project.metadata.get("cropCode"):
             raise ValueError(f"{identifier}: giống cây không khớp dự án.")
-        values = row.get("attributes", {})
-        if not isinstance(values, dict) or not values or any(k not in attributes or meaning_for(attributes[k], v) not in {"positive", "negative"}
-                             for k, v in values.items()):
-            raise ValueError(f"{identifier}: nhãn bổ trợ không hợp lệ.")
-        if any(attributes[k]["role"] == "condition" for k in values) and row.get("presenceMeaning") != "positive":
-            raise ValueError(f"{identifier}: phải xác nhận có cây trước khi gán tình trạng.")
-        if presence["id"] in values and meaning_for(presence, values[presence["id"]]) != row.get("presenceMeaning"):
-            raise ValueError(f"{identifier}: hiện diện mâu thuẫn.")
+        values = validate_review_labels(project, row)
+        if not values:
+            raise ValueError(f"{identifier}: chưa có nhãn Có/Không để train; hãy lưu nháp.")
         source = (root / str(row.get("file", ""))).resolve()
         if not source.is_relative_to(root) or not source.is_file() or source == manifest_path(store, project):
             raise ValueError(f"{identifier}: đường dẫn ảnh không hợp lệ.")

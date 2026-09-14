@@ -103,8 +103,10 @@ class ProjectOverview(ctk.CTkScrollableFrame):
         try:
             data, _ = load_review(store, project)
             images = data["images"] if data else []
-            active = sum(r.get("enabled") is True for r in images)
-            self.label(supplement, f"{len(images)} ảnh bổ trợ   ·   {active} đang bật train")
+            archived = sum(r.get("archived") is True for r in images)
+            active = sum(r.get("enabled") is True and r.get("archived") is not True for r in images)
+            self.label(supplement, f"{len(images) - archived} ảnh bổ trợ   ·   {active} đang bật train"
+                       + (f"   ·   {archived} đã lưu trữ" if archived else ""))
             self.label(supplement, "Lưu riêng với ảnh giàn. Không cộng vào thống kê Có / Không và VAL / TEST ở trên.", color=muted, size=11)
         except (OSError, ValueError, TypeError) as exc:
             self.label(supplement, f"Cần kiểm tra danh sách bổ trợ: {exc}", color=self.colors["warn"], size=11)

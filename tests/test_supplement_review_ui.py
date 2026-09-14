@@ -112,6 +112,47 @@ class SupplementReviewUiTests(unittest.TestCase):
         self.assertTrue(data['images'][0]['enabled'])
         self.assertIsNone(self.view.selected)
 
+    def test_all_project_attributes_can_be_added_then_saved_as_draft_and_approved(self):
+        before = deepcopy(self.app.project.to_dict())
+        self.assertEqual(set(self.view.form), {'plant_presence', 'yellow_leaf', 'wilt'})
+        self.assertEqual(self.view.values(), {'yellow_leaf': 'present'})
+        menu, choices = self.view.form['wilt']
+        menu.set(next(caption for caption, value in choices.items() if value == 'present'))
+        self.view.save('draft', save_draft_labels=True)
+        self.complete_save()
+        self.assertFalse(self.view.selected['enabled'])
+        self.assertEqual(self.view.selected['attributes']['wilt'], 'present')
+        self.assertIn(('wilt', 'present'), self.view.attribute_map.values())
+        self.view.save('reviewed')
+        self.complete_save()
+        self.assertTrue(self.view.selected['enabled'])
+        self.assertEqual(before, self.app.project.to_dict())
+        self.assertNotIn('plant_presence', self.view.selected['attributes'])
+
+    def test_presence_change_updates_condition_fields_without_inheriting_parent_labels(self):
+        menu, choices = self.view.form['plant_presence']
+        menu.set(next(caption for caption, value in choices.items() if value == 'absent'))
+        self.view.attribute_changed('plant_presence')
+        self.assertEqual(self.view.values(), {'plant_presence': 'absent', 'yellow_leaf': 'not_applicable', 'wilt': 'not_applicable'})
+        self.view.save('reviewed')
+        self.complete_save()
+        self.assertEqual(self.view.selected['presenceMeaning'], 'negative')
+
+    def test_archived_images_are_outside_default_list_and_can_be_restored(self):
+        self.view.save('archived')
+        self.complete_save()
+        self.assertEqual(len(self.view.filtered), 26)
+        self.assertNotIn('s0', [row['id'] for row in self.view.filtered])
+        self.view.status_filter.set('Đã lưu trữ')
+        self.view.apply_filters()
+        self.assertEqual(self.view.selected['id'], 's0')
+        self.view.save('reviewed')
+        self.complete_save()
+        self.assertFalse(self.view.filtered)
+        self.view.status_filter.set('Tất cả')
+        self.view.apply_filters()
+        self.assertEqual(len(self.view.filtered), 27)
+
     def test_unsaved_form_preserved_on_cancel_and_bottle_context_has_no_supplements(self):
         menu, choices = self.view.form['yellow_leaf']
         menu.set(next(k for k, v in choices.items() if v == 'absent'))
@@ -139,6 +180,12 @@ class SupplementReviewUiTests(unittest.TestCase):
                 self.app.canvas.focus_force()
                 self.app._show_label_workspace('Ảnh bổ trợ')
                 self.assertEqual(self.app.focus_get(), self.view.preview)
+                header = self.view.source_switch.master
+                title = next(w for w in header.winfo_children() if hasattr(w, 'cget') and w.cget('text') == 'DANH SÁCH ẢNH')
+                self.assertGreaterEqual(self.view.source_switch.winfo_rootx(), title.winfo_rootx() + title.winfo_width())
+                self.assertLessEqual(self.view.source_switch.winfo_rootx() + self.view.source_switch.winfo_width(),
+                                     self.view.list_card.winfo_rootx() + self.view.list_card.winfo_width())
+                self.assertEqual(self.app.label_source.get(), 'Bổ trợ')
                 self.assertGreater(self.view.preview.winfo_width(), 250)
                 self.assertGreater(self.view.preview.winfo_height(), 260)
                 self.assertLessEqual(self.view.details.winfo_rootx() + self.view.details.winfo_width(),

@@ -441,6 +441,21 @@ class SmartLabelApp(ctk.CTk):
         ctk.CTkLabel(card, text=title, font=("Segoe UI Semibold", 14), text_color=COLORS["accent"]).pack(anchor="w", padx=14, pady=(12, 6))
         return card
 
+    def _label_list_card(self, parent):
+        """Same list header in both workspaces; source selection stays beside it."""
+        card = ctk.CTkFrame(parent, corner_radius=12, fg_color=COLORS["panel2"],
+                            border_width=1, border_color=COLORS["border"])
+        header = ctk.CTkFrame(card, fg_color="transparent")
+        header.pack(fill="x", padx=10, pady=(10, 6))
+        ctk.CTkLabel(header, text="DANH SÁCH ẢNH", font=("Segoe UI Semibold", 11),
+                     text_color=COLORS["accent"]).pack(side="left")
+        switch = ctk.CTkSegmentedButton(header, values=["Giàn", "Bổ trợ"],
+            variable=self.label_source, command=self._show_label_workspace,
+            selected_color="#256481", selected_hover_color="#327b9c",
+            font=("Segoe UI", 11), width=124, height=28, dynamic_resizing=False)
+        self.label_source_switches.append(switch)
+        return card, switch
+
     @staticmethod
     def _project_action_group(parent, key: str):
         title, subtitle = PROJECT_ACTION_GROUPS[key]
@@ -1262,11 +1277,13 @@ class SmartLabelApp(ctk.CTk):
     def _apply_project_context_visibility(self) -> None:
         hydro = is_hydroponic_project(self.project)
         if hydro:
-            if not self.label_workspace_switch.winfo_manager():
-                self.label_workspace_switch.pack(fill="x", padx=8, pady=(6, 4), before=self.label_workspace_host)
+            for switch in self.label_source_switches:
+                if not switch.winfo_manager():
+                    switch.pack(side="right", padx=(8, 0))
         else:
             self._show_label_workspace("Danh sách ảnh", force=True)
-            self.label_workspace_switch.pack_forget()
+            for switch in self.label_source_switches:
+                switch.pack_forget()
             self.supplement_view.set_project(None)
         supplements_button = getattr(self, "training_supplements_button", None)
         if supplements_button is not None:
@@ -1336,10 +1353,8 @@ class SmartLabelApp(ctk.CTk):
     # ---------- labeling ----------
     def _build_label_tab(self) -> None:
         label_tab = self.tabs.tab("GÁN NHÃN")
-        self.label_workspace_switch = ctk.CTkSegmentedButton(label_tab,
-            values=["Danh sách ảnh", "Ảnh bổ trợ"], command=self._show_label_workspace,
-            selected_color="#256481", selected_hover_color="#327b9c", height=34)
-        self.label_workspace_switch.set("Danh sách ảnh")
+        self.label_source = tk.StringVar(value="Giàn")
+        self.label_source_switches = []
         self.label_workspace_host = ctk.CTkFrame(label_tab, fg_color="transparent")
         self.label_workspace_host.pack(fill="both", expand=True)
         self.capture_workspace = ctk.CTkFrame(self.label_workspace_host, fg_color="transparent")
@@ -1397,7 +1412,8 @@ class SmartLabelApp(ctk.CTk):
 
         body = ctk.CTkFrame(tab, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=8, pady=(0, 8))
-        left = self._card(body, "DANH SÁCH ẢNH")
+        left, self.label_workspace_switch = self._label_list_card(body)
+        self.capture_list_card = left
         left.pack(side="left", fill="y", padx=(0, 5))
         self.image_filter = ctk.CTkOptionMenu(left, width=260, values=["Tất cả", "Chưa gán nhãn", "Bản nháp", "Đã duyệt", "Từ chối"], command=self._change_image_filter)
         self.image_filter.pack(padx=10, pady=6)
@@ -5125,10 +5141,10 @@ class SmartLabelApp(ctk.CTk):
 
     def _show_label_workspace(self, name, *, force=False):
         if not force and not self.supplement_view.allow_leave():
-            self.label_workspace_switch.set("Ảnh bổ trợ")
+            self.label_source.set("Bổ trợ")
             return
-        supplemental = name == "Ảnh bổ trợ" and is_hydroponic_project(self.project)
-        self.label_workspace_switch.set("Ảnh bổ trợ" if supplemental else "Danh sách ảnh")
+        supplemental = name in {"Ảnh bổ trợ", "Bổ trợ"} and is_hydroponic_project(self.project)
+        self.label_source.set("Bổ trợ" if supplemental else "Giàn")
         self.capture_workspace.pack_forget()
         self.supplement_view.pack_forget()
         if supplemental:
