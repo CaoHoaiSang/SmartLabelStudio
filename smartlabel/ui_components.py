@@ -37,7 +37,12 @@ PROJECT_TEMPLATE_HELP = {
 
 HYDRO_RUNTIME_LABELS = {
     "Jetson Nano · TensorRT FP16 (build engine trên Jetson)": "jetson_nano_tensorrt_fp16",
-    "Windows · ONNX Runtime CPU (chỉ kiểm thử shadow)": "windows_onnxruntime_cpu",
+    "Windows · ONNX Runtime CPU": "windows_onnxruntime_cpu",
+}
+
+HYDRO_DEPLOYMENT_LABELS = {
+    "Vận hành thật · kết luận và cảnh báo AI": "operational",
+    "Shadow · ghi kết quả, chưa cảnh báo AI": "shadow",
 }
 
 CROP_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
@@ -196,11 +201,17 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
         super().__init__(parent)
         self.result: dict | None = None
         self.title("Cấu hình gói model Hydro")
-        self.geometry("720x715")
+        self.geometry(f"720x{max(650, min(775, self.winfo_screenheight() - 100))}")
         self.minsize(650, 650)
         self.transient(parent)
         self.grab_set()
         self.configure(fg_color="#0b151f")
+        # Reserve the footer before the scrollable content consumes the height.
+        actions = ctk.CTkFrame(self, fg_color="transparent")
+        actions.pack(side="bottom", fill="x", padx=22, pady=18)
+        ctk.CTkButton(actions, text="Hủy", width=110, fg_color="#415466", command=self.destroy).pack(side="right", padx=(6, 0))
+        self.continue_button = ctk.CTkButton(actions, text="TIẾP TỤC", width=150, fg_color="#2b906d", command=self._accept)
+        self.continue_button.pack(side="right")
         ctk.CTkLabel(
             self, text="GÓI MODEL HYDRO · CẤU HÌNH VÀ NGƯỠNG",
             font=("Segoe UI Semibold", 19), text_color="#22b9ee",
@@ -242,11 +253,18 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
             values=list(HYDRO_RUNTIME_LABELS),
             variable=self.runtime_label,
         ).pack(side="left", fill="x", expand=True)
+        mode_row = ctk.CTkFrame(self, fg_color="transparent")
+        mode_row.pack(fill="x", padx=22, pady=4)
+        ctk.CTkLabel(mode_row, text="Chế độ sử dụng", width=190, anchor="w", text_color="#8298aa").pack(side="left")
+        self.deployment_label = tk.StringVar(value=next(
+            (label for label, code in HYDRO_DEPLOYMENT_LABELS.items() if code == defaults.get("deploymentMode", "operational")),
+            next(iter(HYDRO_DEPLOYMENT_LABELS))))
+        ctk.CTkOptionMenu(mode_row, values=list(HYDRO_DEPLOYMENT_LABELS), variable=self.deployment_label).pack(side="left", fill="x", expand=True)
         ctk.CTkLabel(
             self,
             text=(
-                "Windows dùng chính ONNX để thử toàn tuyến và luôn ở shadow: không kích hoạt cảnh báo. "
-                "Jetson vẫn build TensorRT engine trực tiếp trên thiết bị."
+                "Windows và Nano dùng cùng chế độ kết luận/cảnh báo AI. Vận hành thật cần QA holdout đạt; "
+                "Shadow chỉ ghi kết quả để đối chiếu. Windows chạy ONNX, Nano build TensorRT trên thiết bị."
             ),
             wraplength=660,
             justify="left",
@@ -272,10 +290,6 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
                 self.variables[f"{key}.{bound}"] = variable
             ctk.CTkLabel(card, text=defaults.get("thresholdSources", {}).get(key, "Khởi đầu 0.30 / 0.70 · chưa hiệu chỉnh"),
                          wraplength=540, justify="left", text_color="#8298aa", font=("Segoe UI", 11)).pack(anchor="w", padx=10, pady=(0, 6))
-        actions = ctk.CTkFrame(self, fg_color="transparent")
-        actions.pack(fill="x", padx=22, pady=18)
-        ctk.CTkButton(actions, text="Hủy", width=110, fg_color="#415466", command=self.destroy).pack(side="right", padx=(6, 0))
-        ctk.CTkButton(actions, text="TIẾP TỤC", width=150, fg_color="#2b906d", command=self._accept).pack(side="right")
 
     def _accept(self) -> None:
         required = ("datasetVersion", "sourceCommit", "cameraProfileIds", "geometryProfileIds")
@@ -300,7 +314,7 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
             "geometryProfileIds": [item.strip() for item in self.variables["geometryProfileIds"].get().split(",") if item.strip()],
             "thresholds": thresholds,
             "runtimeTarget": HYDRO_RUNTIME_LABELS[self.runtime_label.get()],
-            "deploymentMode": "shadow",
+            "deploymentMode": HYDRO_DEPLOYMENT_LABELS[self.deployment_label.get()],
         }
         self.destroy()
 

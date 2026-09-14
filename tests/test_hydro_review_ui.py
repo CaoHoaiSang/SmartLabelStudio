@@ -141,10 +141,128 @@ class HydroReviewUiTests(unittest.TestCase):
             dialog.variables["plant_presence.highThreshold"].set("0.8")
             dialog._accept()
             self.assertEqual(dialog.result["thresholds"]["plant_presence"]["highThreshold"], .8)
-            self.assertEqual(dialog.result["deploymentMode"], "shadow")
+            self.assertEqual(dialog.result["deploymentMode"], "operational")
         finally:
             if dialog.winfo_exists():
                 dialog.destroy()
+
+    def test_overview_and_dataset_expand_scroll_to_bottom_and_back_for_both_tasks(self):
+        import time
+        from smartlabel.models import Annotation
+        self.app.deiconify()
+        self.app.geometry('1180x720')
+        try:
+            for tab, panel in (('DỰ ÁN', self.app.project_overview), ('DATASET', self.app.dataset_overview)):
+                self.app.tabs.set(tab)
+                self.app.update()
+                time.sleep(.15)
+                if not panel.details_visible:
+                    panel.toggle_details()
+                self.app.update()
+                canvas = panel._parent_canvas
+                self.assertGreater(canvas.bbox('all')[3], canvas.winfo_height())
+                canvas.yview_moveto(0)
+                panel.event_generate('<MouseWheel>', delta=-120)
+                self.app.update()
+                self.assertGreater(canvas.yview()[0], 0, 'mouse wheel must scroll expanded content')
+                panel._scrollbar._command('moveto', 1)
+                self.app.update()
+                self.assertAlmostEqual(canvas.yview()[1], 1, places=3)
+                panel._scrollbar._command('moveto', 0)
+                self.app.update()
+                self.assertAlmostEqual(canvas.yview()[0], 0, places=3)
+                panel.toggle_details()
+                self.app.update()
+                self.assertTrue(canvas.cget('scrollregion'))
+            bottle = deepcopy(self.bottle)
+            bottle.attribute_schema = {'condition': ['good', 'bad']}
+            bottle.attribute_settings = {'condition': {'title': 'Tình trạng chai', 'scope': 'annotation_crop'}}
+            record = ImageRecord(id='b', file_name='b.png', width=20, height=20)
+            record.annotations = [Annotation(id='a', class_id=0, attributes={'condition': 'bad'})]
+            bottle.images = [record]
+            Image.new('RGB', (20, 20), 'blue').save(self.store.image_path(bottle, record))
+            self.app._change_project_context(bottle)
+            for panel in (self.app.project_overview, self.app.dataset_overview):
+                text = '\n'.join(w.cget('text') for w in panel.wrapped_labels)
+                self.assertIn('1 nhãn vật thể', text)
+                self.assertIn('Tình trạng chai · trên vật thể', text)
+                self.assertIn('bad   ·   1', text)
+                self.assertNotIn('ẢNH BỔ TRỢ', text)
+            self.app.project = None
+            self.app._refresh_everything()
+            self.assertFalse(self.app.dataset_overview._parent_frame.winfo_manager())
+        finally:
+            self.app.withdraw()
+
+    def test_auto_label_shows_each_actual_checkpoint_and_refreshes_after_registration(self):
+        checkpoint = Path(self.temp.name) / 'yellow-current.pt'
+        checkpoint.write_bytes(b'UI fixture')
+        self.app.project.attribute_models['yellow_leaf'] = str(checkpoint)
+        self.app.project.attribute_models['wilt'] = str(Path(self.temp.name) / 'missing.pt')
+        before = deepcopy(self.app.project.to_dict())
+        self.app._refresh_active_model_status()
+        self.assertIn('yellow-current.pt', self.app.auto_classifier_rows['yellow_leaf'].cget('text'))
+        self.assertIn('Thiếu tệp PT', self.app.auto_classifier_rows['wilt'].cget('text'))
+        self.assertIn('Chưa có model', self.app.auto_classifier_rows['plant_presence'].cget('text'))
+        self.assertFalse(self.app.model_entry.winfo_manager())
+        self.assertFalse(self.app.auto_choose_button.winfo_manager())
+        self.assertEqual(before, self.app.project.to_dict())
+        self.app.running_classification_key = 'wilt'
+        with patch.object(self.app, '_latest_best_pt', return_value=checkpoint), patch.object(self.app.store, 'register_model', return_value=checkpoint):
+            self.app._activate_latest_classification_model()
+        self.assertIn('yellow-current.pt', self.app.auto_classifier_rows['wilt'].cget('text'))
+        self.app._change_project_context(self.bottle)
+        self.assertEqual(self.app.auto_classifier_rows, {})
+        self.assertFalse(self.app.auto_classifier_panel._parent_frame.winfo_manager())
+        self.assertTrue(self.app.model_entry.winfo_manager())
+        self.assertTrue(self.app.auto_choose_button.winfo_manager())
+
+    def test_bundle_runtime_and_usage_mode_are_independent(self):
+        from smartlabel.ui_components import HYDRO_RUNTIME_LABELS, HYDRO_DEPLOYMENT_LABELS
+        defaults = {'datasetVersion': 'v1', 'sourceCommit': 'abc', 'cameraProfileIds': ['cam'],
+                    'geometryProfileIds': ['geo'], 'modelTitles': {'plant_presence': 'Có cây'}}
+        for runtime in HYDRO_RUNTIME_LABELS:
+            for mode in HYDRO_DEPLOYMENT_LABELS:
+                dialog = HydroBundleConfigDialog(self.app, defaults)
+                dialog.runtime_label.set(runtime)
+                dialog.deployment_label.set(mode)
+                dialog._accept()
+                self.assertEqual(dialog.result['runtimeTarget'], HYDRO_RUNTIME_LABELS[runtime])
+                self.assertEqual(dialog.result['deploymentMode'], HYDRO_DEPLOYMENT_LABELS[mode])
+
+    def test_bundle_actions_remain_visible_at_minimum_window_size(self):
+        import time
+        self.app.deiconify()
+        self.app.update()
+        dialog = HydroBundleConfigDialog(self.app, {})
+        try:
+            dialog.geometry('650x650')
+            for _ in range(3):
+                dialog.update()
+                time.sleep(.1)
+            button = dialog.continue_button
+            self.assertTrue(button.winfo_ismapped())
+            bottom = button.winfo_rooty() + button.winfo_height() - dialog.winfo_rooty()
+            self.assertLessEqual(bottom, dialog.winfo_height())
+            self.assertGreaterEqual(button.winfo_height(), 28)
+        finally:
+            dialog.destroy()
+            self.app.withdraw()
+
+    def test_split_change_refreshes_both_statistics_panels(self):
+        record = self.app.project.images[0]
+        record.review_status = 'reviewed'
+        self.app.project.images = [record]
+        path = self.app.datasets.split_assignment_path(self.app.project)
+        import json
+        group = record.metadata.get('plant_instance_id') or record.capture_group or record.id
+        path.write_text(json.dumps({'groups': {group: 'test'}}), encoding='utf-8')
+        self.app._split_assignment_changed()
+        for panel in (self.app.project_overview, self.app.dataset_overview):
+            first_split = panel.split_frames[0]
+            test_positive = next(w for w in first_split.winfo_children()
+                                 if int(w.grid_info()['row']) == 1 and int(w.grid_info()['column']) == 3)
+            self.assertEqual(test_positive.cget('text'), '1')
 
     def test_hydro_auto_worker_snapshot_ui_responsive_and_ownership_until_done(self):
         entered, release = Event(), Event()

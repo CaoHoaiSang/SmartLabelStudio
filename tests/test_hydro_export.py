@@ -129,6 +129,16 @@ class HydroPackageTests(unittest.TestCase):
         self.export.assert_not_called()
         self.assert_preserved()
 
+    def test_windows_operational_package_preserves_explicit_mode_with_validated_qa(self):
+        self.config['deploymentMode'] = 'operational'
+        self.qa.return_value = {'issues': [], 'validationStatus': 'validated_holdout'}
+        result = self.build()
+        manifest = json.loads((result['bundle'] / 'bundle.json').read_text(encoding='utf-8'))
+        self.assertEqual(manifest['runtimeTarget'], 'windows_onnxruntime_cpu')
+        self.assertEqual(manifest['deploymentMode'], 'operational')
+        self.assertEqual(manifest['validationStatus'], 'validated_holdout')
+        self.assert_preserved()
+
     def test_export_failure_keeps_models_and_publishes_nothing(self):
         self.export.side_effect = RuntimeError("fixture conversion failed")
         with self.assertRaisesRegex(RuntimeError, "conversion failed"):

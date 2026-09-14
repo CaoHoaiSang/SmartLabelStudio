@@ -460,9 +460,13 @@ train nhóm lỗi/chưa train. Khi đủ nhóm, **Tạo gói model Hydro** lấy
 mới và model đã lưu trước đó. ZIP PT tự tạo sau batch chỉ để quản lý
 checkpoint, không phải gói dùng để cài lên Hydro.
 
-Windows hiện dùng ONNX Runtime ở chế độ shadow. Với Nano, chọn runtime Jetson;
-TensorRT engine được build trên Nano. QA dataset khi đóng gói không thay thế
-đánh giá độ chính xác của model trên tập test và ảnh thực tế.
+Windows dùng ONNX Runtime; Nano build TensorRT engine trên thiết bị. Chọn riêng
+**Runtime đích** và **Chế độ sử dụng**: mặc định **Vận hành thật**, hoặc chọn
+**Shadow** để ghi kết quả mà chưa cảnh báo AI. Cả hai runtime có cùng điều kiện
+QA holdout cho vận hành thật; không hạ tự động xuống shadow nếu QA chưa đạt.
+Gói cũ giữ nguyên chế độ đã lưu. QA dataset không thay thế đánh giá độ chính xác
+model trên tập test và ảnh thực tế. Hydro Camera/backend cần nạp bản source hỗ
+trợ Windows operational trước khi nhận gói mới; tạo ZIP không tự kích hoạt model.
 
 **Ngưỡng điền sẵn:** Low 0.30 / High 0.70 là mức khởi đầu, chưa hiệu chỉnh.
 Score Có ≤ Low được xem là Không; ≥ High là Có; khoảng giữa là Chưa chắc.
@@ -473,6 +477,12 @@ nhận khi tạo gói được giữ cho cùng checkpoint. Model đổi thì c�
 Test không tạo gợi ý ngưỡng. Đây không phải cam kết model đã đủ tốt để phát hành.
 
 ### Auto-Label cho Hydro
+
+Danh sách hiển thị từng classifier thực sự được dùng: tên thuộc tính, tên tệp
+PT và trạng thái có tệp/chưa có/thiếu tệp. Di chuột lên dòng để xem đường dẫn.
+Danh sách cập nhật khi đổi dự án hoặc train xong; Hydro không dùng ô model định
+vị đơn. Tệp tồn tại chưa chứng minh đúng nhãn: Auto-Label kiểm contract khi chạy.
+Các bài vật thể giữ lựa chọn model Detection/Segmentation riêng.
 
 Sau khi đã train đủ các nhóm, mở **AUTO-LABEL** và nhấn **CHẠY AUTO-LABEL**.
 Ứng dụng tự chọn các classifier đã đăng ký; không cần detector hoặc SAM.

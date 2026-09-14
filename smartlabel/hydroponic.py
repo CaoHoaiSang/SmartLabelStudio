@@ -1225,8 +1225,6 @@ def write_hydro_model_bundle(
     if deployment_mode not in {"shadow", "operational"}:
         raise ValueError("deployment_mode must be shadow or operational")
     validation_status = str(project.metadata.get("validationStatus", "pilot_unvalidated"))
-    if runtime_target == "windows_onnxruntime_cpu" and deployment_mode != "shadow":
-        raise ValueError("Windows ONNX Runtime is only allowed in shadow mode")
     if deployment_mode == "operational" and validation_status != "validated_holdout":
         raise ValueError("operational deployment requires an independent validated holdout")
     label_distribution = {}

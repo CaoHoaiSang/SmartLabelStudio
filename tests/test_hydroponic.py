@@ -685,7 +685,7 @@ class HydroponicMvpTests(unittest.TestCase):
         self.assertEqual(windows_manifest["runtimeTarget"], "windows_onnxruntime_cpu")
         self.assertEqual(windows_manifest["deploymentMode"], "shadow")
         self.assertNotIn("minimumTensorRTVersion", windows_manifest)
-        with self.assertRaisesRegex(ValueError, "only allowed in shadow"):
+        with self.assertRaisesRegex(ValueError, "independent validated holdout"):
             write_hydro_model_bundle(
                 self.project, self.root / "unsafe_windows_bundle", models,
                 {key: {"lowThreshold": 0.25, "highThreshold": 0.75} for key in models},

@@ -31,12 +31,19 @@ duyệt lại hoặc loại từng ảnh. Không cần import thủ công. Snaps
 không đổi. Trong lúc kiểm tra/lưu, ứng dụng giữ quyền xử lý để tránh đổi dự án,
 train hoặc đóng cửa sổ giữa chừng; kiểm tra nguồn chạy ở worker để UI phản hồi.
 
-Tổng quan Hydro hiển thị ba số chính **Ảnh giàn / Đã duyệt / Chưa duyệt** và
+Tổng quan và Dataset dùng chung thành phần hiển thị có vùng cuộn tự cập nhật
+khi mở/đóng chi tiết. Dataset mặc định mở chi tiết Train/Val/Test; Tổng quan có
+thể mở khi cần. Sửa ngày 14/09: giữ handler Configure của CTkScrollableFrame,
+không ghi đè scrollregion khi bổ sung xử lý đổi chiều rộng.
+
+Hydro hiển thị ba số chính **Ảnh giàn / Đã duyệt / Chưa duyệt** và
 thẻ riêng cho mỗi thuộc tính, nhấn mạnh **Có / Không**. Chỉ hiện nhóm chưa
 chắc/không áp dụng/thiếu nhãn/chưa duyệt khi có dữ liệu. Chi tiết phân tập nằm
 trong **Xem chi tiết Train / Val / Test**. Ảnh bổ trợ có ô thống kê riêng,
-không cộng vào số ảnh giàn hay bảng thuộc tính. Dự án Chai giữ giao diện thống
-kê hình học và không có mục Ảnh bổ trợ.
+không cộng vào số ảnh giàn hay bảng thuộc tính. Chai và bài vật thể có cùng
+cách trình bày thẻ nhưng thống kê nhãn hình học, Class, nguồn và các thuộc tính
+theo phạm vi trên ảnh/trên vật thể; không có mục Ảnh bổ trợ Hydro. Chỉnh phân tập
+cập nhật cả hai bảng. Không thay đổi luật export hoặc tự chuyển ảnh giữa các tập.
 
 ## Dùng ảnh bổ trợ
 

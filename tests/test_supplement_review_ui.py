@@ -126,8 +126,8 @@ class SupplementReviewUiTests(unittest.TestCase):
         self.assertFalse(self.view.winfo_manager())
         self.assertIsNone(self.view.project)
         self.assertFalse(self.view.rows)
-        self.assertTrue(self.app.project_summary.winfo_manager())
-        self.assertFalse(self.app.hydro_overview._parent_frame.winfo_manager())
+        self.assertFalse(self.app.project_summary.winfo_manager())
+        self.assertTrue(self.app.project_overview._parent_frame.winfo_manager())
         self.assertTrue(self.app.capture_workspace.winfo_manager())
 
     def test_visible_layout_at_minimum_and_large_window_and_overview_expansion(self):
@@ -147,12 +147,12 @@ class SupplementReviewUiTests(unittest.TestCase):
                 self.app.update()
                 time.sleep(.15)  # CTkTabview finishes its delayed tab transition.
                 self.app.update()
-                self.assertTrue(self.app.hydro_overview.winfo_ismapped())
+                self.assertTrue(self.app.project_overview.winfo_ismapped())
                 self.assertFalse(self.app.project_summary.winfo_ismapped())
-                self.app.hydro_overview.toggle_details()
+                self.app.project_overview.toggle_details()
                 self.app.update()
-                for frame in self.app.hydro_overview.split_frames:
-                    self.assertEqual(bool(frame.winfo_manager()), self.app.hydro_overview.details_visible)
+                for frame in self.app.project_overview.split_frames:
+                    self.assertEqual(bool(frame.winfo_manager()), self.app.project_overview.details_visible)
                 self.app.tabs.set('GÁN NHÃN')
                 self.app.update()
                 time.sleep(.15)

@@ -43,7 +43,7 @@ from .model_export import RknnExportConfig, RknnExportJob, diagnose_rknn_environ
 from .models import Annotation, Project
 from .project_store import ProjectStore
 from .supplement_review_view import SupplementReviewView
-from .hydro_overview import HydroOverview
+from .project_overview import ProjectOverview
 from .quality import inspect_project
 from .split_dialog import SplitManagerDialog
 from .training import TrainingConfig, TrainingJob
@@ -597,7 +597,7 @@ class SmartLabelApp(ctk.CTk):
         center.pack(side="left", fill="both", expand=True, padx=5, pady=8)
         self.project_summary = ctk.CTkTextbox(center, font=("Consolas", 14), fg_color="#0a131c", corner_radius=10)
         self.project_summary.pack(fill="both", expand=True, padx=14, pady=(4, 14))
-        self.hydro_overview = HydroOverview(center, COLORS, self._open_training_supplements)
+        self.project_overview = ProjectOverview(center, COLORS, self._open_training_supplements)
 
         right = self._card(tab, "NGUYÊN TẮC")
         right.pack(side="right", fill="y", padx=(5, 8), pady=8)
@@ -942,7 +942,9 @@ class SmartLabelApp(ctk.CTk):
                 self.project = None
                 self.supplement_view.set_project(None)
                 self._apply_project_context_visibility()
-                self.hydro_overview.pack_forget()
+                self.project_overview.pack_forget()
+                self.dataset_overview.pack_forget()
+                self.dataset_info.pack(fill="both", expand=True, padx=14, pady=(4, 14))
                 self.project_summary.pack(fill="both", expand=True, padx=14, pady=(4, 14))
                 self.canvas.active_class_id = None
                 self.show_attribute_panel.set(False)
@@ -2587,6 +2589,7 @@ class SmartLabelApp(ctk.CTk):
         settings.pack(side="left", fill="y", padx=(8, 5), pady=8)
         self.model_entry = ctk.CTkEntry(settings, width=330, textvariable=self.model_path)
         self.model_entry.pack(padx=14, pady=5)
+        self.auto_classifier_panel = ctk.CTkScrollableFrame(settings, width=310, height=165, fg_color="#0a131c")
         self.active_model_status_label = ctk.CTkLabel(
             settings,
             text="Chưa có model Auto-Label đang hoạt động",
@@ -2707,11 +2710,37 @@ class SmartLabelApp(ctk.CTk):
             self._confidence_changed(self.confidence_slider.get())
         if hydro:
             self.auto_sam_card.pack_forget()
+            self.model_entry.pack_forget()
+            self.auto_choose_button.pack_forget()
+            if not self.auto_classifier_panel.winfo_ismapped():
+                self.auto_classifier_panel.pack(fill="x", padx=14, pady=5, before=self.active_model_status_label)
+            for widget in self.auto_classifier_panel.winfo_children():
+                widget.destroy()
             attrs = model_attributes(self.project)
-            ready = sum(Path(self.project.attribute_models.get(a["id"], "")).is_file() for a in attrs)
-            self.active_model_status_label.configure(text=f"Classifier đã lưu: {ready}/{len(attrs)} · không cần model định vị",
+            ready = 0
+            self.auto_classifier_rows = {}
+            for attr in attrs:
+                value = self.project.attribute_models.get(attr["id"], "")
+                path = Path(value)
+                available = path.is_file() and path.suffix.lower() == ".pt"
+                ready += available
+                state = "Đang dùng" if available else "Thiếu tệp PT" if value else "Chưa có model"
+                text = f"{attr['displayName']} · {state}\n{path.name if value else 'Train thuộc tính này để có model'}"
+                label = ctk.CTkLabel(self.auto_classifier_panel, text=text, anchor="w", justify="left", wraplength=286,
+                    text_color=COLORS["good"] if available else COLORS["warn"], font=("Segoe UI", 12))
+                label.pack(fill="x", padx=6, pady=6)
+                if value:
+                    ToolTip(label, str(path.resolve()))
+                self.auto_classifier_rows[attr["id"]] = label
+            self.active_model_status_label.configure(text=f"Classifier có tệp PT: {ready}/{len(attrs)} · kiểm nhãn model khi chạy",
                                                      text_color=COLORS["good"] if ready == len(attrs) else COLORS["warn"])
             return
+        self.auto_classifier_panel.pack_forget()
+        self.auto_classifier_rows = {}
+        if not self.model_entry.winfo_manager():
+            self.model_entry.pack(padx=14, pady=5, before=self.active_model_status_label)
+        if not self.auto_choose_button.winfo_manager():
+            self.auto_choose_button.pack(padx=14, pady=5, before=self.auto_model_help)
         if not self.auto_sam_card.winfo_manager():
             pack_before(self.auto_sam_card, self.auto_progress_card, side="left", fill="y", padx=5, pady=8)
         path = Path(self.project.active_model) if self.project and self.project.active_model else None
@@ -3272,6 +3301,7 @@ class SmartLabelApp(ctk.CTk):
         info.pack(fill="both", expand=True, pady=(6, 0))
         self.dataset_info = ctk.CTkTextbox(info, fg_color="#091119", font=("Consolas", 13), corner_radius=10)
         self.dataset_info.pack(fill="both", expand=True, padx=14, pady=(4, 14))
+        self.dataset_overview = ProjectOverview(info, COLORS, self._open_training_supplements, expanded=True)
 
     def _refresh_split_status(self) -> None:
         if not self.project or not hasattr(self, "dataset_split_status_label"):
@@ -3291,7 +3321,7 @@ class SmartLabelApp(ctk.CTk):
         if not self.project:
             return
         self.datasets.ensure_split_assignment(self.project)
-        self._refresh_split_status()
+        self._split_assignment_changed()
         messagebox.showinfo(
             "Đã khóa phân tập",
             "Train/Validation/Test của các capture group hiện tại đã được giữ cố định.\n\n"
@@ -3302,7 +3332,11 @@ class SmartLabelApp(ctk.CTk):
     def _open_split_manager(self) -> None:
         if not self.project:
             return
-        SplitManagerDialog(self, self.datasets, self.project, self._refresh_split_status)
+        SplitManagerDialog(self, self.datasets, self.project, self._split_assignment_changed)
+
+    def _split_assignment_changed(self) -> None:
+        self._refresh_split_status()
+        self._refresh_project_statistics()
 
     def _rebalance_split_assignment(self) -> None:
         if not self.project:
@@ -3317,7 +3351,7 @@ class SmartLabelApp(ctk.CTk):
         if not confirmed:
             return
         self.datasets.ensure_split_assignment(self.project, force_rebalance=True)
-        self._refresh_split_status()
+        self._split_assignment_changed()
         messagebox.showinfo("Đã tạo phân tập mới", "Phân tập mới đã được khóa. Hãy train model mới từ đầu chu kỳ này.", parent=self)
 
     def _selected_split_strategy(self) -> str:
@@ -4158,6 +4192,7 @@ class SmartLabelApp(ctk.CTk):
             "geometryProfileIds": self.project.metadata.get("geometryProfileIds", []),
             "thresholds": self.project.metadata.get("hydroThresholds", {}),
             "runtimeTarget": self.project.metadata.get("hydroRuntimeTarget", "jetson_nano_tensorrt_fp16"),
+            "deploymentMode": self.project.metadata.get("hydroDeploymentMode", "operational"),
             "cropDisplayName": self.project.metadata.get("cropDisplayName", "cây mục tiêu"),
         }
         defaults["thresholds"], defaults["thresholdSources"] = threshold_defaults(self.project)
@@ -4217,6 +4252,7 @@ class SmartLabelApp(ctk.CTk):
                 "hydroOnnxInputSize": 224, "lastHydroBundle": str(result["bundle"]),
                 "datasetVersion": config["datasetVersion"], "sourceCommit": config["sourceCommit"],
                 "hydroThresholds": config["thresholds"], "hydroRuntimeTarget": config["runtimeTarget"],
+                "hydroDeploymentMode": config["deploymentMode"],
                 "hydroThresholdModelHashes": result.get("modelHashes", {}),
             })
             try:
@@ -4850,6 +4886,7 @@ class SmartLabelApp(ctk.CTk):
         registered = self.store.register_model(best)
         self.project.attribute_models[key] = str(registered)
         self.store.save(self.project)
+        self._refresh_active_model_status()
         title = self._attribute_config(key)["title"]
         self._append_log(
             self.train_log,
@@ -5070,7 +5107,9 @@ class SmartLabelApp(ctk.CTk):
             self.canvas.active_class_id = None
             self._clear_current_image()
             self._apply_hydro_metadata_visibility()
-            self.hydro_overview.pack_forget()
+            self.project_overview.pack_forget()
+            self.dataset_overview.pack_forget()
+            self.dataset_info.pack(fill="both", expand=True, padx=14, pady=(4, 14))
             self.project_summary.pack(fill="both", expand=True, padx=14, pady=(4, 14))
             self._replace_text(self.project_summary, "Chưa có dự án. Nhấn Dự án mới để bắt đầu.")
             self._replace_text(self.dataset_info, "Chưa có dữ liệu.")
@@ -5130,13 +5169,11 @@ class SmartLabelApp(ctk.CTk):
             text.append("\nNGUỒN NHÃN")
             text.extend(f"  {key:20}: {value}" for key, value in summary["sources"].items())
         self._replace_text(self.project_summary, "\n".join(text))
-        if hydro:
-            self.project_summary.pack_forget()
-            self.hydro_overview.pack(fill="both", expand=True, padx=14, pady=(4, 14))
-            self.hydro_overview.render(self.store, self.project, summary)
-        else:
-            self.hydro_overview.pack_forget()
-            self.project_summary.pack(fill="both", expand=True, padx=14, pady=(4, 14))
+        self.project_summary.pack_forget()
+        self.dataset_info.pack_forget()
+        for panel in (self.project_overview, self.dataset_overview):
+            panel.pack(fill="both", expand=True, padx=14, pady=(4, 14))
+            panel.render(self.store, self.project, summary)
         self._replace_text(self.dataset_info, "\n".join(text[3:]))
         if hasattr(self, "project_guidance_label"):
             if hydro:

@@ -1,18 +1,20 @@
-"""Readable overview of real slot labels, with supplements shown separately."""
+"""Shared project/dataset presentation; statistics follow each task's label scope."""
+from collections import Counter
 import customtkinter as ctk
 
 from .supplement_review import load_review
 
 
-class HydroOverview(ctk.CTkScrollableFrame):
-    def __init__(self, master, colors, open_supplements):
+class ProjectOverview(ctk.CTkScrollableFrame):
+    def __init__(self, master, colors, open_supplements, *, expanded=False):
         super().__init__(master, fg_color="#0a131c", corner_radius=10)
         self.colors, self.open_supplements = colors, open_supplements
-        self.details_visible = False
+        self.details_visible = expanded
         self.split_frames = []
         self.wrapped_labels = []
         self.last_width = 0
-        self.bind("<Configure>", self.resize_labels)
+        # Keep CTkScrollableFrame's scrollregion update when content expands.
+        self.bind("<Configure>", self.resize_labels, add="+")
 
     def label(self, parent, text, *, color=None, size=12, bold=False):
         label = ctk.CTkLabel(parent, text=text, anchor="w", justify="left",
@@ -35,14 +37,16 @@ class HydroOverview(ctk.CTkScrollableFrame):
         self.split_frames = []
         self.wrapped_labels = []
         muted = self.colors["muted"]
+        hydro = "image_attributes" in summary
         self.label(self, project.name, size=20, bold=True)
-        self.label(self, "Phân loại từng rọ · Nhãn trực tiếp trên ảnh", color=muted)
+        self.label(self, "Phân loại từng rọ · Nhãn trực tiếp trên ảnh" if hydro
+                   else "Nhãn vật thể · RECT / SEG / OBB / ORI", color=muted)
         totals = ctk.CTkFrame(self, fg_color="transparent")
         totals.pack(fill="x", padx=6, pady=(8, 12))
         totals.grid_columnconfigure((0, 1, 2), weight=1, uniform="counts")
         statuses = summary["statuses"]
         for i, (count, title, color) in enumerate((
-                (summary["images"], "Ảnh giàn", self.colors["accent"]),
+                (summary["images"], "Ảnh giàn" if hydro else "Ảnh", self.colors["accent"]),
                 (statuses.get("reviewed", 0), "Đã duyệt", self.colors["good"]),
                 (summary["images"] - statuses.get("reviewed", 0) - statuses.get("rejected", 0), "Chưa duyệt", self.colors["warn"]))):
             card = ctk.CTkFrame(totals, fg_color=self.colors["panel2"], corner_radius=10)
@@ -50,7 +54,10 @@ class HydroOverview(ctk.CTkScrollableFrame):
             self.label(card, f"{count:,}", size=23, color=color, bold=True)
             self.label(card, title, color=muted)
         if statuses.get("rejected"):
-            self.label(self, f"Ảnh giàn bị từ chối: {statuses['rejected']}", color=muted)
+            self.label(self, f"Ảnh bị từ chối: {statuses['rejected']}", color=muted)
+        if not hydro:
+            self.render_geometry(project, summary)
+            return
         self.label(self, "THUỘC TÍNH TRÊN ẢNH RỌ", size=13, color=self.colors["accent"], bold=True)
         self.label(self, "Có / Không: số ảnh rọ đã duyệt theo từng thuộc tính.", color=muted)
         rows = summary["image_attributes"]
@@ -103,6 +110,26 @@ class HydroOverview(ctk.CTkScrollableFrame):
             self.label(supplement, f"Cần kiểm tra danh sách bổ trợ: {exc}", color=self.colors["warn"], size=11)
         ctk.CTkButton(supplement, text="Xem & duyệt ảnh bổ trợ →", command=self.open_supplements,
                       fg_color="#27505a", hover_color="#346974").pack(anchor="w", padx=12, pady=(6, 12))
+
+    def render_geometry(self, project, summary):
+        self.label(self, f"{summary['annotations']:,} nhãn vật thể", size=18, bold=True)
+        self.label(self, "Thống kê nhãn hiện có, gồm cả bản nháp. Trạng thái duyệt ảnh được hiển thị ở trên.", color=self.colors["muted"])
+        sections = [("THEO CLASS", summary["classes"]), ("NGUỒN NHÃN", summary["sources"])]
+        for key in project.attribute_schema:
+            settings = project.attribute_settings.get(key, {})
+            scope = settings.get("scope", "annotation_crop")
+            records = project.images if scope == "image" else [ann for record in project.images for ann in record.annotations]
+            counts = Counter(record.attributes.get(key) or "Chưa gán" for record in records)
+            title = settings.get("title") or key
+            sections.append((f"{title} · {'trên ảnh' if scope == 'image' else 'trên vật thể'}", counts))
+        for title, counts in sections:
+            card = ctk.CTkFrame(self, fg_color=self.colors["panel2"], corner_radius=10)
+            card.pack(fill="x", padx=6, pady=6)
+            self.label(card, title, color=self.colors["accent"], size=13, bold=True)
+            if not counts:
+                self.label(card, "Chưa có dữ liệu", color=self.colors["muted"])
+            for name, count in counts.items():
+                self.label(card, f"{name}   ·   {count:,}")
 
     def update_toggle(self):
         self.toggle.configure(text=("Ẩn" if self.details_visible else "Xem") + " chi tiết Train / Val / Test")

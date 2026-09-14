@@ -49,8 +49,6 @@ def build_hydro_package(project, store, output, config, progress, cancel):
     runtime, mode = config.get("runtimeTarget"), config.get("deploymentMode")
     if runtime not in RUNTIME_TARGETS or mode not in {"shadow", "operational"}:
         raise ValueError("Runtime hoặc chế độ triển khai không hợp lệ.")
-    if runtime == "windows_onnxruntime_cpu" and mode != "shadow":
-        raise ValueError("Windows chỉ hỗ trợ chế độ shadow.")
     assignment = DatasetManager(store).ensure_split_assignment(project, persist=False)
     report = hydro_dataset_qa(project, store, assignment)
     errors = [issue for issue in report["issues"] if issue["severity"] == "error"]

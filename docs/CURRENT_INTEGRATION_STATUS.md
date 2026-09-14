@@ -1,6 +1,39 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 14/09/2026
 
-## Xem/duyệt ảnh bổ trợ trong SmartLabel và Tổng quan mới — 14/09/2026
+## Hiện hành: Tổng quan/Dataset, model Auto-Label và Windows operational — 14/09/2026
+
+Nhánh `fix/studio-workflow-runtime-consistency`, kế thừa `4de4813`.
+Tổng quan và Dataset dùng chung `ProjectOverview`; giữ handler cập nhật
+scrollregion của CustomTkinter khi gắn handler đổi chiều rộng. Mở chi tiết
+Train/Val/Test rồi cuộn chuột hoặc kéo thanh cuộn đều xem được nội dung cuối.
+Dataset mở sẵn chi tiết, Tổng quan mặc định thu gọn. Đổi phân tập làm mới cả
+hai nơi. Hydro giữ thống kê ảnh rọ/bổ trợ riêng; các bài vật thể dùng cùng thẻ
+nhưng đếm class, nguồn và thuộc tính theo scope ảnh/vật thể, gồm cả bản nháp.
+
+Auto-Label Hydro hiện checkpoint của từng thuộc tính trong `attribute_models`,
+phân biệt có tệp PT/thiếu tệp/chưa train, tooltip đường dẫn; cập nhật ngay sau
+đăng ký model từ train. Có tệp chưa chứng minh đúng nhãn, worker vẫn kiểm khi
+chạy. Bài vật thể giữ chọn model đơn và các công cụ riêng.
+
+Tạo gói tách Runtime đích khỏi Chế độ sử dụng: mặc định mới **Vận hành thật**
+cho cả Windows/Nano, có thể chủ động chọn Shadow; nhớ chế độ đã xuất thành công.
+Không tự sửa chế độ gói cũ. Vận hành thật vẫn yêu cầu QA `validated_holdout`;
+giá trị này phản ánh QA dữ liệu, không bảo đảm độ chính xác model. Hộp cấu hình
+giữ nút thao tác ở đáy khi thu nhỏ. Hydro đi kèm nhánh
+`fix/windows-ai-operational-parity`: bỏ giới hạn Windows chỉ shadow ở validator
+Camera/backend, giữ smoke/QA/tương thích/ghi active atomic và liên động hiện hữu.
+
+Kiểm chứng: 216 test toàn bộ SmartLabel đạt; sau bổ sung làm mới phân tập và
+footer hộp cấu hình, chạy lại 14/14 test UI liên quan đạt (25,854 giây). Hydro
+Camera 123 đạt/1 bỏ qua; backend 569 đạt/7 bỏ qua. Kiểm xuyên repo bằng ZIP fixture
+qua import/activate/suy luận ONNX Runtime thật đạt ở cả hai chế độ, 10 rọ mỗi
+chế độ; QA và chuyển PT→ONNX dùng fixture, không chứng minh chất lượng model thật.
+Project Cải Ngọt hiện có đủ ba tệp PT nhưng metadata vẫn `pilot_unvalidated`.
+Không train, sửa dữ liệu, kích hoạt model hay khởi động lại dịch vụ đang chạy.
+Mở lại Studio và nạp lại Camera/backend mới trước khi dùng operational Windows;
+nghiệm thu model/camera thật và Nano vẫn là bước riêng.
+
+## Mốc trước: Xem/duyệt ảnh bổ trợ trong SmartLabel và Tổng quan mới — 14/09/2026
 
 Nhánh `feat/supplement-review-and-overview`, kế thừa `9235460`.
 GÁN NHÃN có chuyển đổi **Danh sách ảnh / Ảnh bổ trợ** riêng cho Hydro.
