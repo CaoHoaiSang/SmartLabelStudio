@@ -133,6 +133,69 @@ class SupplementReviewUiTests(unittest.TestCase):
         attr = next(a for a in model_attributes(self.hydro) if a['id'] == 'wilt')
         self.assertEqual(len(validated_samples(self.store, self.hydro, attr, {'plant': 'train'})), 1)
 
+    def test_filtered_edit_keeps_image_and_zoom_and_shows_independent_counter(self):
+        self.app.tabs.set('GÁN NHÃN')
+        self.filter_attribute('yellow_leaf', 'present')
+        row_id = self.view.selected['id']
+        self.app.canvas.zoom(1.4)
+        image, scale = self.app.canvas.image, self.app.canvas.scale
+        menu, choices = self.view.form['yellow_leaf']
+        menu._dropdown_callback(next(k for k, v in choices.items() if v == 'absent'))
+        self.complete_save()
+        self.assertEqual(self.view.selected['id'], row_id)
+        self.assertEqual(self.view.values()['yellow_leaf'], 'absent')
+        self.assertIs(self.app.canvas.image, image)
+        self.assertEqual(self.app.canvas.scale, scale)
+        self.assertNotIn(self.view.selected, self.view.filtered)
+        self.assertIn('không còn thuộc bộ lọc', self.app.label_save_status.cget('text'))
+        self.assertEqual(self.app.image_position_label.cget('text'), '1 / 27')
+        self.app._next_image()
+        self.assertEqual(self.view.selected['id'], 's1')
+        self.assertEqual(self.app.image_position_label.cget('text'), '2 / 27')
+
+    def test_source_return_does_not_reuse_wrong_preview_and_reload_is_contextual(self):
+        source_pixel = self.app.canvas.image.getpixel((0, 0))
+        self.assertTrue(self.app.label_reload_button.winfo_manager())
+        self.app._show_label_workspace('Giàn')
+        self.assertFalse(self.app.label_reload_button.winfo_manager())
+        self.assertNotEqual(self.app.canvas.image.getpixel((0, 0)), source_pixel)
+        self.app._show_label_workspace('Bổ trợ')
+        self.assertEqual(self.app.canvas.image.getpixel((0, 0)), source_pixel)
+        self.assertTrue(self.app.label_reload_button.winfo_manager())
+
+    def test_draft_does_not_scan_split_or_rebuild_hidden_statistics(self):
+        self.app.tabs.set('GÁN NHÃN')
+        with patch.object(self.app.datasets, 'ensure_split_assignment', side_effect=AssertionError('draft must not scan split')), \
+             patch.object(self.app, '_refresh_project_statistics') as refresh:
+            self.choose('wilt', 'present')
+            refresh.assert_not_called()
+        self.assertTrue(self.app.project_statistics_dirty)
+
+    def test_cancel_navigation_prompts_once_and_warmup_failure_keeps_review_available(self):
+        row_id = self.view.selected['id']
+        self.app.other_abnormal_var.set('Unsaved fixture note')
+        with patch('smartlabel.supplement_review_view.messagebox.askyesno', return_value=False) as ask:
+            self.app._next_image()
+            ask.assert_called_once()
+        self.assertEqual(self.view.selected['id'], row_id)
+        self.view.sync_details()
+        self.view.warm_started = False
+        with patch('smartlabel.supplement_review_view.Thread', side_effect=RuntimeError('no worker')):
+            self.view.warm_review_pixels()
+        self.assertFalse(self.view.busy)
+        self.assertFalse(self.view.warm_started)
+        self.choose('wilt', 'present')
+        self.assertEqual(self.view.values()['wilt'], 'present')
+
+    def test_approve_after_filtered_edit_advances_to_following_image_not_first(self):
+        self.filter_attribute('yellow_leaf', 'present')
+        self.view.show_row(self.view.filtered[5])
+        self.choose('yellow_leaf', 'absent')
+        self.assertEqual(self.view.selected['id'], 's5')
+        self.app._approve_image_next()
+        self.complete_save()
+        self.assertEqual(self.view.selected['id'], 's6')
+
     def test_absent_or_unassigned_presence_clears_conditions_like_capture(self):
         self.choose('plant_presence', 'absent')
         self.assertEqual(self.view.values(), {'plant_presence': 'absent', 'yellow_leaf': 'not_applicable', 'wilt': 'not_applicable'})

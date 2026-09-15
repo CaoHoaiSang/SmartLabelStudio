@@ -98,9 +98,7 @@ class ImageRecord:
         return cls(**values)
 
     def to_dict(self) -> dict[str, Any]:
-        data = asdict(self)
-        data["annotations"] = [item.to_dict() for item in self.annotations]
-        return data
+        return asdict(self)
 
 
 @dataclass
@@ -145,10 +143,7 @@ class Project:
         return cls(**values)
 
     def to_dict(self) -> dict[str, Any]:
-        data = asdict(self)
-        data["classes"] = [asdict(item) for item in self.classes]
-        data["images"] = [item.to_dict() for item in self.images]
-        return data
+        return asdict(self)
 
     def class_by_id(self, class_id: int) -> LabelClass | None:
         return next((item for item in self.classes if item.id == class_id), None)

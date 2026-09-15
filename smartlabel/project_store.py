@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, fields, is_dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Iterable
@@ -16,6 +16,14 @@ from .attribute_defaults import image_attribute_defaults
 
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
+
+
+def _json_record(value):
+    # Saving is synchronous: encode dataclass fields directly instead of making
+    # several deep copies of every image. to_dict still provides detached snapshots.
+    if is_dataclass(value) and not isinstance(value, type):
+        return {field.name: getattr(value, field.name) for field in fields(value)}
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 class ProjectStore:
@@ -97,7 +105,7 @@ class ProjectStore:
         target.mkdir(parents=True, exist_ok=True)
         path = target / "project.json"
         temp = path.with_suffix(".json.tmp")
-        temp.write_text(json.dumps(project.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        temp.write_text(json.dumps(project, default=_json_record, ensure_ascii=False, indent=2), encoding="utf-8")
         temp.replace(path)
 
     def load(self, path_or_id: str | Path) -> Project:

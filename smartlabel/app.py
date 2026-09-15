@@ -341,6 +341,8 @@ class SmartLabelApp(ctk.CTk):
         self._build_dataset_tab()
         self._build_train_tab()
         self._build_hardware_tab()
+        for name in ("DỰ ÁN", "DATASET"):
+            self.tabs.tab(name).bind("<Map>", self._refresh_pending_project_statistics, add="+")
 
     def _button(self, parent, text, command, *, width=130, color=None, tooltip: str | None = None):
         enabled_color = color or "#217fa9"
@@ -1466,20 +1468,26 @@ class SmartLabelApp(ctk.CTk):
             width=286,
         )
         self.image_list.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.label_reload_button = self._button(left, "Tải lại danh sách", self._reload_label_source, width=260, color="#415466")
-        self.label_reload_button.pack(padx=10, pady=(0, 8))
+        self.label_reload_button = self._button(left, "Tải lại từ tệp", self._reload_label_source, width=260, color="#415466",
+            tooltip="Đọc lại ảnh bổ trợ khi tệp được cập nhật bên ngoài hoặc có xung đột lưu. Nhãn sửa ở đây tự lưu, không cần nhấn nút này.")
 
         center = ctk.CTkFrame(body, corner_radius=12, fg_color="#091119", border_width=1, border_color=COLORS["border"])
         center.pack(side="left", fill="both", expand=True, padx=5)
+        image_header = ctk.CTkFrame(center, height=32, fg_color="transparent")
+        image_header.pack(fill="x", padx=10, pady=(4, 0))
+        image_header.pack_propagate(False)
+        self.image_position_label = ctk.CTkLabel(image_header, text="0 / 0", width=90, anchor="w",
+            font=("Segoe UI Semibold", 12), text_color=COLORS["accent"])
+        self.image_position_label.pack(side="left", padx=(0, 8))
         self.current_image_label = ctk.CTkLabel(
-            center,
+            image_header,
             text="Chưa chọn ảnh",
             height=32,
             anchor="w",
             font=("Segoe UI Semibold", 12),
             text_color=COLORS["accent"],
         )
-        self.current_image_label.pack(fill="x", padx=10, pady=(4, 0))
+        self.current_image_label.pack(side="left", fill="x", expand=True)
         self.canvas = AnnotationCanvas(center, self._annotation_changed, self._annotation_selected, self._sam_prompt_added, self._view_changed)
         self.canvas.set_geometry_mode(self.annotation_geometry.get().lower())
         self.canvas.pack(fill="both", expand=True, padx=5, pady=5)
@@ -1522,6 +1530,8 @@ class SmartLabelApp(ctk.CTk):
             text_color=COLORS["muted"],
         )
         self.image_status_label.pack(fill="x", padx=1, pady=1)
+        self.label_save_status = ctk.CTkLabel(right, text="", wraplength=245, justify="left",
+            anchor="w", text_color=COLORS["muted"], font=("Segoe UI", 11))
         self.class_quick_frame = ctk.CTkFrame(right, fg_color="transparent")
         self.class_quick_frame.pack(fill="x")
         ctk.CTkLabel(self.class_quick_frame, text="CLASS · chọn nhanh", text_color=COLORS["muted"]).pack(anchor="w", padx=12)
@@ -1612,6 +1622,13 @@ class SmartLabelApp(ctk.CTk):
             return self.supplement_view.reload()
         self._refresh_image_list()
         self._sync_image_list_to_current()
+
+    def _label_feedback(self, text="", *, warning=False):
+        self.label_save_status.configure(text=text, text_color=COLORS["warn"] if warning else COLORS["muted"])
+        if text:
+            self.label_save_status.pack(after=self.image_status_frame, fill="x", padx=12, pady=(0, 8))
+        else:
+            self.label_save_status.pack_forget()
 
     def _geometry_changed(self, value: str) -> None:
         normalized = value.lower()
@@ -1811,9 +1828,11 @@ class SmartLabelApp(ctk.CTk):
         self.sam_click_busy = False
         record = self.project.images[self.current_index]
         self.canvas.load(self.project, record, str(self.store.image_path(self.project, record)))
+        self._label_feedback()
         self.current_image_label.configure(
-            text=f"{self.current_index + 1}/{len(self.project.images)}  ·  {record.file_name}  ·  {record.width}×{record.height}"
+            text=f"{record.file_name}  ·  {record.width}×{record.height}"
         )
+        self.image_position_label.configure(text=f"{self.current_index + 1} / {len(self.project.images)}")
         remembered = self.last_selected_by_image.get(record.id)
         selected_id = remembered if remembered and any(ann.id == remembered for ann in record.annotations) else (record.annotations[0].id if record.annotations else None)
         self.canvas.selected_id = selected_id
@@ -1829,9 +1848,11 @@ class SmartLabelApp(ctk.CTk):
         if self._supplement_active():
             return self.supplement_view.show_row(None)
         self.current_index = -1
+        self._label_feedback()
         self.sam_click_request_version += 1
         self.sam_click_busy = False
         self.canvas.clear_image()
+        self.image_position_label.configure(text="0 / 0")
         self.canvas.project = self.project
         self.current_image_label.configure(text="Không có ảnh trong bộ lọc này" if self.project and self.project.images else "Chưa có ảnh trong dự án")
         self._annotation_selected(None)
@@ -1841,7 +1862,7 @@ class SmartLabelApp(ctk.CTk):
                        self.reject_image_button, self.restore_image_button):
             self._set_button_enabled(button, False)
 
-    def _sync_image_list_to_current(self, focus: bool = False) -> None:
+    def _sync_image_list_to_current(self, focus: bool = False, *, keep_current=False) -> None:
         if self._supplement_active():
             return
         if not self.project or not (0 <= self.current_index < len(self.project.images)):
@@ -1850,6 +1871,10 @@ class SmartLabelApp(ctk.CTk):
         if not self._image_matches_filters(record) or record not in self.filtered_images:
             self._refresh_image_list()
             if record not in self.filtered_images:
+                if keep_current:
+                    self.image_list.clear_selection()
+                    self._label_feedback("Đã lưu. Ảnh này không còn thuộc bộ lọc; bạn có thể sửa tiếp hoặc chọn Ảnh sau.")
+                    return
                 if self.paged_images:
                     self.current_index = self.project.images.index(self.paged_images[0])
                     self._load_current_image()
@@ -1877,8 +1902,14 @@ class SmartLabelApp(ctk.CTk):
         records = getattr(self, "filtered_images", [])
         if self.project and records:
             current = self.project.images[self.current_index] if self.current_index >= 0 else None
-            index = records.index(current) if current in records else (-1 if delta > 0 else 0)
-            self.current_index = self.project.images.index(records[(index + delta) % len(records)])
+            if current in records:
+                target = records[(records.index(current) + delta) % len(records)]
+            else:
+                positions = {r.id: i for i, r in enumerate(self.project.images)}
+                following = [r for r in records if positions[r.id] > self.current_index]
+                preceding = [r for r in records if positions[r.id] < self.current_index]
+                target = (following[0] if following else records[0]) if delta > 0 else (preceding[-1] if preceding else records[-1])
+            self.current_index = self.project.images.index(target)
             self._load_current_image()
 
         elif self.project:
@@ -2490,6 +2521,7 @@ class SmartLabelApp(ctk.CTk):
             return self.supplement_view.attribute_changed(key, value)
         if self.project and 0 <= self.current_index < len(self.project.images) and self._attribute_config(key)["scope"] == "image":
             record = self.project.images[self.current_index]
+            previous = (deepcopy(record.attributes), deepcopy(record.metadata), record.review_status, record.updated_at)
             if value:
                 record.attributes[key] = value
             else:
@@ -2506,10 +2538,21 @@ class SmartLabelApp(ctk.CTk):
             if record.review_status == "reviewed":
                 record.review_status = "draft"
             record.updated_at = datetime.now().astimezone().isoformat(timespec="seconds")
-            self.save_project()
+            try:
+                self.save_project()
+            except (OSError, ValueError, TypeError) as exc:
+                record.attributes, record.metadata, record.review_status, record.updated_at = previous
+                self._annotation_selected(self.selected_annotation_id)
+                self._label_feedback(f"Chưa lưu được nhãn: {exc}. Giá trị đã lưu được giữ nguyên; hãy thử lại.", warning=True)
+                logger.exception("Could not save image attributes")
+                return
+            self._update_record_thumbnail(record)
             self._annotation_selected(self.selected_annotation_id)
-            self._sync_image_list_to_current()
+            self._label_feedback("Đã lưu nhãn. Duyệt lại ảnh sau khi sửa.")
+            self._sync_image_list_to_current(keep_current=True)
             self._update_image_status_controls()
+            if record.attributes.get(key, "") != value:
+                self._label_feedback("Cần chọn Có cây trước khi gán tình trạng lá. Khi chưa xác nhận có cây, tình trạng là Không áp dụng.", warning=True)
             return
         ann = self._selected_annotation()
         if ann:
@@ -2674,7 +2717,7 @@ class SmartLabelApp(ctk.CTk):
             index = self.paged_images.index(record)
             count = len(record.attributes) if is_hydroponic_project(self.project) else len(record.annotations)
             self.image_list.update_item(index, status=record.review_status, count=count)
-        self._refresh_project_statistics()
+        self._request_project_statistics()
 
     # ---------- auto label ----------
     def _build_auto_tab(self) -> None:
@@ -5229,7 +5272,16 @@ class SmartLabelApp(ctk.CTk):
         else:
             self.supplement_view.deactivate(render=not force)
 
+    def _request_project_statistics(self):
+        self.project_statistics_dirty = True
+        self._refresh_pending_project_statistics()
+
+    def _refresh_pending_project_statistics(self, _event=None):
+        if getattr(self, "project_statistics_dirty", False) and self.tabs.get() in {"DỰ ÁN", "DATASET"}:
+            self._refresh_project_statistics()
+
     def _refresh_project_statistics(self) -> None:
+        self.project_statistics_dirty = False
         if not self.project or not hasattr(self, "project_summary") or not hasattr(self, "dataset_info"):
             return
         summary = self.datasets.summary(self.project)
@@ -5607,6 +5659,7 @@ class SmartLabelApp(ctk.CTk):
         if self.model_export_job:
             self.model_export_job.stop()
         self._save_app_settings()
+        self.supplement_view.warm_stop.set()
         self.destroy()
 
 

@@ -561,6 +561,12 @@ class ThumbnailList(ctk.CTkScrollableFrame):
         if notify:
             self.command(index)
 
+    def clear_selection(self):
+        if self.selected_key in self._row_by_key:
+            self._style_selected(self._row_by_key[self.selected_key], False)
+        self.selected_key = None
+        self.selected_index = -1
+
     def see(self, index: int) -> None:
         if not (0 <= index < len(self.rows)):
             return

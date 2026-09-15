@@ -1,6 +1,42 @@
 # Tổng quan thuộc tính và ảnh bổ trợ Hydro
 
-Ngày 14/09/2026. Source tiếp nối công cụ Hydro/Chai hiện có, không đổi contract model/bundle.
+Ngày 15/09/2026. Source tiếp nối công cụ Hydro/Chai hiện có, không đổi contract model/bundle.
+
+## Sửa nhãn và chuyển ảnh — 15/09/2026
+
+Sửa thuộc tính tự lưu. Nếu nhãn mới làm ảnh ra khỏi bộ lọc (ví dụ đang xem
+Đã duyệt nhưng sửa ảnh thành nháp), giữ ảnh và giá trị vừa sửa trên canvas;
+báo rõ ảnh không còn thuộc bộ lọc. Không tự nhảy sang ảnh khác có giá trị cũ.
+Ảnh sau / Ảnh trước hoặc chọn thumbnail mới sẽ tiếp tục danh sách còn khớp.
+Duyệt & tiếp vẫn là thao tác chủ động lưu duyệt rồi chuyển ảnh.
+
+Số thứ tự / tổng ảnh nằm ở vùng riêng góc trên trái, không bị tên tệp dài
+che mất. Giàn tính trên toàn bộ ảnh giàn; Bổ trợ tính trên nguồn đang làm
+việc, tách ảnh lưu trữ. Bộ lọc/phân trang vẫn hiển thị số ảnh khớp riêng.
+
+**Tải lại từ tệp** chỉ hiện ở Bổ trợ: đọc lại sidecar khi một công cụ/phiên
+khác đã cập nhật, hoặc để xử lý xung đột revision. Không cần nhấn sau mỗi
+lần sửa/duyệt. Giàn dùng dữ liệu đang mở và tự cập nhật danh sách; ẩn nút
+tải lại dư thừa ở nguồn này. Giữ xác nhận ghi chú chưa lưu trước tải lại.
+
+Tối ưu không thay đổi nhãn hoặc điều kiện nhận mẫu train:
+
+- Lưu project mã hóa trực tiếp một lần, giữ JSON và thay tệp atomic; snapshot
+  to_dict vẫn là bản sao độc lập. Lỗi lưu thuộc tính Giàn khôi phục giá trị
+  đã lưu trên form và báo lỗi tại chỗ.
+- Lưu nháp Bổ trợ chỉ cần schema/settings; không sao chép cả danh sách ảnh
+  hoặc quét phân tập. Giữ ảnh/zoom khi lưu chính ảnh đang xem.
+- Thống kê trang Tổng quan/Dataset được đánh dấu cần cập nhật và dựng khi
+  mở trang, không dựng lại hai trang ẩn sau mỗi lần gán nhãn.
+- Duyệt vẫn kiểm tất cả dữ liệu liên quan, nguồn TRAIN, nhãn, ảnh trùng,
+  checksum, revision và khóa ghi. Cache chỉ dùng lại dấu vân tay pixel
+  sau khi đọc và băm lại toàn bộ byte của tệp; không dùng mtime làm bằng chứng.
+  Có bước chuẩn bị cache nền khi mở Bổ trợ; cache giới hạn 4.096 mục và tách
+  theo project. Lần kiểm tra đầu hoặc khi tệp đổi vẫn có thể lâu hơn.
+  Export train không dùng cache này và vẫn kiểm toàn bộ nguồn độc lập.
+
+Mở lại SmartLabel để nạp Python source mới. Các mốc dữ liệu phía dưới là
+lịch sử; đợt 15/09 không tự sửa nhãn/dataset, train hoặc thay model của người dùng.
 
 Tổng quan Hydro đếm **giá trị thuộc tính trên ảnh rọ đã duyệt**, thay cho số
 khung hình học thường bằng 0. Mỗi thuộc tính có Có/Không/Chưa chắc/Không áp dụng,

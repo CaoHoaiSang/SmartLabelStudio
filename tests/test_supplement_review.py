@@ -15,6 +15,43 @@ class SupplementReviewTests(unittest.TestCase):
     def update(self, decision, **kwargs):
         return save_review(self.store, self.project, self.assignment, "s1", decision, sha256(self.path), **kwargs)
 
+    def test_warm_approval_revalidates_split_labels_parent_and_actual_file_bytes(self):
+        from smartlabel.training_supplements import ReviewPixelCache
+        cache = ReviewPixelCache()
+        self.update('reviewed', pixel_cache=cache)
+        before = self.path.read_bytes()
+        self.assignment['train'] = 'val'
+        with self.assertRaisesRegex(ValueError, 'VAL/TEST'):
+            self.update('reviewed', pixel_cache=cache)
+        self.assignment['train'] = 'train'
+        self.project.images[0].review_status = 'draft'
+        with self.assertRaisesRegex(ValueError, 'chưa xác minh'):
+            self.update('reviewed', pixel_cache=cache)
+        self.project.images[0].review_status = 'reviewed'
+        with self.assertRaisesRegex(ValueError, 'xác nhận có cây'):
+            self.update('reviewed', pixel_cache=cache, attributes={'plant_presence': 'absent', 'yellow_leaf': 'present'})
+        from PIL import Image
+        from os import utime
+        source = self.path.parent / 'yellow.png'
+        stamp = source.stat()
+        Image.new('RGB', (32, 32), 'blue').save(source)
+        utime(source, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+        with self.assertRaisesRegex(ValueError, 'ảnh thay đổi'):
+            self.update('reviewed', pixel_cache=cache)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_warm_approval_detects_new_pixel_duplicate_from_captured_images(self):
+        from smartlabel.training_supplements import ReviewPixelCache
+        from PIL import Image
+        cache = ReviewPixelCache()
+        self.update('reviewed', pixel_cache=cache)
+        before = self.path.read_bytes()
+        # Another capture changes after warmup; same pixels in a different encoding.
+        Image.new('RGB', (32, 32), 'yellow').save(self.store.image_path(self.project, self.project.images[1]), compress_level=0)
+        with self.assertRaisesRegex(ValueError, 'trùng nội dung'):
+            self.update('reviewed', pixel_cache=cache)
+        self.assertEqual(self.path.read_bytes(), before)
+
     def test_defaults_require_review_before_export_and_repair_is_idempotent(self):
         self.project.attribute_settings['wilt']['default'] = 'absent'
         before = deepcopy(self.row)

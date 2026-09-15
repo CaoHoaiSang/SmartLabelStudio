@@ -1,6 +1,29 @@
-# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 14/09/2026
+# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 15/09/2026
 
-## Hiện hành: Mặc định, duyệt và tốc độ chuyển nguồn ảnh — 14/09/2026
+## Hiện hành: sửa thuộc tính và độ phản hồi — 15/09/2026
+
+Nhánh `fix/label-edit-responsiveness`, kế thừa `2c19af8`.
+Giàn/Bổ trợ giữ ảnh vừa sửa khi ảnh ra khỏi bộ lọc; báo đã lưu và cho người
+dùng chủ động đi tiếp. Khắc phục hành vi tự chuyển ảnh khiến thuộc tính
+trông như quay lại giá trị cũ. Vùng số thứ tự riêng cho cả hai nguồn.
+Lưu Giàn tránh serialize/deepcopy lặp, giữ hợp đồng JSON và ghi atomic;
+lưu thất bại không giả báo thành công. Bổ trợ giữ canvas/zoom khi lưu,
+không quét phân tập khi lưu nháp, không dựng thống kê hai trang đang ẩn.
+Duyệt chuẩn bị dấu vân tay pixel nền, nhưng vẫn đọc/băm toàn bộ byte để
+xác minh trước dùng cache; export giữ kiểm chứng nguồn đầy đủ độc lập.
+Nút Tải lại từ tệp chỉ ở Bổ trợ để nhận thay đổi bên ngoài/xử lý conflict,
+không phải bước bắt buộc sau sửa nhãn. Không đổi dữ liệu, model hoặc runtime.
+[Quy tắc thao tác và kiểm tra](HYDRO_TRAINING_SUPPLEMENTS.md).
+
+Kiểm chứng: toàn bộ 249/249 đạt (187,524 giây); sau rà soát điều hướng cuối,
+16/16 UI Bổ trợ và 17/17 UI Hydro đạt, thêm kiểm Map thật khi mở Tổng quan.
+Đo bản sao cô lập 1.297 ảnh (không profiler): sửa Giàn 0,24–0,26 giây,
+sửa Bổ trợ 0,37–0,46 giây, duyệt sau chuẩn bị cache 0,97 giây. Duyệt đầu
+còn 6,81 giây, mở Bổ trợ đầu 3,94 giây; không hứa mọi lượt tức thì.
+1.428 tệp gốc giữ hash, không callback error trong benchmark. Cần mở lại
+SmartLabel để nạp source; không dùng kiểm thử UI thay nghiệm thu chất lượng model.
+
+## Mốc trước: Mặc định, duyệt và tốc độ chuyển nguồn ảnh — 14/09/2026
 
 Nhánh `fix/supplement-defaults-and-switch-performance`, từ `d357be2`.
 Bổ trợ khóa Duyệt & tiếp khi ảnh đã duyệt; phím tắt không ghi lịch sử trùng.

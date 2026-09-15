@@ -172,7 +172,7 @@ def preview_path(store, project, row, *, cache=None):
 
 
 def save_review(store, project, assignments, row_id, decision, expected_revision,
-                *, attributes=None, note="", save_draft_labels=False, other_abnormal=None):
+                *, attributes=None, note="", save_draft_labels=False, other_abnormal=None, pixel_cache=None):
     """Atomic sidecar-only save with revision check and export validation on approval.
 
     An exclusive lock serializes cooperating Studio instances. A second hash
@@ -219,7 +219,8 @@ def save_review(store, project, assignments, row_id, decision, expected_revision
                        "archived": "Lưu trữ khỏi danh sách làm việc và train; giữ ảnh cùng lịch sử."}[decision],
                    reviewedBy="SmartLabel operator", reviewedAt=datetime.now(timezone.utc).isoformat())
         if decision == "reviewed":
-            validate_manifest_samples(store, project, model_attributes(project)[0], assignments, data)
+            validate_manifest_samples(store, project, model_attributes(project)[0], assignments, data,
+                                      **({"pixel_cache": pixel_cache} if pixel_cache is not None else {}))
         history = row.setdefault("reviewHistory", [])
         if not isinstance(history, list):
             raise ValueError("Lịch sử duyệt không hợp lệ; chưa lưu thay đổi.")

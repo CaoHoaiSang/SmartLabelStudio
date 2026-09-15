@@ -54,6 +54,10 @@ class HydroReviewUiTests(unittest.TestCase):
         self.app.auto_label_running = self.app.evaluation_running = self.app.hydro_export_running = False
         self.app.project_views.clear()
         self.app._change_project_context(deepcopy(self.hydro))
+        self.app.image_filter.set('Tất cả')
+        self.app.label_filter_field.set(image_filters.ALL)
+        self.app.label_filter_value.set(image_filters.ANY)
+        self.app._change_image_filter()
         app_module.messagebox.showerror.reset_mock()
         app_module.messagebox.showinfo.reset_mock()
         gc.collect()
@@ -92,11 +96,61 @@ class HydroReviewUiTests(unittest.TestCase):
         self.assertEqual(self.app.canvas.record.id, "3")
         self.app._attribute_changed("yellow_leaf", "absent")
         self.assertEqual([r.id for r in self.app.filtered_images], ["1"])
-        self.assertEqual(self.app.canvas.record.id, "1")
+        self.assertEqual(self.app.canvas.record.id, "3")
+        self.assertEqual(self.app.canvas.record.attributes['yellow_leaf'], 'absent')
+        self.assertIn('không còn thuộc bộ lọc', self.app.label_save_status.cget('text'))
+        self.assertEqual(self.app.image_list.curselection(), ())
         self.assertNotEqual(self.app.label_filter_field.get(), image_filters.ALL)
+        self.app._next_image()
+        self.assertEqual(self.app.canvas.record.id, "1")
         self.app._attribute_changed("yellow_leaf", "absent")
         self.assertFalse(self.app.filtered_images)
+        self.assertEqual(self.app.canvas.record.id, "1")
+        self.app._next_image()
         self.assertIsNone(self.app.canvas.record)
+
+    def test_capture_dropdown_persists_in_reviewed_filter_and_stays_on_edited_image(self):
+        app = self.app
+        for row in app.project.images:
+            row.review_status = 'reviewed'
+        app.image_filter.set('Đã duyệt')
+        app._change_image_filter()
+        edited = app.canvas.record
+        menu = app.attribute_widgets['yellow_leaf']
+        caption = next(k for k, v in app.attribute_display_to_value['yellow_leaf'].items() if v == 'present')
+        menu._dropdown_callback(caption)
+        self.assertIs(app.canvas.record, edited)
+        self.assertEqual(menu.get(), caption)
+        self.assertEqual(edited.review_status, 'draft')
+        saved = self.store.load(app.project.id).image_by_id(edited.id)
+        self.assertEqual(saved.attributes['yellow_leaf'], 'present')
+        self.assertIn('yellow_leaf', saved.metadata['hydroManualAttributes'])
+        self.assertEqual(app.image_position_label.cget('text'), '1 / 5')
+        app._next_image()
+        self.assertEqual(app.canvas.record.id, '1')
+
+    def test_capture_save_failure_keeps_previous_labels_and_explains_retry(self):
+        app = self.app
+        previous = deepcopy(app.canvas.record.to_dict())
+        with patch.object(app.store, 'save', side_effect=OSError('disk unavailable')):
+            app._attribute_changed('yellow_leaf', 'present')
+        self.assertEqual(app.canvas.record.to_dict(), previous)
+        self.assertIn('Chưa lưu được nhãn', app.label_save_status.cget('text'))
+
+    def test_edit_defers_hidden_statistics_until_overview_is_opened(self):
+        app = self.app
+        app.deiconify()
+        app.tabs.set('GÁN NHÃN')
+        app.update()
+        with patch.object(app, '_refresh_project_statistics', wraps=app._refresh_project_statistics) as refresh:
+            app._attribute_changed('yellow_leaf', 'present')
+            refresh.assert_not_called()
+            self.assertTrue(app.project_statistics_dirty)
+            app.tabs.set('DỰ ÁN')
+            app.update()
+            refresh.assert_called_once()
+            self.assertFalse(app.project_statistics_dirty)
+        app.withdraw()
 
     def test_filter_and_tool_context_survive_round_trip_without_bottle_leak(self):
         self.filter_yellow()

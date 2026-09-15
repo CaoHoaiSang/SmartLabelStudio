@@ -3,18 +3,18 @@
 Supplement records never enter project.images. Only this adapter writes their
 labels, through the revision-checked sidecar API.
 """
-from copy import deepcopy
+from copy import copy, deepcopy
 import gc
 from pathlib import Path
 from queue import Queue, Empty
-from threading import Thread
+from threading import Event, Thread
 from tkinter import messagebox
 
 from . import image_filters
 from .hydro_labels import display_values, enforce_presence
 from .models import ImageRecord
 from .supplement_review import form_attributes, load_review, preview_path, save_review
-from .training_supplements import review_attributes
+from .training_supplements import ReviewPixelCache, review_attributes
 from .ui_components import IMAGE_REVIEW_STATUS_STYLE
 
 STATUSES = ["Tất cả", "Chưa gán nhãn", "Bản nháp", "Đã duyệt", "Từ chối"]
@@ -32,6 +32,9 @@ class SupplementReviewView:
         self.filter_selection = ("Tất cả", image_filters.ALL, image_filters.ANY)
         self.preview_cache = {}
         self.list_dirty = True
+        self.pixel_cache = ReviewPixelCache()
+        self.warm_stop = Event()
+        self.warm_started = False
 
     @property
     def preview(self):
@@ -50,6 +53,10 @@ class SupplementReviewView:
         self.page = 0
         self.filter_selection = ("Tất cả", image_filters.ALL, image_filters.ANY)
         self.preview_cache.clear()
+        self.warm_stop.set()
+        self.warm_stop = Event()
+        self.warm_started = False
+        self.pixel_cache = ReviewPixelCache()
         self.list_dirty = True
 
     def filter_widgets(self):
@@ -65,6 +72,7 @@ class SupplementReviewView:
         if not self.active:
             self.capture_view = (tuple(w.get() for w in self.filter_widgets()), self.app.image_page)
         self.active = True
+        self.app.label_reload_button.pack(padx=10, pady=(0, 8))
         self.app.image_filter.configure(values=[*STATUSES, "Đã lưu trữ"])
         self.set_filters(self.filter_selection)
         self.preview.read_only = True
@@ -73,13 +81,36 @@ class SupplementReviewView:
         # The caller already checked the previous source. Widgets still contain
         # capture labels here, so comparing them to the last supplement is wrong.
         self.reload(check_unsaved=False)
+        self.warm_review_pixels()
         self.preview.focus_set()
+
+    def warm_review_pixels(self):
+        if self.warm_started or not self.project:
+            return
+        self.warm_started = True
+        paths = [self.app.store.image_path(self.project, r) for r in self.project.images]
+        cache, stop = self.pixel_cache, self.warm_stop
+        # Background work captures paths/cache only, never Tk widgets or live labels.
+        gc.collect()
+        def worker():
+            for path in paths:
+                if stop.is_set():
+                    return
+                try:
+                    cache.fingerprint(path)
+                except (OSError, ValueError):
+                    pass  # Approval will report invalid/missing files; warmup never approves.
+        try:
+            Thread(target=worker, daemon=True).start()
+        except RuntimeError:
+            self.warm_started = False  # Optional preparation; approval can compute without it.
 
     def deactivate(self, *, render=True):
         if not self.active:
             return
         self.filter_selection = tuple(w.get() for w in self.filter_widgets())
         self.active = False
+        self.app.label_reload_button.pack_forget()
         self.preview.read_only = False
         self.app.image_filter.configure(values=STATUSES)
         for widget in self.app.attribute_widgets.values():
@@ -200,14 +231,26 @@ class SupplementReviewView:
             self.app.image_list.select(self.page_rows.index(self.selected))
 
     def navigate(self, delta):
-        if self.filtered and self.allow_leave():
-            current = self.filtered.index(self.selected) if self.selected in self.filtered else (-1 if delta > 0 else 0)
-            self.show_row(self.filtered[(current + delta) % len(self.filtered)])
+        if not self.allow_leave():
+            return
+        if self.filtered:
+            if self.selected in self.filtered:
+                row = self.filtered[(self.filtered.index(self.selected) + delta) % len(self.filtered)]
+            else:
+                positions = {r['id']: i for i, r in enumerate(self.rows)}
+                index = positions.get(self.selected['id'], -1) if self.selected else -1
+                following = [r for r in self.filtered if positions[r['id']] > index]
+                preceding = [r for r in self.filtered if positions[r['id']] < index]
+                row = (following[0] if following else self.filtered[0]) if delta > 0 else (preceding[-1] if preceding else self.filtered[-1])
+            self.show_row(row)
+        else:
+            self.show_row(None)
 
     def show_row(self, row):
+        previous = self.selected
         self.selected, self.preview_ok, self.rendering = row, False, True
+        self.app._label_feedback()
         try:
-            self.preview.clear_image()
             self.app.selected_annotation_id = None
             if row in self.filtered:
                 page = self.filtered.index(row) // self.app.image_page_size
@@ -217,15 +260,31 @@ class SupplementReviewView:
                 self.render_list()
             if row:
                 path = preview_path(self.app.store, self.project, row, cache=self.preview_cache)
-                self.preview.load(self.project, self.record_for(row), str(path))
+                signature = (path, path.stat().st_mtime_ns, path.stat().st_size, row.get("sha256"))
+                same_image = (previous and previous['id'] == row['id'] and self.preview.image is not None
+                              and self.preview.record and self.preview.record.id == row['id']
+                              and getattr(self, 'loaded_preview_signature', None) == signature)
+                if not same_image:
+                    self.preview.load(self.project, self.record_for(row), str(path))
+                else:
+                    self.preview.record = self.record_for(row)
+                self.loaded_preview_signature = signature
                 self.preview_ok = True
-                self.app.current_image_label.configure(text=f"Bổ trợ · {self.rows.index(row) + 1}/{len(self.rows)}"
-                    f" · {path.name} · {self.preview.image.width}×{self.preview.image.height} · Chỉ TRAIN")
+                source = [r for r in self.rows if bool(r.get('archived')) == bool(row.get('archived'))]
+                self.app.image_position_label.configure(text=f"{source.index(row) + 1} / {len(source)}")
+                self.app.current_image_label.configure(text=f"Bổ trợ · {path.name}"
+                    f" · {self.preview.image.width}×{self.preview.image.height} · Chỉ TRAIN")
                 if row in self.filtered:
                     self.app.image_list.select(self.page_rows.index(row), focus=True)
+                else:
+                    self.app.image_list.clear_selection()
             else:
+                self.preview.clear_image()
+                self.app.image_position_label.configure(text="0 / 0")
                 self.app.current_image_label.configure(text="Không có ảnh bổ trợ trong bộ lọc này")
         except (OSError, ValueError) as exc:
+            self.preview.clear_image()
+            self.app.image_position_label.configure(text="0 / 0")
             self.app.current_image_label.configure(text=f"Không mở được ảnh bổ trợ: {exc}")
         finally:
             self.rendering = False
@@ -254,6 +313,8 @@ class SupplementReviewView:
             raw = values.get(attr, "")
             widget.set(display_values(self.project, attr).get(raw, raw) if raw else "— Chưa gán —")
         self.save("draft", save_draft_labels=True)
+        if values.get(key, "") != value:
+            self.app._label_feedback("Cần chọn Có cây trước khi gán tình trạng lá. Khi chưa xác nhận có cây, tình trạng là Không áp dụng.", warning=True)
 
     def update_controls(self):
         row = self.selected
@@ -270,8 +331,9 @@ class SupplementReviewView:
             self.app._set_button_enabled(button, enabled)
         for widget in (*self.filter_widgets(), *self.app.attribute_widgets.values()):
             widget.configure(state="disabled" if self.busy or (widget in self.app.attribute_widgets.values() and not row) else "normal")
-        if not self.busy:
-            self.app._refresh_label_filters()
+        self.app._set_button_enabled(self.app.label_reload_button, not self.busy)
+        self.app.approve_image_button.configure(text="Đang kiểm tra…" if self.busy and getattr(self, 'saving_decision', '') == 'reviewed'
+                                                else "Duyệt & tiếp")
 
     def archive(self, identifier=None):
         row = next((r for r in self.rows if f"supplement:{r['id']}" == identifier), self.selected)
@@ -287,22 +349,35 @@ class SupplementReviewView:
                 and self.values() == form_attributes(self.project, self.selected)
                 and self.app.other_abnormal_var.get() == self.selected.get("otherAbnormal", "")):
             return
-        project = deepcopy(self.project)
-        assignments = self.app.datasets.ensure_split_assignment(project, persist=False)["groups"]
+        # Draft writes need schema/settings only. Full evidence belongs to approval.
+        project = copy(self.project)
+        if decision != "reviewed":
+            project.images = []
+        project = deepcopy(project)
+        assignments = self.app.datasets.ensure_split_assignment(project, persist=False)["groups"] if decision == "reviewed" else {}
         identifier, revision, attributes = self.selected["id"], self.revision, self.values()
         note = self.app.other_abnormal_var.get()
         self.next_id = identifier
-        if advance and self.selected in self.filtered and len(self.filtered) > 1:
-            self.next_id = self.filtered[(self.filtered.index(self.selected) + 1) % len(self.filtered)]["id"]
+        if advance and self.filtered:
+            if self.selected in self.filtered:
+                self.next_id = self.filtered[(self.filtered.index(self.selected) + 1) % len(self.filtered)]["id"]
+            else:
+                positions = {r['id']: i for i, r in enumerate(self.rows)}
+                index = positions.get(identifier, -1)
+                self.next_id = next((r['id'] for r in self.filtered if positions[r['id']] > index), self.filtered[0]['id'])
         self.busy = self.app.supplement_review_running = True
+        self.saving_decision = decision
+        self.keep_edited_row = decision == "draft" and save_draft_labels and not advance
         self.update_controls()
-        self.app._set_status("Đang lưu nhãn bổ trợ…")
+        self.app._set_status("Đang kiểm tra ảnh và nguồn trước khi duyệt…" if decision == "reviewed" else "Đang lưu nhãn bổ trợ…")
+        self.app._label_feedback("Đang kiểm tra ảnh và nguồn trước khi duyệt…" if decision == "reviewed" else "Đang lưu nhãn…")
         gc.collect()
 
         def worker():
             try:
                 result = save_review(self.app.store, project, assignments, identifier, decision, revision,
-                                     attributes=attributes, save_draft_labels=save_draft_labels, other_abnormal=note)
+                                     attributes=attributes, save_draft_labels=save_draft_labels, other_abnormal=note,
+                                     pixel_cache=self.pixel_cache)
                 self.results.put((result, None))
             except Exception as exc:
                 self.results.put((None, str(exc)))
@@ -321,11 +396,16 @@ class SupplementReviewView:
         self.busy = self.app.supplement_review_running = False
         if error:
             self.app._set_status(f"Chưa lưu: {error}", self.colors["warn"])
+            self.app._label_feedback(f"Chưa lưu: {error}", warning=True)
             self.update_controls()
             return
         self.data, self.revision = result
         self.rows = self.data["images"]
         self.refresh_list(render=False)
-        self.show_row(next((r for r in self.filtered if r["id"] == self.next_id), self.filtered[0] if self.filtered else None))
+        candidates = self.rows if self.keep_edited_row else self.filtered
+        self.show_row(next((r for r in candidates if r["id"] == self.next_id), self.filtered[0] if self.filtered else None))
+        if self.keep_edited_row:
+            self.app._label_feedback("Đã lưu nhãn. Duyệt lại ảnh sau khi sửa." if self.selected in self.filtered else
+                "Đã lưu. Ảnh này không còn thuộc bộ lọc; bạn có thể sửa tiếp hoặc chọn Ảnh sau.")
         self.app._set_status("Đã lưu nhãn bổ trợ." + ("" if self.selected and self.selected.get("enabled") else " Duyệt ảnh để dùng train."), self.colors["good"])
-        self.app._refresh_project_statistics()
+        self.app._request_project_statistics()

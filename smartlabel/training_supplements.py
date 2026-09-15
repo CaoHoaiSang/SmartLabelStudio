@@ -4,9 +4,11 @@ The sidecar is independent of project.json so an open labeling session cannot
 overwrite it. Export validates every enabled record before making a snapshot.
 """
 from collections import Counter
+from io import BytesIO
 import hashlib
 import json
 from pathlib import Path
+from threading import Lock
 
 from PIL import Image
 
@@ -54,6 +56,33 @@ def pixel_hash(path):
         return hashlib.sha256(str(image.size).encode() + image.tobytes()).hexdigest()
 
 
+class ReviewPixelCache:
+    """Reuse decoded pixel fingerprints only after rehashing complete file bytes.
+
+    No mtime shortcut for approval. Export does not use this optional UI cache.
+    """
+    def __init__(self, limit=4096):
+        self.limit = limit
+        self.values = {}
+        self.lock = Lock()
+
+    def fingerprint(self, path):
+        raw = Path(path).read_bytes()
+        digest = hashlib.sha256(raw).hexdigest()
+        with self.lock:
+            cached = self.values.get(digest)
+        if cached is None:
+            with Image.open(BytesIO(raw)) as opened:
+                image = opened.convert("RGB")
+                pixels = hashlib.sha256(str(image.size).encode() + image.tobytes()).hexdigest()
+            with self.lock:
+                if len(self.values) >= self.limit:
+                    self.values.pop(next(iter(self.values)))
+                self.values[digest] = pixels
+            cached = pixels
+        return digest, cached
+
+
 def review_attributes(project, row):
     """Read legacy presence evidence as a label, never inherit parent labels.
 
@@ -99,7 +128,7 @@ def validated_samples(store, project, attribute, assignments):
     return validate_manifest_samples(store, project, attribute, assignments, data)
 
 
-def validate_manifest_samples(store, project, attribute, assignments, data):
+def validate_manifest_samples(store, project, attribute, assignments, data, *, pixel_cache=None):
     """Validate a candidate sidecar without writing it, using the export contract."""
     if project.metadata.get("template") != "Hydroponic Slot Condition":
         return []
@@ -138,13 +167,18 @@ def validate_manifest_samples(store, project, attribute, assignments, data):
         source = (root / str(row.get("file", ""))).resolve()
         if not source.is_relative_to(root) or not source.is_file() or source == manifest_path(store, project):
             raise ValueError(f"{identifier}: đường dẫn ảnh không hợp lệ.")
-        digest = sha256(source)
+        if pixel_cache is None:
+            digest, pixels = sha256(source), None
+        else:
+            digest, pixels = pixel_cache.fingerprint(source)
         if digest != row.get("sha256") or digest in seen_hashes:
             raise ValueError(f"{identifier}: ảnh thay đổi hoặc bị trùng.")
         seen_hashes.add(digest)
         if source_pixels is None:
-            source_pixels = {pixel_hash(store.image_path(project, r)) for r in project.images}
-        pixels = pixel_hash(source)
+            source_pixels = {(pixel_cache.fingerprint(store.image_path(project, r))[1] if pixel_cache is not None
+                              else pixel_hash(store.image_path(project, r))) for r in project.images}
+        if pixels is None:
+            pixels = pixel_hash(source)
         if pixels in source_pixels:
             raise ValueError(f"{identifier}: ảnh trùng nội dung với dự án/ảnh bổ trợ.")
         source_pixels.add(pixels)
