@@ -137,9 +137,9 @@ PROJECT_ACTION_TOOLTIPS = {
     "capture_manifest": {
         "standard": "Chức năng này chỉ hiện trong project dùng mẫu Hydroponic Slot Condition.",
         "hydro": (
-            "Cách nhập khuyến nghị cho dữ liệu từ AI Camera. Ứng dụng kiểm tra schema, checksum, ID trùng, "
+            "Công cụ nâng cao để nhập đúng một capture đã giải nén khi cần kiểm tra hoặc phục hồi. Ứng dụng kiểm tra schema, checksum, ID trùng, "
             "lineage, hình học ROI/slot và đủ rọ theo bố cục của từng capture trước khi nhập; ảnh slot được dùng để gán nhãn và "
-            "vẫn giữ liên kết tới full frame/ROI. Nút này không chụp ảnh và không chạy inference."
+            "vẫn giữ liên kết tới full frame/ROI. Luồng thông thường nên dùng Nhập gói HydroFlow (.zip)."
         ),
     },
     "capture_dataset_archive": {
@@ -449,8 +449,13 @@ class SmartLabelApp(ctk.CTk):
                             border_width=1, border_color=COLORS["border"])
         header = ctk.CTkFrame(card, fg_color="transparent")
         header.pack(fill="x", padx=10, pady=(10, 6))
-        ctk.CTkLabel(header, text="DANH SÁCH ẢNH", font=("Segoe UI Semibold", 11),
-                     text_color=COLORS["accent"]).pack(side="left")
+        self.image_list_title_label = ctk.CTkLabel(
+            header,
+            text="DANH SÁCH ẢNH",
+            font=("Segoe UI Semibold", 14),
+            text_color=COLORS["accent"],
+        )
+        self.image_list_title_label.pack(side="left")
         switch = ctk.CTkSegmentedButton(header, values=["Giàn", "Bổ trợ"],
             variable=self.label_source, command=self._show_label_workspace,
             selected_color="#256481", selected_hover_color="#327b9c",
@@ -539,7 +544,7 @@ class SmartLabelApp(ctk.CTk):
         self.hydro_archive_import_button.pack(fill="x", padx=8, pady=4)
         self.hydro_import_button = self._button(
             import_group,
-            "Nhập 1 CaptureManifestV1",
+            "Nhập một capture đơn · Nâng cao",
             self._import_capture_manifest,
             width=220,
             color="#2b906d",
@@ -600,9 +605,6 @@ class SmartLabelApp(ctk.CTk):
             tooltip=self._project_action_tooltip("project_settings", False),
         )
         self.project_settings_button.pack(fill="x", padx=8, pady=(4, 8))
-        self.training_supplements_button = self._button(
-            settings_group, "Xem ảnh bổ trợ train", self._open_training_supplements,
-            width=220, tooltip="Mở ảnh tổng hợp/nguồn ngoài và danh sách nguồn. Chỉ dùng bổ trợ TRAIN Hydro.")
         lifecycle_group = self._project_action_group(project_tools, "lifecycle")
         self._button(lifecycle_group, "Xóa dự án…", self._trash_current_project,
                      width=220, color="#a94747",
@@ -614,7 +616,7 @@ class SmartLabelApp(ctk.CTk):
         center.pack(side="left", fill="both", expand=True, padx=5, pady=8)
         self.project_summary = ctk.CTkTextbox(center, font=("Consolas", 14), fg_color="#0a131c", corner_radius=10)
         self.project_summary.pack(fill="both", expand=True, padx=14, pady=(4, 14))
-        self.project_overview = ProjectOverview(center, COLORS, self._open_training_supplements)
+        self.project_overview = ProjectOverview(center, COLORS)
 
         right = self._card(tab, "NGUYÊN TẮC")
         right.pack(side="right", fill="y", padx=(5, 8), pady=8)
@@ -1297,12 +1299,6 @@ class SmartLabelApp(ctk.CTk):
             for switch in self.label_source_switches:
                 switch.pack_forget()
             self.supplement_view.set_project(None)
-        supplements_button = getattr(self, "training_supplements_button", None)
-        if supplements_button is not None:
-            if hydro and not supplements_button.winfo_manager():
-                supplements_button.pack(fill="x", padx=8, pady=(0, 8))
-            elif not hydro:
-                supplements_button.pack_forget()
         contextual_buttons = (
             (getattr(self, "hydro_archive_import_button", None), getattr(self, "hydro_import_button", None)),
             (getattr(self, "hydro_import_button", None), getattr(self, "import_folder_button", None)),
@@ -1732,9 +1728,7 @@ class SmartLabelApp(ctk.CTk):
         field = self.label_filter_fields[self.label_filter_field.get()]
         records = None
         if self._supplement_active():
-            archived = self.image_filter.get() == "Đã lưu trữ"
-            records = (self.supplement_view.record_for(row) for row in self.supplement_view.rows
-                       if bool(row.get("archived")) == archived)
+            records = (self.supplement_view.record_for(row) for row in self.supplement_view.rows)
         self.label_filter_values = image_filters.filter_values(self.project, field, records)
         values = list(self.label_filter_values)
         state = "disabled" if field[0] == "all" else "normal"
@@ -3457,7 +3451,7 @@ class SmartLabelApp(ctk.CTk):
         info.pack(fill="both", expand=True, pady=(6, 0))
         self.dataset_info = ctk.CTkTextbox(info, fg_color="#091119", font=("Consolas", 13), corner_radius=10)
         self.dataset_info.pack(fill="both", expand=True, padx=14, pady=(4, 14))
-        self.dataset_overview = ProjectOverview(info, COLORS, self._open_training_supplements, expanded=True)
+        self.dataset_overview = ProjectOverview(info, COLORS, expanded=True)
 
     def _refresh_split_status(self) -> None:
         if not self.project or not hasattr(self, "dataset_split_status_label"):

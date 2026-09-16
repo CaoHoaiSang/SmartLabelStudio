@@ -469,13 +469,15 @@ class ThumbnailList(ctk.CTkScrollableFrame):
             font=("Segoe UI Semibold", 14),
             command=lambda key=item["key"]: self._delete_key(key),
         )
-        delete_button.pack(anchor="center", pady=(0, 7))
+        delete_visible = item.get("delete_visible", True)
+        if delete_visible:
+            delete_button.pack(anchor="center", pady=(0, 7))
         badge = ctk.CTkLabel(
             actions, text="", width=18, height=18, corner_radius=9,
             fg_color=status_style["indicator"],
         )
         badge.pack(anchor="center")
-        ToolTip(delete_button, item.get("delete_tooltip", "Xóa ảnh này cùng toàn bộ nhãn và thuộc tính liên quan."))
+        delete_tooltip = ToolTip(delete_button, item.get("delete_tooltip", "Xóa ảnh này cùng toàn bộ nhãn và thuộc tính liên quan."))
         name_tooltip = ToolTip(name_label, display_name)
         status_tooltip = ToolTip(badge, f"Trạng thái ảnh: {status_style['label']}")
         data = {
@@ -488,7 +490,9 @@ class ThumbnailList(ctk.CTkScrollableFrame):
             "badge": badge,
             "name_tooltip": name_tooltip,
             "status_tooltip": status_tooltip,
+            "delete_tooltip": delete_tooltip,
             "delete": delete_button,
+            "delete_visible": delete_visible,
             "status": status,
             "count": item.get("count", 0),
             "display_name": display_name,
@@ -515,6 +519,14 @@ class ThumbnailList(ctk.CTkScrollableFrame):
             row["badge"].configure(text="", fg_color=status_style["indicator"])
             row["status_tooltip"].set_text(f"Trạng thái ảnh: {status_style['label']}")
             row["status"] = status
+        delete_visible = item.get("delete_visible", True)
+        if delete_visible != row["delete_visible"]:
+            if delete_visible:
+                row["delete"].pack(anchor="center", pady=(0, 7), before=row["badge"])
+            else:
+                row["delete"].pack_forget()
+            row["delete_visible"] = delete_visible
+        row["delete_tooltip"].set_text(item.get("delete_tooltip", "Xóa ảnh này cùng toàn bộ nhãn và thuộc tính liên quan."))
         image_path = str(item["path"])
         signature = self._image_signature(image_path)
         if image_path != row["path"] or signature != row["image_signature"]:
@@ -532,7 +544,7 @@ class ThumbnailList(ctk.CTkScrollableFrame):
     def _delete_key(self, key) -> None:
         """Select the row first, then ask the owner to confirm its deletion."""
         index = next((i for i, row in enumerate(self.rows) if row["key"] == key), -1)
-        if index < 0:
+        if index < 0 or not self.rows[index].get("delete_visible", True):
             return
         self.select(index, notify=True, focus=True)
         if self.delete_command:

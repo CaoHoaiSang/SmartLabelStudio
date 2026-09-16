@@ -2,13 +2,49 @@
 from collections import Counter
 import customtkinter as ctk
 
+from .hydro_labels import model_attributes
+from .label_schema import meaning_for
 from .supplement_review import load_review
+from .training_supplements import review_attributes
+
+
+def summarize_supplement_rows(project, rows):
+    """Return operator-facing counts without changing supplement eligibility."""
+    rows = list(rows or [])
+    excluded = [row for row in rows if row.get("archived") is True or row.get("reviewStatus") == "rejected"]
+    working = [row for row in rows if row not in excluded]
+    reviewed = [row for row in working if row.get("reviewStatus") == "reviewed"]
+    active = [row for row in reviewed if row.get("enabled") is True]
+    pending = len(working) - len(reviewed)
+    attributes = []
+    for attribute in model_attributes(project):
+        counts = Counter(
+            meaning_for(attribute, review_attributes(project, row).get(attribute["id"]))
+            for row in active
+        )
+        attributes.append({
+            "id": attribute["id"],
+            "title": attribute["displayName"],
+            "positive": counts.get("positive", 0),
+            "negative": counts.get("negative", 0),
+        })
+    return {
+        "total": len(rows),
+        "working": len(working),
+        "reviewed": len(reviewed),
+        "active": len(active),
+        "paused": len(reviewed) - len(active),
+        "pending": max(0, pending),
+        "rejected": len(excluded),
+        "legacy_archived": sum(row.get("archived") is True for row in rows),
+        "attributes": attributes,
+    }
 
 
 class ProjectOverview(ctk.CTkScrollableFrame):
-    def __init__(self, master, colors, open_supplements, *, expanded=False):
+    def __init__(self, master, colors, *, expanded=False):
         super().__init__(master, fg_color="#0a131c", corner_radius=10)
-        self.colors, self.open_supplements = colors, open_supplements
+        self.colors = colors
         self.details_visible = expanded
         self.split_frames = []
         self.wrapped_labels = []
@@ -41,6 +77,8 @@ class ProjectOverview(ctk.CTkScrollableFrame):
         self.label(self, project.name, size=20, bold=True)
         self.label(self, "Phân loại từng rọ · Nhãn trực tiếp trên ảnh" if hydro
                    else "Nhãn vật thể · RECT / SEG / OBB / ORI", color=muted)
+        if hydro:
+            self.label(self, "ẢNH TỪ GIÀN", size=13, color=self.colors["accent"], bold=True)
         totals = ctk.CTkFrame(self, fg_color="transparent")
         totals.pack(fill="x", padx=6, pady=(8, 12))
         totals.grid_columnconfigure((0, 1, 2), weight=1, uniform="counts")
@@ -58,6 +96,44 @@ class ProjectOverview(ctk.CTkScrollableFrame):
         if not hydro:
             self.render_geometry(project, summary)
             return
+        supplement = ctk.CTkFrame(self, fg_color="#132b31", corner_radius=10)
+        supplement.pack(fill="x", padx=6, pady=(4, 12))
+        self.label(supplement, "ẢNH BỔ TRỢ · CHỈ TRAIN", size=13, color="#69d7bd", bold=True)
+        try:
+            data, _ = load_review(store, project)
+            supplement_summary = summarize_supplement_rows(project, data["images"] if data else [])
+            supplement_totals = ctk.CTkFrame(supplement, fg_color="transparent")
+            supplement_totals.pack(fill="x", padx=6, pady=(4, 6))
+            supplement_totals.grid_columnconfigure((0, 1, 2), weight=1, uniform="supplement_counts")
+            for column, (count, title, color) in enumerate((
+                    (supplement_summary["total"], "Ảnh bổ trợ", self.colors["accent"]),
+                    (supplement_summary["reviewed"], "Đã duyệt", self.colors["good"]),
+                    (supplement_summary["pending"], "Chưa duyệt", self.colors["warn"]))):
+                card = ctk.CTkFrame(supplement_totals, fg_color=self.colors["panel2"], corner_radius=10)
+                card.grid(row=0, column=column, sticky="ew", padx=4)
+                self.label(card, f"{count:,}", size=22, color=color, bold=True)
+                self.label(card, title, color=muted)
+            details = [f"Đang dùng train {supplement_summary['active']}"]
+            if supplement_summary["paused"]:
+                details.append(f"Tạm tắt {supplement_summary['paused']}")
+            if supplement_summary["rejected"]:
+                details.append(f"Từ chối {supplement_summary['rejected']}")
+            self.label(supplement, "   ·   ".join(details), color=muted, size=11)
+            for attribute in supplement_summary["attributes"]:
+                self.label(
+                    supplement,
+                    f"{attribute['title']}:  Có {attribute['positive']:,}   ·   Không {attribute['negative']:,}",
+                    color="#b9d7e8",
+                    size=11,
+                )
+            self.label(
+                supplement,
+                "Ảnh bổ trợ đã duyệt chỉ bổ sung TRAIN; không thay ảnh giàn trong VAL / TEST.",
+                color=muted,
+                size=11,
+            )
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            self.label(supplement, f"Cần kiểm tra danh sách bổ trợ: {exc}", color=self.colors["warn"], size=11)
         self.label(self, "THUỘC TÍNH TRÊN ẢNH RỌ", size=13, color=self.colors["accent"], bold=True)
         self.label(self, "Có / Không: số ảnh rọ đã duyệt theo từng thuộc tính.", color=muted)
         rows = summary["image_attributes"]
@@ -97,22 +173,6 @@ class ProjectOverview(ctk.CTkScrollableFrame):
         if missing:
             self.label(self, "TEST còn thiếu một trong hai nhóm Có / Không: " + ", ".join(missing)
                        + ". Chưa đủ dữ liệu để đánh giá hai nhóm.", color=self.colors["warn"], size=11)
-        supplement = ctk.CTkFrame(self, fg_color="#132b31", corner_radius=10)
-        supplement.pack(fill="x", padx=6, pady=(12, 8))
-        self.label(supplement, "ẢNH BỔ TRỢ · CHỈ TRAIN", size=13, color="#69d7bd", bold=True)
-        try:
-            data, _ = load_review(store, project)
-            images = data["images"] if data else []
-            archived = sum(r.get("archived") is True for r in images)
-            active = sum(r.get("enabled") is True and r.get("archived") is not True for r in images)
-            self.label(supplement, f"{len(images) - archived} ảnh bổ trợ   ·   {active} đang bật train"
-                       + (f"   ·   {archived} đã lưu trữ" if archived else ""))
-            self.label(supplement, "Lưu riêng với ảnh giàn. Không cộng vào thống kê Có / Không và VAL / TEST ở trên.", color=muted, size=11)
-        except (OSError, ValueError, TypeError) as exc:
-            self.label(supplement, f"Cần kiểm tra danh sách bổ trợ: {exc}", color=self.colors["warn"], size=11)
-        ctk.CTkButton(supplement, text="Xem & duyệt ảnh bổ trợ →", command=self.open_supplements,
-                      fg_color="#27505a", hover_color="#346974").pack(anchor="w", padx=12, pady=(6, 12))
-
     def render_geometry(self, project, summary):
         self.label(self, f"{summary['annotations']:,} nhãn vật thể", size=18, bold=True)
         self.label(self, "Thống kê nhãn hiện có, gồm cả bản nháp. Trạng thái duyệt ảnh được hiển thị ở trên.", color=self.colors["muted"])

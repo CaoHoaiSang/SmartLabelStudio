@@ -52,8 +52,10 @@ chính các widget hiện hữu: danh sách thumbnail/phân trang, bộ lọc, c
 zoom %, căn giữa, thuộc tính, ghi chú và các nút duyệt. Không còn màn hình
 Bổ trợ riêng hoặc bộ lọc Đợt/tuổi cây. Ba ô lọc giống Giàn: **trạng thái →
 nhãn/thuộc tính → giá trị**. Chỉ có **Chưa gán giá trị** khi nguồn ảnh đang
-xem còn thiếu giá trị của thuộc tính đã chọn. Bổ trợ giữ thêm lựa chọn
-**Đã lưu trữ** trong bộ lọc trạng thái để khôi phục ảnh đã ẩn.
+xem còn thiếu giá trị của thuộc tính đã chọn. Giàn và Bổ trợ dùng cùng năm
+trạng thái: Tất cả, Chưa gán nhãn, Bản nháp, Đã duyệt và Từ chối. Bản ghi Bổ
+trợ cũ từng có `archived: true` cũng hiện trong **Từ chối** và khôi phục được;
+không còn bộ lọc lưu trữ riêng.
 
 Dữ liệu Bổ trợ vẫn đọc sidecar, không đưa ảnh gốc hoặc biến thể vào
 project.images. Thumbnail dùng cùng thành phần với Giàn; số nhãn Hydro
@@ -71,8 +73,9 @@ hình học và phím Delete/Undo không tác động vào ảnh Giàn đang ch�
   Có/Không của chính nó. Mục thiếu/Chưa chắc/Không áp dụng không train.
 - **Bỏ duyệt / Từ chối** giữ nhãn đã lưu và tắt train. **Khôi phục** đưa về
   bản nháp để kiểm lại, chưa bật train. Ghi chú bất thường lưu riêng, không train.
-- Nút **×** trên thumbnail Bổ trợ hỏi xác nhận **Lưu trữ**, giữ ảnh/nhãn/lịch
-  sử. Chọn Đã lưu trữ → Khôi phục hoặc Duyệt & tiếp để đưa ảnh trở lại.
+- Thumbnail Bổ trợ không có nút `×`; dùng **Từ chối** để loại khỏi train và
+  **Khôi phục** để đưa về bản nháp. Backend chỉ giữ khả năng đọc `archived`
+  cho dữ liệu cũ, không tạo trạng thái lưu trữ mới từ giao diện.
   Không suy ảnh trùng chỉ vì Lá vàng=Không.
 - Lưu chạy ở worker, khóa đổi ảnh/nguồn/dự án trong khi ghi. Xung đột revision
   hoặc lỗi ghi giữ thay đổi trên form và báo lỗi; không ghi đè phiên khác.
@@ -140,8 +143,9 @@ không ghi đè scrollregion khi bổ sung xử lý đổi chiều rộng.
 Hydro hiển thị ba số chính **Ảnh giàn / Đã duyệt / Chưa duyệt** và
 thẻ riêng cho mỗi thuộc tính, nhấn mạnh **Có / Không**. Chỉ hiện nhóm chưa
 chắc/không áp dụng/thiếu nhãn/chưa duyệt khi có dữ liệu. Chi tiết phân tập nằm
-trong **Xem chi tiết Train / Val / Test**. Ảnh bổ trợ có ô thống kê riêng,
-không cộng vào số ảnh giàn hay bảng thuộc tính. Chai và bài vật thể có cùng
+trong **Xem chi tiết Train / Val / Test**. Ảnh bổ trợ có ba số tương ứng,
+trạng thái dùng train và số Có/Không theo từng thuộc tính; không cộng vào số
+ảnh giàn hoặc VAL/TEST. Chai và bài vật thể có cùng
 cách trình bày thẻ nhưng thống kê nhãn hình học, Class, nguồn và các thuộc tính
 theo phạm vi trên ảnh/trên vật thể; không có mục Ảnh bổ trợ Hydro. Chỉnh phân tập
 cập nhật cả hai bảng. Không thay đổi luật export hoặc tự chuyển ảnh giữa các tập.
@@ -149,8 +153,9 @@ cập nhật cả hai bảng. Không thay đổi luật export hoặc tự chuy�
 ## Dùng ảnh bổ trợ
 
 Ảnh tổng hợp hoặc ảnh ngoài giàn nằm trong `training_supplements/` của project,
-không import thành ảnh capture có lineage giả. Nút **Xem ảnh bổ trợ train** tại
-Dự án mở giao diện duyệt trong SmartLabel. Tổng quan báo riêng số ảnh đang bật; nhấn Train
+không import thành ảnh capture có lineage giả. Mở **GÁN NHÃN → Bổ trợ** để xem
+và duyệt bằng cùng giao diện ảnh giàn; trang Dự án/Dataset chỉ thống kê, không
+lặp nút điều hướng. Nhấn Train
 vẫn dùng exporter Classification hiện có, tự thêm ảnh phù hợp vào TRAIN đúng
 thuộc tính. Nhật ký train ghi số ảnh bổ trợ. Chưa chạy train khi chỉ xem Tổng quan.
 

@@ -105,7 +105,12 @@ Trong trang **DỰ ÁN**, các thao tác được chia theo đúng thứ tự s�
 - **Nhập thư mục ảnh**: quét cả thư mục con.
 - **Nhập các ảnh**: chọn một hoặc nhiều file.
 - **Tách frame từ video**: ứng dụng đọc tổng số frame, đề xuất khoảng `N` để tạo tối đa khoảng 500 ảnh và cảnh báo trước nếu lựa chọn dự kiến tạo quá nhiều ảnh. `N=4` nghĩa là lưu mỗi 4 frame, không phải chỉ lưu 4 ảnh.
-- **Nhập CaptureManifestV1** *(chỉ hiện với project Hydro)*: lựa chọn khuyến nghị cho ảnh từ Camera Service vì kiểm tra checksum, lineage, hình học và đủ 10 slot. Nhập thư mục/ảnh/video thông thường không tự tạo lineage hoặc chia thành 2 ROI/10 slot.
+- **Nhập gói HydroFlow (.zip)** *(chỉ hiện với project Hydro)*: luồng thông
+  thường để chuyển nhiều capture đã duyệt từ HydroFlow, có kiểm tra checksum,
+  lineage, hình học và cấu trúc slot.
+- **Nhập một capture đơn · Nâng cao** *(chỉ hiện với project Hydro)*: nhập trực
+  tiếp một `CaptureManifestV1` đã giải nén để kiểm tra hoặc phục hồi kỹ thuật.
+  Không phải cách nhập hằng ngày và không thay cho gói HydroFlow `.zip`.
 
 ### 4.2. Dọn dữ liệu vừa nhập
 

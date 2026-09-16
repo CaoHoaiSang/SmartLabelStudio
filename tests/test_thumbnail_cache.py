@@ -64,3 +64,19 @@ class ThumbnailCacheTests(unittest.TestCase):
         self.browser.set_items(self.rows('a'))
         self.assertIsNone(row['thumb'].cget('image'))
         self.assertEqual(row['thumb'].cget('text'), 'Không có ảnh')
+
+    def test_hidden_delete_action_cannot_fire_and_can_be_restored_on_reuse(self):
+        deleted = []
+        self.browser.delete_command = deleted.append
+        hidden = self.rows('archived')[0]
+        hidden['delete_visible'] = False
+        self.browser.set_items([hidden])
+        row = self.browser.rows[0]
+        self.assertFalse(row['delete'].winfo_manager())
+        self.browser._delete_key('archived')
+        self.assertFalse(deleted)
+        visible = self.rows('archived')[0]
+        self.browser.set_items([visible])
+        self.assertEqual(row['delete'].winfo_manager(), 'pack')
+        self.browser._delete_key('archived')
+        self.assertEqual(deleted, ['archived'])

@@ -205,14 +205,16 @@ class SupplementReviewUiTests(unittest.TestCase):
         self.assertEqual(self.view.values()['yellow_leaf'], 'not_applicable')
         self.assertIsNone(self.view.selected['presenceMeaning'])
 
-    def test_archive_reject_restore_and_filter_membership(self):
-        with patch('smartlabel.supplement_review_view.messagebox.askyesno', return_value=True):
-            self.app._delete_image_from_thumbnail('supplement:s0')
+    def test_reject_restore_and_filter_membership_without_thumbnail_delete(self):
+        self.assertFalse(self.app.image_list.rows[0]['delete'].winfo_manager())
+        self.app._reject_image()
         self.complete_save()
-        self.assertEqual(len(self.view.filtered), 26)
-        self.app.image_filter.set('Đã lưu trữ')
+        self.assertEqual(len(self.view.filtered), 27)
+        self.app.image_filter.set('Từ chối')
         self.app._change_image_filter()
         self.assertEqual(self.view.selected['id'], 's0')
+        self.assertFalse(self.app.image_list.rows[0]['delete'].winfo_manager())
+        self.assertEqual(self.app.restore_image_button.cget('state'), 'normal')
         self.app._restore_image()
         self.complete_save()
         self.assertFalse(self.view.filtered)
@@ -225,6 +227,23 @@ class SupplementReviewUiTests(unittest.TestCase):
         self.app._change_image_filter()
         self.assertEqual(self.view.selected['id'], 's0')
         self.assertEqual(len(self.app.project.images), 1)
+
+    def test_historical_archived_row_appears_as_rejected_and_can_be_restored(self):
+        path = manifest_path(self.store, self.hydro)
+        payload = json.loads(path.read_text(encoding='utf-8'))
+        payload['images'][0].update(archived=True, enabled=False, reviewStatus='reviewed')
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+        self.view.reload(check_unsaved=False)
+        self.app.image_filter.set('Từ chối')
+        self.app._change_image_filter()
+        self.assertEqual(self.view.selected['id'], 's0')
+        self.assertEqual(self.app.approve_image_button.cget('state'), 'disabled')
+        self.assertEqual(self.app.restore_image_button.cget('state'), 'normal')
+        self.app._restore_image()
+        self.complete_save()
+        self.app.image_filter.set('Bản nháp')
+        self.app._change_image_filter()
+        self.assertEqual(self.view.selected['id'], 's0')
 
     def test_unsaved_note_cancel_busy_switch_and_bottle_isolation(self):
         self.app.other_abnormal_var.set('Rách lá')

@@ -4,6 +4,7 @@ from unittest.mock import patch
 import unittest
 
 import test_training_supplements as fixtures
+from smartlabel.project_overview import summarize_supplement_rows
 from smartlabel.supplement_review import load_review, preview_path, review_state, save_review, materialize_confirmed_presence, form_attributes, materialize_missing_defaults
 from smartlabel.training_supplements import sha256, validated_samples, review_attributes
 
@@ -220,6 +221,27 @@ class SupplementReviewTests(unittest.TestCase):
         restored, _ = self.update('reviewed', attributes={'plant_presence': 'present', 'yellow_leaf': 'present'})
         self.assertFalse(restored['images'][0]['archived'])
         self.assertEqual(len(validated_samples(self.store, self.project, self.yellow, self.assignment)), 1)
+
+    def test_overview_summarizes_supplement_review_and_train_states(self):
+        active = deepcopy(self.row)
+        reviewed_off = deepcopy(self.row)
+        reviewed_off.update(id="reviewed-off", enabled=False)
+        pending = deepcopy(self.row)
+        pending.update(id="pending", enabled=False, reviewStatus="draft")
+        rejected = deepcopy(self.row)
+        rejected.update(id="rejected", enabled=False, reviewStatus="rejected")
+        archived = deepcopy(self.row)
+        archived.update(id="archived", enabled=False, archived=True)
+        summary = summarize_supplement_rows(
+            self.project,
+            [active, reviewed_off, pending, rejected, archived],
+        )
+        self.assertEqual(
+            {key: summary[key] for key in ("total", "working", "reviewed", "active", "paused", "pending", "rejected", "legacy_archived")},
+            {"total": 5, "working": 3, "reviewed": 2, "active": 1, "paused": 1, "pending": 1, "rejected": 2, "legacy_archived": 1},
+        )
+        yellow = next(row for row in summary["attributes"] if row["id"] == "yellow_leaf")
+        self.assertEqual((yellow["positive"], yellow["negative"]), (1, 0))
 
     def test_atomic_replace_failure_cleans_own_temporary_files_and_preserves_manifest(self):
         before = self.path.read_bytes()

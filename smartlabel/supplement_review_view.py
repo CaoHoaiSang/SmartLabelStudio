@@ -18,6 +18,11 @@ from .training_supplements import ReviewPixelCache, review_attributes
 from .ui_components import IMAGE_REVIEW_STATUS_STYLE
 
 STATUSES = ["Tất cả", "Chưa gán nhãn", "Bản nháp", "Đã duyệt", "Từ chối"]
+LEGACY_ARCHIVED_FILTER = "Đã lưu trữ"
+
+
+def normalize_status_filter(value):
+    return "Từ chối" if value == LEGACY_ARCHIVED_FILTER else value
 
 
 class SupplementReviewView:
@@ -64,7 +69,7 @@ class SupplementReviewView:
 
     def set_filters(self, selection):
         for widget, value in zip(self.filter_widgets(), selection):
-            widget.set(value)
+            widget.set(normalize_status_filter(value))
         self.app._refresh_label_filters()
 
     def activate(self):
@@ -73,7 +78,7 @@ class SupplementReviewView:
             self.capture_view = (tuple(w.get() for w in self.filter_widgets()), self.app.image_page)
         self.active = True
         self.app.label_reload_button.pack(padx=10, pady=(0, 8))
-        self.app.image_filter.configure(values=[*STATUSES, "Đã lưu trữ"])
+        self.app.image_filter.configure(values=STATUSES)
         self.set_filters(self.filter_selection)
         self.preview.read_only = True
         self.preview.set_mode("select")
@@ -175,9 +180,10 @@ class SupplementReviewView:
 
     def refresh_list(self, *, render=True):
         self.app._refresh_label_filters()
-        archived = self.app.image_filter.get() == "Đã lưu trữ"
-        self.filtered = [r for r in self.rows if bool(r.get("archived")) == archived
-                         and self.app._image_matches_filters(self.record_for(r))]
+        # Historical archived rows are represented as rejected records. This
+        # keeps old provenance restorable without exposing a second exclusion
+        # concept in the operator workflow.
+        self.filtered = [r for r in self.rows if self.app._image_matches_filters(self.record_for(r))]
         self.list_dirty = True
         if render:
             self.render_list()
@@ -205,7 +211,7 @@ class SupplementReviewView:
             record = self.record_for(row)
             items.append({"key": f"supplement:{row['id']}", "name": record.file_name, "path": path,
                           "status": record.review_status, "count": len(record.attributes),
-                          "delete_tooltip": "Lưu trữ ảnh bổ trợ; giữ ảnh, nhãn và lịch sử."})
+                          "delete_visible": False})
         self.app.image_list.set_items(items)
         self.list_dirty = False
         start = self.page * size
@@ -270,7 +276,7 @@ class SupplementReviewView:
                     self.preview.record = self.record_for(row)
                 self.loaded_preview_signature = signature
                 self.preview_ok = True
-                source = [r for r in self.rows if bool(r.get('archived')) == bool(row.get('archived'))]
+                source = self.rows
                 self.app.image_position_label.configure(text=f"{source.index(row) + 1} / {len(source)}")
                 self.app.current_image_label.configure(text=f"Bổ trợ · {path.name}"
                     f" · {self.preview.image.width}×{self.preview.image.height} · Chỉ TRAIN")
@@ -321,13 +327,14 @@ class SupplementReviewView:
         status = self.record_for(row).review_status if row else "unlabeled"
         style = IMAGE_REVIEW_STATUS_STYLE[status]
         self.app.image_status_frame.configure(fg_color=style["background"], border_color=style["border"])
-        title = "ĐÃ LƯU TRỮ" if row and row.get("archived") else style["full_label"]
+        title = "ĐÃ TỪ CHỐI · KHÔNG DÙNG TRAIN" if row and row.get("archived") else style["full_label"]
         self.app.image_status_label.configure(text=title if row else "CHƯA CHỌN ẢNH", text_color=style["text"], fg_color=style["background"])
         valid = bool(row) and not self.busy
-        for button, enabled in ((self.app.approve_image_button, valid and self.preview_ok and status != "reviewed"),
-                                (self.app.unapprove_image_button, valid and status == "reviewed"),
-                                (self.app.reject_image_button, valid and status != "rejected"),
-                                (self.app.restore_image_button, valid and status == "rejected")):
+        archived = bool(row and row.get("archived"))
+        for button, enabled in ((self.app.approve_image_button, valid and not archived and self.preview_ok and status != "reviewed"),
+                                (self.app.unapprove_image_button, valid and not archived and status == "reviewed"),
+                                (self.app.reject_image_button, valid and not archived and status != "rejected"),
+                                (self.app.restore_image_button, valid and (archived or status == "rejected"))):
             self.app._set_button_enabled(button, enabled)
         for widget in (*self.filter_widgets(), *self.app.attribute_widgets.values()):
             widget.configure(state="disabled" if self.busy or (widget in self.app.attribute_widgets.values() and not row) else "normal")
@@ -337,10 +344,10 @@ class SupplementReviewView:
 
     def archive(self, identifier=None):
         row = next((r for r in self.rows if f"supplement:{r['id']}" == identifier), self.selected)
-        if row is not None and self.allow_leave() and messagebox.askyesno("Lưu trữ ảnh bổ trợ",
-                "Ẩn ảnh khỏi danh sách làm việc và train? Ảnh, nhãn và lịch sử vẫn được giữ.", parent=self.app):
+        if row is not None and self.allow_leave() and messagebox.askyesno("Từ chối ảnh bổ trợ",
+                "Loại ảnh này khỏi train? Ảnh, nhãn và lịch sử vẫn được giữ để có thể khôi phục.", parent=self.app):
             self.show_row(row)
-            self.save("archived")
+            self.save("rejected")
 
     def save(self, decision, *, save_draft_labels=False, advance=False):
         if self.busy or not self.selected or self.project is not self.app.project or not self.app._can_change_project():

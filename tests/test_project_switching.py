@@ -86,6 +86,7 @@ class ProjectSwitchingTests(unittest.TestCase):
             children = self.app.import_folder_button.master.pack_slaves()
             self.assertLess(children.index(self.app.hydro_archive_import_button), children.index(self.app.hydro_import_button))
             self.assertLess(children.index(self.app.hydro_import_button), children.index(self.app.import_folder_button))
+            self.assertEqual(self.app.hydro_import_button.cget("text"), "Nhập một capture đơn · Nâng cao")
             self.assertIn("Classification toàn ảnh", self.app.project_summary.get("1.0", "end"))
 
     def test_02_empty_project_clears_canvas_and_class(self):

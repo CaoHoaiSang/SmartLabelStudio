@@ -78,12 +78,13 @@ class HydroReviewUiTests(unittest.TestCase):
         self.assertIn("THUỘC TÍNH TRÊN ẢNH RỌ", hydro)
         self.assertNotIn("Số nhãn hình học", hydro)
         self.assertIn("Có 0 · Không 1", hydro)
-        self.assertTrue(self.app.training_supplements_button.winfo_manager())
+        self.assertFalse(hasattr(self.app, "training_supplements_button"))
+        self.assertGreaterEqual(int(self.app.image_list_title_label.cget("font")[1]), 14)
         self.app._change_project_context(deepcopy(self.bottle))
         bottle = self.app.project_summary.get("1.0", "end")
         self.assertIn("Số nhãn hình học: 0", bottle)
         self.assertNotIn("THUỘC TÍNH TRÊN ẢNH RỌ", bottle)
-        self.assertFalse(self.app.training_supplements_button.winfo_manager())
+        self.assertFalse(hasattr(self.app, "training_supplements_button"))
 
     def test_filter_navigation_and_edit_reconcile_without_clearing_filter(self):
         self.filter_yellow()
