@@ -55,6 +55,7 @@ HYDRO_QA_ISSUE_MESSAGES = {
     "image_not_reviewed": "Ảnh chưa được người dùng duyệt.",
     "duplicate_sha256": "Phát hiện ảnh trùng nội dung SHA-256.",
     "incomplete_capture_slots": "Capture thiếu hoặc trùng rọ so với bố cục đã chụp.",
+    "capture_slots_excluded": "Một số ảnh rọ không còn trong dataset và sẽ không được dùng để train.",
     "plant_instance_leakage": "Plant instance xuất hiện trong nhiều split.",
     "crop_cycle_holdout_missing": "Chưa có crop cycle độc lập dành riêng cho test holdout.",
 }
@@ -1056,6 +1057,7 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
             issues.append({"severity": "error", "imageId": image_ids[0], "code": "duplicate_sha256", "related": image_ids[1:]})
     for capture_id, slot_ids in capture_slots.items():
         records = [record for record in project.images if record.metadata.get("captureId") == capture_id]
+        representative_id = records[0].id if records else ""
         expected_slots = set(SLOT_IDS)
         try:
             topologies = [topology_for({"schemaVersion": record.metadata.get("captureSchemaVersion", 1),
@@ -1064,15 +1066,34 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
                 raise ValueError("mixed capture topology")
             expected_slots = {slot for view in topologies[0]["views"] for slot in view["slotIds"]}
         except (ValueError, KeyError, IndexError):
-            issues.append({"severity": "error", "imageId": "", "captureId": capture_id, "code": "capture_topology_invalid"})
-        if len(slot_ids) != len(expected_slots) or set(slot_ids) != expected_slots:
+            issues.append({"severity": "error", "imageId": representative_id, "captureId": capture_id, "code": "capture_topology_invalid"})
+        missing_slots = sorted(expected_slots - set(slot_ids))
+        duplicate_slots = sorted(slot for slot, count in Counter(slot_ids).items() if count > 1)
+        if duplicate_slots:
+            duplicate_record = next(
+                (record for record in records if str(record.metadata.get("slotId", "")) in duplicate_slots),
+                records[0] if records else None,
+            )
             issues.append({
                 "severity": "error",
-                "imageId": "",
+                "imageId": duplicate_record.id if duplicate_record else representative_id,
                 "code": "incomplete_capture_slots",
                 "captureId": capture_id,
-                "missing": sorted(expected_slots - set(slot_ids)),
-                "duplicates": sorted(slot for slot, count in Counter(slot_ids).items() if count > 1),
+                "missing": missing_slots,
+                "duplicates": duplicate_slots,
+            })
+        elif missing_slots:
+            # Manifests are validated as complete and imported atomically. A
+            # missing slot in an otherwise valid capture is an image later
+            # removed from this training project. Keep the exclusion visible,
+            # but do not block export after rejecting an unusable crop.
+            issues.append({
+                "severity": "warning",
+                "imageId": representative_id,
+                "code": "capture_slots_excluded",
+                "captureId": capture_id,
+                "missing": missing_slots,
+                "duplicates": [],
             })
     for plant_id, splits in plant_splits.items():
         if len(splits) > 1:

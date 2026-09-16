@@ -781,16 +781,16 @@ class SmartLabelApp(ctk.CTk):
                 image_id,
             )
 
-    def _open_qa_image(self, image_id: str) -> None:
+    def _open_qa_image(self, image_id: str) -> bool:
         if not self.project:
-            return
+            return False
         index = next((i for i, record in enumerate(self.project.images) if record.id == image_id), None)
         if index is None:
-            return
+            return False
         if self._supplement_active():
             self._show_label_workspace("Giàn")
             if self._supplement_active():
-                return
+                return False
         if not self._image_matches_filters(self.project.images[index]):
             self.image_filter.set("Tất cả")
             self.label_filter_field.set(image_filters.ALL)
@@ -800,6 +800,7 @@ class SmartLabelApp(ctk.CTk):
         self.tabs.set("GÁN NHÃN")
         self._load_current_image()
         self._sync_image_list_to_current()
+        return True
 
     def _load_initial_project(self) -> None:
         projects = self.store.list_projects()
@@ -3325,13 +3326,30 @@ class SmartLabelApp(ctk.CTk):
 
     def _open_issue(self) -> None:
         selected = self.review_list.curselection()
-        if not selected or not self.project or selected[0] >= len(self.review_row_image_ids):
+        if not selected:
+            messagebox.showinfo(
+                "Chưa chọn kết quả",
+                "Hãy chọn một dòng có tên ảnh rồi bấm Mở ảnh đang chọn.",
+                parent=self,
+            )
+            return
+        if not self.project or selected[0] >= len(self.review_row_image_ids):
             return
         image_id = self.review_row_image_ids[selected[0]]
         if not image_id:
-            self._set_status("Dòng này là kết quả tổng hợp, không gắn với một ảnh cụ thể.", COLORS["warn"])
+            messagebox.showinfo(
+                "Kết quả tổng hợp",
+                "Dòng này áp dụng cho toàn dataset nên không có một ảnh cụ thể để mở. "
+                "Các lỗi theo capture sẽ tự liên kết tới một ảnh đại diện trong capture đó.",
+                parent=self,
+            )
             return
-        self._open_qa_image(image_id)
+        if not self._open_qa_image(image_id):
+            messagebox.showerror(
+                "Không còn tìm thấy ảnh",
+                "Ảnh liên kết với kết quả này không còn trong project. Hãy chạy lại Kiểm tra Dataset Hydro để làm mới danh sách.",
+                parent=self,
+            )
 
     # ---------- dataset ----------
     def _build_dataset_tab(self) -> None:
@@ -4330,7 +4348,11 @@ class SmartLabelApp(ctk.CTk):
             "geometryProfileIds": self.project.metadata.get("geometryProfileIds", []),
             "thresholds": self.project.metadata.get("hydroThresholds", {}),
             "runtimeTarget": self.project.metadata.get("hydroRuntimeTarget", "jetson_nano_tensorrt_fp16"),
-            "deploymentMode": self.project.metadata.get("hydroDeploymentMode", "operational"),
+            "deploymentMode": self.project.metadata.get("hydroDeploymentMode") or (
+                "operational"
+                if self.project.metadata.get("validationStatus") == "validated_holdout"
+                else "shadow"
+            ),
             "cropDisplayName": self.project.metadata.get("cropDisplayName", "cây mục tiêu"),
         }
         defaults["thresholds"], defaults["thresholdSources"] = threshold_defaults(self.project)

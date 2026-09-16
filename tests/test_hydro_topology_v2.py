@@ -70,7 +70,11 @@ class HydroTopologyV2Tests(unittest.TestCase):
             self.assertEqual(bundle["schemaVersion"], 2)
             self.assertEqual(bundle["pipeline"], "fixed_slot_multilabel_v2")
             project.images.pop()
-            self.assertTrue(any(issue["code"] == "incomplete_capture_slots" for issue in hydro_dataset_qa(project, store)["issues"]))
+            excluded = [issue for issue in hydro_dataset_qa(project, store)["issues"]
+                        if issue["code"] == "capture_slots_excluded"]
+            self.assertEqual(len(excluded), 1)
+            self.assertEqual(excluded[0]["severity"], "warning")
+            self.assertTrue(excluded[0]["imageId"])
             manifest["assets"][-1]["rackId"] = "tube_1"
             path.write_text(json.dumps(manifest), encoding="utf-8")
             with self.assertRaises(CaptureManifestError): validate_capture_manifest(path)

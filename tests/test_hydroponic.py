@@ -599,6 +599,18 @@ class HydroponicMvpTests(unittest.TestCase):
         self.assertIn("thiếu upper_05, lower_05", detail)
         self.assertIn("slot trùng upper_01", detail)
 
+    def test_hydro_qa_still_blocks_duplicate_slots_and_links_a_record(self) -> None:
+        import_capture_manifest(self.store, self.project, self.create_manifest())
+        self.project.images[1].metadata["slotId"] = self.project.images[0].metadata["slotId"]
+
+        report = hydro_dataset_qa(self.project, self.store)
+
+        duplicate = next(issue for issue in report["issues"]
+                         if issue["code"] == "incomplete_capture_slots")
+        self.assertEqual(duplicate["severity"], "error")
+        self.assertEqual(duplicate["duplicates"], ["upper_01"])
+        self.assertTrue(duplicate["imageId"])
+
     def test_hydro_training_readiness_does_not_count_validation_or_test_labels(self) -> None:
         import_capture_manifest(self.store, self.project, self.create_manifest())
         for index, record in enumerate(self.project.images):
@@ -645,7 +657,10 @@ class HydroponicMvpTests(unittest.TestCase):
         removed = self.project.images.pop()
         self.store.image_path(self.project, removed).unlink()
         incomplete = hydro_dataset_qa(self.project, self.store, assignment)
-        self.assertTrue(any(issue["code"] == "incomplete_capture_slots" for issue in incomplete["issues"]))
+        excluded = [issue for issue in incomplete["issues"] if issue["code"] == "capture_slots_excluded"]
+        self.assertEqual(len(excluded), 1)
+        self.assertEqual(excluded[0]["severity"], "warning")
+        self.assertTrue(excluded[0]["imageId"])
 
         models = {}
         for key in ("plant_presence", "yellow_leaf", "wilt"):

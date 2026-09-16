@@ -181,6 +181,34 @@ class HydroReviewUiTests(unittest.TestCase):
         self.assertIsNone(self.app.canvas.record)
         self.assertEqual(self.app.image_filter.get(), "Bản nháp")
 
+    def test_review_open_explains_aggregate_and_stale_rows(self):
+        self.app._begin_review_results("QA", "fixture")
+        self.app._append_review_result("[CẢNH BÁO] Toàn dataset", "")
+        self.app.review_list.selection_set(0)
+        self.app._open_issue()
+        app_module.messagebox.showinfo.assert_called_once()
+
+        app_module.messagebox.showinfo.reset_mock()
+        self.app._begin_review_results("QA", "fixture")
+        self.app._append_review_result("[LỖI] stale.jpg", "missing-image-id")
+        self.app.review_list.selection_set(0)
+        self.app._open_issue()
+        app_module.messagebox.showerror.assert_called_once()
+
+    def test_unvalidated_project_defaults_bundle_to_shadow(self):
+        self.app.project.metadata.pop("hydroDeploymentMode", None)
+        self.app.project.metadata["validationStatus"] = "pilot_unvalidated"
+        captured = {}
+
+        def capture_defaults(_parent, defaults):
+            captured.update(defaults)
+            return None
+
+        with patch.object(app_module, "ask_hydro_bundle_config", side_effect=capture_defaults), \
+                patch.object(self.app, "_hydro_classifier_paths", return_value={}):
+            self.app._export_hydro_bundle()
+        self.assertEqual(captured["deploymentMode"], "shadow")
+
     def test_dialog_defaults_locked_provenance_and_editable_thresholds(self):
         defaults = {"datasetVersion": "v1", "sourceCommit": "abc", "cameraProfileIds": ["cam"],
                     "geometryProfileIds": [], "modelTitles": {"plant_presence": "Có cây"}}
