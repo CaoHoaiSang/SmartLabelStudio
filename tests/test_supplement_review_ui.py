@@ -205,15 +205,15 @@ class SupplementReviewUiTests(unittest.TestCase):
         self.assertEqual(self.view.values()['yellow_leaf'], 'not_applicable')
         self.assertIsNone(self.view.selected['presenceMeaning'])
 
-    def test_reject_restore_and_filter_membership_without_thumbnail_delete(self):
-        self.assertFalse(self.app.image_list.rows[0]['delete'].winfo_manager())
+    def test_reject_restore_and_filter_membership_keeps_permanent_delete_available(self):
+        self.assertEqual(self.app.image_list.rows[0]['delete'].winfo_manager(), 'pack')
         self.app._reject_image()
         self.complete_save()
         self.assertEqual(len(self.view.filtered), 27)
         self.app.image_filter.set('Từ chối')
         self.app._change_image_filter()
         self.assertEqual(self.view.selected['id'], 's0')
-        self.assertFalse(self.app.image_list.rows[0]['delete'].winfo_manager())
+        self.assertEqual(self.app.image_list.rows[0]['delete'].winfo_manager(), 'pack')
         self.assertEqual(self.app.restore_image_button.cget('state'), 'normal')
         self.app._restore_image()
         self.complete_save()
@@ -227,6 +227,25 @@ class SupplementReviewUiTests(unittest.TestCase):
         self.app._change_image_filter()
         self.assertEqual(self.view.selected['id'], 's0')
         self.assertEqual(len(self.app.project.images), 1)
+
+    def test_permanent_delete_requires_confirmation_and_removes_only_supplement(self):
+        row = self.view.rows[0]
+        path = manifest_path(self.store, self.hydro).parent / row['file']
+        supplement_before = path.read_bytes()
+        self.addCleanup(path.write_bytes, supplement_before)
+        captured = self.store.image_path(self.hydro, self.hydro.images[0])
+        captured_before = captured.read_bytes()
+        with patch('smartlabel.supplement_review_view.messagebox.askyesno', return_value=False):
+            self.app._delete_image_from_thumbnail('supplement:s0')
+        self.assertTrue(path.is_file())
+        self.assertEqual(len(self.view.rows), 27)
+        with patch('smartlabel.supplement_review_view.messagebox.askyesno', return_value=True):
+            self.app._delete_image_from_thumbnail('supplement:s0')
+        self.assertFalse(path.exists())
+        self.assertEqual(len(self.view.rows), 26)
+        self.assertNotIn('s0', {item['id'] for item in self.view.rows})
+        self.assertEqual(len(self.app.project.images), 1)
+        self.assertEqual(captured.read_bytes(), captured_before)
 
     def test_historical_archived_row_appears_as_rejected_and_can_be_restored(self):
         path = manifest_path(self.store, self.hydro)

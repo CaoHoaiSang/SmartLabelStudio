@@ -1912,7 +1912,7 @@ class SmartLabelApp(ctk.CTk):
 
     def _delete_image_from_thumbnail(self, image_id: object) -> None:
         if self._supplement_active():
-            return self.supplement_view.archive(image_id)
+            return self.supplement_view.delete(image_id)
         if not self.project:
             return
         record = self.project.image_by_id(str(image_id))
@@ -1923,7 +1923,7 @@ class SmartLabelApp(ctk.CTk):
 
     def _delete_current_image(self) -> None:
         if self._supplement_active():
-            return self.supplement_view.archive()
+            return self.supplement_view.delete()
         if self.import_in_progress:
             messagebox.showinfo(
                 "Đang nhập dữ liệu",

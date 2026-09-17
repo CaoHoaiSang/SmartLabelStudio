@@ -5,7 +5,7 @@ import unittest
 
 import test_training_supplements as fixtures
 from smartlabel.project_overview import summarize_supplement_rows
-from smartlabel.supplement_review import load_review, preview_path, review_state, save_review, materialize_confirmed_presence, form_attributes, materialize_missing_defaults
+from smartlabel.supplement_review import delete_supplement, load_review, preview_path, review_state, save_review, materialize_confirmed_presence, form_attributes, materialize_missing_defaults
 from smartlabel.training_supplements import sha256, validated_samples, review_attributes
 
 
@@ -221,6 +221,31 @@ class SupplementReviewTests(unittest.TestCase):
         restored, _ = self.update('reviewed', attributes={'plant_presence': 'present', 'yellow_leaf': 'present'})
         self.assertFalse(restored['images'][0]['archived'])
         self.assertEqual(len(validated_samples(self.store, self.project, self.yellow, self.assignment)), 1)
+
+    def test_permanent_delete_removes_only_supplement_file_and_sidecar_record(self):
+        image = preview_path(self.store, self.project, self.row)
+        captured_before = self.store.image_path(self.project, self.project.images[0]).read_bytes()
+        project_before = self.project.to_dict()
+        data, revision, warning = delete_supplement(
+            self.store, self.project, "s1", sha256(self.path)
+        )
+        self.assertEqual(data["images"], [])
+        self.assertEqual(revision, sha256(self.path))
+        self.assertIsNone(warning)
+        self.assertFalse(image.exists())
+        self.assertEqual(self.project.to_dict(), project_before)
+        self.assertEqual(self.store.image_path(self.project, self.project.images[0]).read_bytes(), captured_before)
+
+    def test_permanent_delete_rolls_back_file_when_manifest_write_fails(self):
+        image = preview_path(self.store, self.project, self.row)
+        manifest_before = self.path.read_bytes()
+        image_before = image.read_bytes()
+        with patch("smartlabel.supplement_review._replace_manifest", side_effect=OSError("disk unavailable")):
+            with self.assertRaisesRegex(OSError, "disk unavailable"):
+                delete_supplement(self.store, self.project, "s1", sha256(self.path))
+        self.assertEqual(self.path.read_bytes(), manifest_before)
+        self.assertEqual(image.read_bytes(), image_before)
+        self.assertFalse(list(self.path.parent.glob(".delete-*.tmp")))
 
     def test_overview_summarizes_supplement_review_and_train_states(self):
         active = deepcopy(self.row)

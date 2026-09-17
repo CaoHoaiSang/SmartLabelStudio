@@ -73,9 +73,11 @@ hình học và phím Delete/Undo không tác động vào ảnh Giàn đang ch�
   Có/Không của chính nó. Mục thiếu/Chưa chắc/Không áp dụng không train.
 - **Bỏ duyệt / Từ chối** giữ nhãn đã lưu và tắt train. **Khôi phục** đưa về
   bản nháp để kiểm lại, chưa bật train. Ghi chú bất thường lưu riêng, không train.
-- Thumbnail Bổ trợ không có nút `×`; dùng **Từ chối** để loại khỏi train và
-  **Khôi phục** để đưa về bản nháp. Backend chỉ giữ khả năng đọc `archived`
-  cho dữ liệu cũ, không tạo trạng thái lưu trữ mới từ giao diện.
+- Nút `×` trên thumbnail Bổ trợ là **xóa vĩnh viễn**: sau xác nhận, Studio xóa
+  tệp ảnh thuộc project, nhãn, nguồn và lịch sử của riêng ảnh đó. Ảnh Giàn gốc
+  và Dataset đã export không bị thay đổi. Nếu chỉ chưa muốn dùng train, chọn
+  **Từ chối** để còn có thể **Khôi phục**. Backend chỉ giữ khả năng đọc
+  `archived` cho dữ liệu cũ, không tạo trạng thái lưu trữ mới từ giao diện.
   Không suy ảnh trùng chỉ vì Lá vàng=Không.
 - Lưu chạy ở worker, khóa đổi ảnh/nguồn/dự án trong khi ghi. Xung đột revision
   hoặc lỗi ghi giữ thay đổi trên form và báo lỗi; không ghi đè phiên khác.
@@ -145,7 +147,8 @@ thẻ riêng cho mỗi thuộc tính, nhấn mạnh **Có / Không**. Chỉ hi�
 chắc/không áp dụng/thiếu nhãn/chưa duyệt khi có dữ liệu. Chi tiết phân tập nằm
 trong **Xem chi tiết Train / Val / Test**. Ảnh bổ trợ có ba số tương ứng,
 trạng thái dùng train và số Có/Không theo từng thuộc tính; không cộng vào số
-ảnh giàn hoặc VAL/TEST. Chai và bài vật thể có cùng
+ảnh giàn hoặc VAL/TEST. Khối nền xanh của Bổ trợ nằm sau toàn bộ số liệu ảnh
+Giàn để thứ bậc nguồn chính → nguồn bổ sung rõ ràng. Chai và bài vật thể có cùng
 cách trình bày thẻ nhưng thống kê nhãn hình học, Class, nguồn và các thuộc tính
 theo phạm vi trên ảnh/trên vật thể; không có mục Ảnh bổ trợ Hydro. Chỉnh phân tập
 cập nhật cả hai bảng. Không thay đổi luật export hoặc tự chuyển ảnh giữa các tập.

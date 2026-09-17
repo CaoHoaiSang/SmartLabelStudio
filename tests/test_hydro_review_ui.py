@@ -80,6 +80,21 @@ class HydroReviewUiTests(unittest.TestCase):
         self.assertIn("Có 0 · Không 1", hydro)
         self.assertFalse(hasattr(self.app, "training_supplements_button"))
         self.assertGreaterEqual(int(self.app.image_list_title_label.cget("font")[1]), 14)
+        labels = []
+        def collect(widget):
+            for child in widget.winfo_children():
+                try:
+                    text = child.cget("text")
+                except (AttributeError, ValueError, tk.TclError):
+                    text = ""
+                if text:
+                    labels.append((text, child))
+                collect(child)
+        collect(self.app.project_overview)
+        texts = [text for text, _ in labels]
+        self.assertLess(texts.index("THUỘC TÍNH TRÊN ẢNH RỌ"), texts.index("ẢNH BỔ TRỢ · CHỈ TRAIN"))
+        supplement_title = next(widget for text, widget in labels if text == "ẢNH BỔ TRỢ · CHỈ TRAIN")
+        self.assertEqual(supplement_title.master.cget("fg_color"), "#132b31")
         self.app._change_project_context(deepcopy(self.bottle))
         bottle = self.app.project_summary.get("1.0", "end")
         self.assertIn("Số nhãn hình học: 0", bottle)

@@ -1,6 +1,6 @@
-# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 16/09/2026
+# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 17/09/2026
 
-## Hiện hành: hợp nhất thống kê và trạng thái ảnh bổ trợ — 16/09/2026
+## Hiện hành: hợp nhất thống kê và quyền xoá ảnh bổ trợ — 17/09/2026
 
 Trang Dự án/Dataset thống kê ảnh Giàn và Bổ trợ theo cùng cấu trúc tổng số,
 đã duyệt, chưa duyệt; ảnh Bổ trợ có thêm trạng thái đang dùng train, tạm tắt,
@@ -9,10 +9,13 @@ từ chối và số Có/Không của từng thuộc tính. Bỏ hai nút điề
 **GÁN NHÃN → Bổ trợ**.
 
 Giao diện chỉ còn một trạng thái loại khỏi train là **Từ chối**; bỏ bộ lọc
-**Đã lưu trữ** và nút `×` trên thumbnail Bổ trợ để không tạo hai khái niệm giống
-nhau. Các bản ghi cũ có `archived: true` được ánh xạ vào **Từ chối**, vẫn giữ
+**Đã lưu trữ** để không tạo hai khái niệm giống nhau. Các bản ghi cũ có
+`archived: true` được ánh xạ vào **Từ chối**, vẫn giữ
 ảnh/nhãn/lịch sử và có thể **Khôi phục** về bản nháp. Backend tiếp tục đọc trạng
 thái cũ để tương thích dữ liệu, nhưng giao diện không tạo bản ghi lưu trữ mới.
+Nút `×` của Bổ trợ là thao tác khác: xóa vĩnh viễn tệp ảnh thuộc project cùng
+nhãn, nguồn và lịch sử sau xác nhận; không xóa ảnh Giàn gốc hoặc snapshot đã
+export. Khối thống kê Bổ trợ dùng nền xanh và nằm sau toàn bộ thông tin ảnh Giàn.
 `CaptureManifestV1` vẫn giữ contract cho
 nhập/phục hồi một capture nhưng được ghi rõ là công cụ nâng cao; gói `.zip` là
 luồng nhập HydroFlow thông thường. Tăng cỡ tiêu đề **DANH SÁCH ẢNH**; không đổi

@@ -13,7 +13,7 @@ from tkinter import messagebox
 from . import image_filters
 from .hydro_labels import display_values, enforce_presence
 from .models import ImageRecord
-from .supplement_review import form_attributes, load_review, preview_path, save_review
+from .supplement_review import delete_supplement, form_attributes, load_review, preview_path, save_review
 from .training_supplements import ReviewPixelCache, review_attributes
 from .ui_components import IMAGE_REVIEW_STATUS_STYLE
 
@@ -211,7 +211,8 @@ class SupplementReviewView:
             record = self.record_for(row)
             items.append({"key": f"supplement:{row['id']}", "name": record.file_name, "path": path,
                           "status": record.review_status, "count": len(record.attributes),
-                          "delete_visible": False})
+                          "delete_visible": True,
+                          "delete_tooltip": "Xóa vĩnh viễn ảnh bổ trợ cùng nhãn, nguồn và lịch sử duyệt."})
         self.app.image_list.set_items(items)
         self.list_dirty = False
         start = self.page * size
@@ -342,12 +343,43 @@ class SupplementReviewView:
         self.app.approve_image_button.configure(text="Đang kiểm tra…" if self.busy and getattr(self, 'saving_decision', '') == 'reviewed'
                                                 else "Duyệt & tiếp")
 
-    def archive(self, identifier=None):
+    def delete(self, identifier=None):
         row = next((r for r in self.rows if f"supplement:{r['id']}" == identifier), self.selected)
-        if row is not None and self.allow_leave() and messagebox.askyesno("Từ chối ảnh bổ trợ",
-                "Loại ảnh này khỏi train? Ảnh, nhãn và lịch sử vẫn được giữ để có thể khôi phục.", parent=self.app):
-            self.show_row(row)
-            self.save("rejected")
+        if self.busy or row is None or not self.allow_leave():
+            return
+        record = self.record_for(row)
+        if not messagebox.askyesno(
+                "Xóa vĩnh viễn ảnh bổ trợ",
+                f"Xóa “{record.file_name}” khỏi dự án?\n\n"
+                "Tệp ảnh bổ trợ, toàn bộ nhãn, nguồn và lịch sử duyệt của ảnh sẽ bị xóa. "
+                "Ảnh giàn gốc (nếu có) và các Dataset đã export trước đó không bị thay đổi.\n\n"
+                "Thao tác này không thể hoàn tác. Nếu chỉ chưa muốn dùng ảnh để train, hãy chọn Từ chối thay vì xóa.",
+                parent=self.app,
+        ):
+            return
+        current_filtered_index = self.filtered.index(row) if row in self.filtered else 0
+        try:
+            path = preview_path(self.app.store, self.project, row, cache=self.preview_cache)
+        except (OSError, ValueError):
+            path = None
+        try:
+            self.data, self.revision, warning = delete_supplement(
+                self.app.store, self.project, row["id"], self.revision
+            )
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            messagebox.showerror("Không xóa được ảnh bổ trợ", str(exc), parent=self.app)
+            return
+        if path is not None:
+            self.preview_cache.pop(path, None)
+        self.rows = self.data["images"]
+        self.selected = None
+        self.refresh_list(render=False)
+        next_row = self.filtered[min(current_filtered_index, len(self.filtered) - 1)] if self.filtered else None
+        self.show_row(next_row)
+        self.app._request_project_statistics()
+        self.app._set_status("Đã xóa vĩnh viễn ảnh bổ trợ khỏi dự án.", self.colors["good"])
+        if warning:
+            messagebox.showwarning("Ảnh đã xóa khỏi danh sách", warning, parent=self.app)
 
     def save(self, decision, *, save_draft_labels=False, advance=False):
         if self.busy or not self.selected or self.project is not self.app.project or not self.app._can_change_project():

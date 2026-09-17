@@ -103,6 +103,75 @@ def load_review(store, project):
     return data, before
 
 
+def delete_supplement(store, project, row_id, expected_revision):
+    """Permanently remove one supplement record and its project-owned file.
+
+    Rejection remains the reversible way to exclude an image from training.
+    This operation is deliberately destructive and uses the same sidecar lock
+    and revision check as label saves. The image is first moved to a temporary
+    file in the same directory so a failed manifest write can restore it.
+    """
+    if project is None or project.metadata.get("template") != "Hydroponic Slot Condition":
+        raise ValueError("Xóa ảnh bổ trợ chỉ áp dụng cho dự án Hydro.")
+    path = manifest_path(store, project)
+    lock = path.with_suffix(".review.lock")
+    try:
+        handle = lock.open("x", encoding="utf-8")
+    except FileExistsError:
+        raise ValueError("Một phiên SmartLabel khác đang cập nhật ảnh bổ trợ. Hãy thử lại sau.") from None
+    try:
+        with handle:
+            handle.write(str(os.getpid()))
+        data, revision = load_review(store, project)
+        if data is None or revision != expected_revision:
+            raise ValueError("Danh sách đã thay đổi từ lần mở ảnh. Hãy tải lại trước khi xóa.")
+        row = next((item for item in data["images"] if item.get("id") == row_id), None)
+        if row is None:
+            raise ValueError("Ảnh bổ trợ không còn trong danh sách.")
+
+        root = path.parent.resolve()
+        manifest = path.resolve()
+        warning = None
+        quarantine = None
+        source = None
+
+        def safe_source(item):
+            try:
+                candidate = (root / str(item.get("file", ""))).resolve()
+                return candidate if candidate.is_relative_to(root) and candidate != manifest else None
+            except (OSError, RuntimeError, ValueError):
+                return None
+
+        source = safe_source(row)
+        if source is None:
+            warning = "Bản ghi có đường dẫn không an toàn; SmartLabel chỉ xóa metadata và không chạm tệp bên ngoài dự án."
+
+        remaining = [item for item in data["images"] if item is not row]
+        shared = bool(source and any(safe_source(item) == source for item in remaining))
+        if source and source.is_file() and not shared:
+            with tempfile.NamedTemporaryFile(dir=root, prefix=".delete-", suffix=".tmp", delete=False) as stream:
+                quarantine = Path(stream.name)
+            quarantine.unlink(missing_ok=True)
+            os.replace(source, quarantine)
+
+        data["images"] = remaining
+        try:
+            new_revision = _replace_manifest(path, data, revision)
+        except Exception:
+            if quarantine is not None and quarantine.exists() and source is not None:
+                os.replace(quarantine, source)
+            raise
+
+        if quarantine is not None:
+            try:
+                quarantine.unlink(missing_ok=True)
+            except OSError:
+                warning = f"Đã xóa bản ghi nhưng còn tệp tạm cần dọn thủ công: {quarantine.name}"
+        return data, new_revision, warning
+    finally:
+        lock.unlink(missing_ok=True)
+
+
 def form_attributes(project, row):
     """UI defaults are pending labels, never implicit training evidence."""
     return fill_missing_image_defaults(project, review_attributes(project, row),
