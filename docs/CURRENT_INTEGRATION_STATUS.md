@@ -21,6 +21,12 @@ nhập/phục hồi một capture nhưng được ghi rõ là công cụ nâng c
 luồng nhập HydroFlow thông thường. Tăng cỡ tiêu đề **DANH SÁCH ẢNH**; không đổi
 ảnh, nhãn, split, model hoặc luật export/train.
 
+Khi chọn nguồn **Bổ trợ**, số thứ tự/tổng số và kích thước ảnh ở vùng xem trước
+lẫn tiêu đề cửa sổ đều được lấy từ chính danh sách Bổ trợ đang chọn. Không còn
+trường hợp nội dung đã chuyển sang ảnh Bổ trợ nhưng tiêu đề vẫn giữ số lượng và
+kích thước của ảnh Giàn. Chuyển qua lại giữa hai nguồn cũng khôi phục đúng vị trí
+đang xem của từng nguồn.
+
 ## Hiện hành: sửa thuộc tính và độ phản hồi — 15/09/2026
 
 Nhánh `fix/label-edit-responsiveness`, kế thừa `2c19af8`.

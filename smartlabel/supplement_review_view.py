@@ -278,9 +278,12 @@ class SupplementReviewView:
                 self.loaded_preview_signature = signature
                 self.preview_ok = True
                 source = self.rows
-                self.app.image_position_label.configure(text=f"{source.index(row) + 1} / {len(source)}")
+                position = source.index(row) + 1
+                width, height = self.preview.image.size
+                self.app.image_position_label.configure(text=f"{position} / {len(source)}")
                 self.app.current_image_label.configure(text=f"Bổ trợ · {path.name}"
-                    f" · {self.preview.image.width}×{self.preview.image.height} · Chỉ TRAIN")
+                    f" · {width}×{height} · Chỉ TRAIN")
+                self.app._set_status(f"Ảnh bổ trợ {position}/{len(source)} · {width}×{height}")
                 if row in self.filtered:
                     self.app.image_list.select(self.page_rows.index(row), focus=True)
                 else:
@@ -289,10 +292,12 @@ class SupplementReviewView:
                 self.preview.clear_image()
                 self.app.image_position_label.configure(text="0 / 0")
                 self.app.current_image_label.configure(text="Không có ảnh bổ trợ trong bộ lọc này")
+                self.app._set_status("Ảnh bổ trợ · không có ảnh trong bộ lọc")
         except (OSError, ValueError) as exc:
             self.preview.clear_image()
             self.app.image_position_label.configure(text="0 / 0")
             self.app.current_image_label.configure(text=f"Không mở được ảnh bổ trợ: {exc}")
+            self.app._set_status(f"Không mở được ảnh bổ trợ: {exc}", self.colors["warn"])
         finally:
             self.rendering = False
         self.sync_details()

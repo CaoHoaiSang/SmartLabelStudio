@@ -163,6 +163,23 @@ class SupplementReviewUiTests(unittest.TestCase):
         self.assertEqual(self.app.canvas.image.getpixel((0, 0)), source_pixel)
         self.assertTrue(self.app.label_reload_button.winfo_manager())
 
+    def test_selected_source_metadata_never_reuses_rack_count_or_dimensions(self):
+        self.assertEqual(self.app.image_position_label.cget('text'), '1 / 27')
+        self.assertIn('60×50', self.app.current_image_label.cget('text'))
+        self.assertIn('Ảnh bổ trợ 1/27 · 60×50', self.app.title())
+
+        self.view.show_row(self.view.rows[4])
+        self.assertEqual(self.app.image_position_label.cget('text'), '5 / 27')
+        self.assertIn('Ảnh bổ trợ 5/27 · 60×50', self.app.title())
+
+        self.app._show_label_workspace('Giàn')
+        self.assertEqual(self.app.image_position_label.cget('text'), '1 / 1')
+        self.assertIn('Ảnh 1/1 · 50×50', self.app.title())
+
+        self.app._show_label_workspace('Bổ trợ')
+        self.assertEqual(self.app.image_position_label.cget('text'), '5 / 27')
+        self.assertIn('Ảnh bổ trợ 5/27 · 60×50', self.app.title())
+
     def test_draft_does_not_scan_split_or_rebuild_hidden_statistics(self):
         self.app.tabs.set('GÁN NHÃN')
         with patch.object(self.app.datasets, 'ensure_split_assignment', side_effect=AssertionError('draft must not scan split')), \
