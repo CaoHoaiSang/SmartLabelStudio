@@ -55,6 +55,7 @@ HYDRO_QA_ISSUE_MESSAGES = {
     "image_not_reviewed": "Ảnh chưa được người dùng duyệt.",
     "duplicate_sha256": "Phát hiện ảnh trùng nội dung SHA-256.",
     "incomplete_capture_slots": "Capture thiếu hoặc trùng rọ so với bố cục đã chụp.",
+    "unexpected_capture_slots": "Ảnh có mã rọ trống hoặc không thuộc bố cục đã chụp.",
     "capture_slots_excluded": "Một số ảnh rọ không còn trong dataset và sẽ không được dùng để train.",
     "plant_instance_leakage": "Plant instance xuất hiện trong nhiều split.",
     "crop_cycle_holdout_missing": "Chưa có crop cycle độc lập dành riêng cho test holdout.",
@@ -1068,7 +1069,18 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
         except (ValueError, KeyError, IndexError):
             issues.append({"severity": "error", "imageId": representative_id, "captureId": capture_id, "code": "capture_topology_invalid"})
         missing_slots = sorted(expected_slots - set(slot_ids))
+        unexpected_slots = sorted(set(slot_ids) - expected_slots)
         duplicate_slots = sorted(slot for slot, count in Counter(slot_ids).items() if count > 1)
+        if unexpected_slots:
+            invalid_record = next((record for record in records
+                                   if str(record.metadata.get("slotId", "")) in unexpected_slots), None)
+            issues.append({
+                "severity": "error",
+                "imageId": invalid_record.id if invalid_record else representative_id,
+                "code": "unexpected_capture_slots",
+                "captureId": capture_id,
+                "unexpected": unexpected_slots,
+            })
         if duplicate_slots:
             duplicate_record = next(
                 (record for record in records if str(record.metadata.get("slotId", "")) in duplicate_slots),
@@ -1082,7 +1094,7 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
                 "missing": missing_slots,
                 "duplicates": duplicate_slots,
             })
-        elif missing_slots:
+        elif missing_slots and not unexpected_slots:
             # Manifests are validated as complete and imported atomically. A
             # missing slot in an otherwise valid capture is an image later
             # removed from this training project. Keep the exclusion visible,

@@ -40,6 +40,7 @@ class SupplementReviewView:
         self.pixel_cache = ReviewPixelCache()
         self.warm_stop = Event()
         self.warm_started = False
+        self.delete_controls_enabled = None
 
     @property
     def preview(self):
@@ -214,6 +215,7 @@ class SupplementReviewView:
                           "delete_visible": True,
                           "delete_tooltip": "Xóa vĩnh viễn ảnh bổ trợ cùng nhãn, nguồn và lịch sử duyệt."})
         self.app.image_list.set_items(items)
+        self.sync_delete_controls(force=True)
         self.list_dirty = False
         start = self.page * size
         shown = f"{start + 1}–{start + len(items)}" if items else "0"
@@ -329,6 +331,7 @@ class SupplementReviewView:
             self.app._label_feedback("Cần chọn Có cây trước khi gán tình trạng lá. Khi chưa xác nhận có cây, tình trạng là Không áp dụng.", warning=True)
 
     def update_controls(self):
+        self.sync_delete_controls()
         row = self.selected
         status = self.record_for(row).review_status if row else "unlabeled"
         style = IMAGE_REVIEW_STATUS_STYLE[status]
@@ -348,9 +351,34 @@ class SupplementReviewView:
         self.app.approve_image_button.configure(text="Đang kiểm tra…" if self.busy and getattr(self, 'saving_decision', '') == 'reviewed'
                                                 else "Duyệt & tiếp")
 
+    def sync_delete_controls(self, *, force=False):
+        enabled = (self.active and self.project is not None and self.project is self.app.project
+                   and not self.busy and not self.app._project_job_busy())
+        if not force and enabled == self.delete_controls_enabled:
+            return
+        self.delete_controls_enabled = enabled
+        for item in self.app.image_list.rows:
+            if str(item["key"]).startswith("supplement:"):
+                self.app._set_button_enabled(item["delete"], enabled)
+
     def delete(self, identifier=None):
-        row = next((r for r in self.rows if f"supplement:{r['id']}" == identifier), self.selected)
-        if self.busy or row is None or not self.allow_leave():
+        if (not self.active or self.project is None or self.project is not self.app.project
+                or self.busy or not self.app._can_change_project()):
+            return
+        row = (next((r for r in self.rows if f"supplement:{r['id']}" == identifier), None)
+               if identifier is not None else self.selected)
+        if row is None:
+            return
+        project, revision = self.project, self.revision
+
+        def context_unchanged():
+            # A Tk confirmation dialog runs a nested event loop. Recheck the
+            # original target and job ownership after each dialog, before I/O.
+            return (self.active and self.project is project and self.app.project is project
+                    and self.revision == revision and not self.busy
+                    and not self.app._project_job_busy())
+
+        if not self.allow_leave() or not context_unchanged():
             return
         record = self.record_for(row)
         if not messagebox.askyesno(
@@ -362,6 +390,12 @@ class SupplementReviewView:
                 parent=self.app,
         ):
             return
+        if not context_unchanged():
+            self.sync_delete_controls()
+            messagebox.showinfo("Chưa xóa ảnh bổ trợ",
+                                "Dự án hoặc danh sách đã thay đổi, hoặc có tác vụ đang xử lý. "
+                                "Hãy đợi hoàn tất rồi chọn lại ảnh cần xóa.", parent=self.app)
+            return
         current_filtered_index = self.filtered.index(row) if row in self.filtered else 0
         try:
             path = preview_path(self.app.store, self.project, row, cache=self.preview_cache)
@@ -369,7 +403,7 @@ class SupplementReviewView:
             path = None
         try:
             self.data, self.revision, warning = delete_supplement(
-                self.app.store, self.project, row["id"], self.revision
+                self.app.store, project, row["id"], revision
             )
         except (OSError, ValueError, TypeError, KeyError) as exc:
             messagebox.showerror("Không xóa được ảnh bổ trợ", str(exc), parent=self.app)

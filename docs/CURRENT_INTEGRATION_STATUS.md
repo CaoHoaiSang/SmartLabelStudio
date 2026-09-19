@@ -1,4 +1,15 @@
-# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 17/09/2026
+# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 19/09/2026
+
+## QA rọ và khóa xóa bổ trợ — 19/09/2026
+
+QA tiếp tục cho phép thiếu ảnh rọ đã loại khỏi dataset với cảnh báo, nhưng
+chặn mã rọ ngoài topology, trống/null và rọ trùng ở cả V1/V2. Báo lỗi liên kết
+đúng ảnh để kiểm tra; không tự đổi mã, phục hồi ảnh hoặc gán lại nhãn.
+Xóa Bổ trợ dùng cùng quyền sở hữu project/job như lưu nhãn, giữ khóa tới khi
+completion được xử lý. Kiểm lại project/revision/job sau hộp xác nhận; nút ×
+tạm khóa khi có job và mở lại khi idle. Giữ xác nhận xóa, sidecar CAS/lock,
+rollback khi ghi lỗi, dữ liệu Giàn và snapshot đã xuất.
+Chi tiết: [bản sửa sau review](reviews/CROSS_AI_QA_DELETE_FIXES_20260919.md).
 
 ## Hiện hành: hợp nhất thống kê và quyền xoá ảnh bổ trợ — 17/09/2026
 

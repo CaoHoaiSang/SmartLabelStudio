@@ -264,6 +264,69 @@ class SupplementReviewUiTests(unittest.TestCase):
         self.assertEqual(len(self.app.project.images), 1)
         self.assertEqual(captured.read_bytes(), captured_before)
 
+    def test_deletion_respects_all_job_ownership_flags_and_releases_controls(self):
+        path = manifest_path(self.store, self.hydro)
+        before = path.read_bytes()
+        flags = ('import_in_progress', 'supplement_review_running', 'auto_label_running',
+                 'evaluation_running', 'running_training_task', 'batch_training_active',
+                 'running_rknn_task', 'rknn_batch_active', 'hydro_export_running')
+        for flag in flags:
+            with self.subTest(flag=flag):
+                old = getattr(self.app, flag)
+                try:
+                    setattr(self.app, flag, True)
+                    # A finished worker still owns the project until completion
+                    # clears its flag. No live subprocess is needed for this gate.
+                    self.view.sync_delete_controls()
+                    self.assertEqual(self.app.image_list.rows[0]['delete'].cget('state'), 'disabled')
+                    with patch('smartlabel.supplement_review_view.messagebox.askyesno') as confirm:
+                        self.app._delete_current_image()
+                        self.app._delete_image_from_thumbnail('supplement:s0')
+                        confirm.assert_not_called()
+                    self.assertEqual(path.read_bytes(), before)
+                finally:
+                    setattr(self.app, flag, old)
+                    self.view.sync_delete_controls()
+                self.assertEqual(self.app.image_list.rows[0]['delete'].cget('state'), 'normal')
+
+    def test_delete_rechecks_job_revision_and_project_after_confirmation(self):
+        path = manifest_path(self.store, self.hydro)
+        before = path.read_bytes()
+        original_project, original_revision = self.app.project, self.view.revision
+        for change in ('job', 'project', 'revision', 'source'):
+            with self.subTest(change=change):
+                def change_during_confirmation(*_args, **_kwargs):
+                    if change == 'job': self.app.hydro_export_running = True
+                    elif change == 'project': self.app.project = self.bottle
+                    elif change == 'revision': self.view.revision = 'external-revision'
+                    else: self.view.active = False
+                    return True
+                try:
+                    with patch('smartlabel.supplement_review_view.messagebox.askyesno', side_effect=change_during_confirmation):
+                        self.app._delete_image_from_thumbnail('supplement:s0')
+                    self.assertEqual(path.read_bytes(), before)
+                    self.assertTrue((path.parent / self.view.rows[0]['file']).is_file())
+                finally:
+                    self.app.hydro_export_running = False
+                    self.app.project = original_project
+                    self.view.revision = original_revision
+                    self.view.active = True
+                    self.view.sync_delete_controls()
+
+    def test_delete_invalid_target_or_old_project_never_falls_back_to_selected(self):
+        path = manifest_path(self.store, self.hydro)
+        before = path.read_bytes()
+        with patch('smartlabel.supplement_review_view.messagebox.askyesno') as confirm:
+            self.app._delete_image_from_thumbnail('supplement:does-not-exist')
+            original = self.app.project
+            try:
+                self.app.project = self.bottle
+                self.app._delete_current_image()
+            finally:
+                self.app.project = original
+            confirm.assert_not_called()
+        self.assertEqual(path.read_bytes(), before)
+
     def test_historical_archived_row_appears_as_rejected_and_can_be_restored(self):
         path = manifest_path(self.store, self.hydro)
         payload = json.loads(path.read_text(encoding='utf-8'))

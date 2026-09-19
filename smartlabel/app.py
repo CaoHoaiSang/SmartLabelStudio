@@ -867,12 +867,15 @@ class SmartLabelApp(ctk.CTk):
             return
         self._change_project_context(candidate)
 
-    def _can_change_project(self) -> bool:
+    def _project_job_busy(self) -> bool:
         # Keep ownership through completion callbacks, not just while the
         # subprocess is alive. Those callbacks register models on self.project.
-        busy = (self.import_in_progress or self.supplement_review_running or self.auto_label_running or self.evaluation_running
+        return bool(self.import_in_progress or self.supplement_review_running or self.auto_label_running or self.evaluation_running
                 or self.running_training_task or self.batch_training_active
                 or self.running_rknn_task or self.rknn_batch_active or self.hydro_export_running)
+
+    def _can_change_project(self) -> bool:
+        busy = self._project_job_busy()
         if busy:
             messagebox.showinfo("Dự án đang xử lý", "Hãy đợi nhập/duyệt ảnh bổ trợ, Auto-Label, train hoặc xuất/đánh giá model hoàn tất trước khi đổi dự án. Nếu đã nhấn Dừng, hãy đợi thông báo kết thúc.", parent=self)
         return not busy
@@ -5650,7 +5653,11 @@ class SmartLabelApp(ctk.CTk):
             pass
         finally:
             # One bad completion callback must not permanently stop the queue.
-            self.after(100, self._drain_events)
+            try:
+                if self._supplement_active():
+                    self.supplement_view.sync_delete_controls()
+            finally:
+                self.after(100, self._drain_events)
 
     def _on_close(self) -> None:
         if self.supplement_review_running:

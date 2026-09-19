@@ -79,6 +79,11 @@ hình học và phím Delete/Undo không tác động vào ảnh Giàn đang ch�
   **Từ chối** để còn có thể **Khôi phục**. Backend chỉ giữ khả năng đọc
   `archived` cho dữ liệu cũ, không tạo trạng thái lưu trữ mới từ giao diện.
   Không suy ảnh trùng chỉ vì Lá vàng=Không.
+  Từ 19/09, xóa bị khóa khi project đang nhập/duyệt, Auto-Label, train, đánh
+  giá hoặc xuất model. Nhấn Dừng chưa mở khóa ngay: cần đợi completion. Sau
+  hộp xác nhận, Studio kiểm lại job, project và revision trước khi xóa; nếu
+  ngữ cảnh đổi thì không xóa và yêu cầu chọn lại ảnh. Không tự chuyển sang
+  xóa ảnh đang chọn khác nếu ID mục tiêu không còn trong danh sách.
 - Lưu chạy ở worker, khóa đổi ảnh/nguồn/dự án trong khi ghi. Xung đột revision
   hoặc lỗi ghi giữ thay đổi trên form và báo lỗi; không ghi đè phiên khác.
   Ghi chú chưa lưu được hỏi trước khi chuyển nguồn/dự án hoặc đóng.

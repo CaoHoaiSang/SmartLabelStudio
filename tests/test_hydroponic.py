@@ -10,6 +10,7 @@ import sys
 import unittest
 from unittest.mock import patch
 import zipfile
+from copy import deepcopy
 
 from PIL import Image
 
@@ -610,6 +611,33 @@ class HydroponicMvpTests(unittest.TestCase):
         self.assertEqual(duplicate["severity"], "error")
         self.assertEqual(duplicate["duplicates"], ["upper_01"])
         self.assertTrue(duplicate["imageId"])
+
+    def test_hydro_qa_blocks_unknown_empty_and_extra_slots_without_relabelling(self) -> None:
+        import_capture_manifest(self.store, self.project, self.create_manifest())
+        record = self.project.images[0]
+        original = deepcopy(record.metadata)
+        for invalid in ("upper_99", "", None, 99):
+            with self.subTest(slot=invalid):
+                record.metadata["slotId"] = invalid
+                record.metadata["plant_instance_id"] = f"{original['cropCycleId']}:{invalid}"
+                before = deepcopy(self.project.to_dict())
+                report = hydro_dataset_qa(self.project, self.store)
+                issue = next(i for i in report["issues"] if i["code"] == "unexpected_capture_slots")
+                self.assertEqual((issue["severity"], issue["imageId"]), ("error", record.id))
+                self.assertEqual(issue["unexpected"], [str(invalid)])
+                self.assertEqual(report["pilotReadiness"]["status"], "dataset_qa_blocked")
+                self.assertFalse(report["pilotReadiness"]["shadowBundleReady"])
+                self.assertFalse(report["pilotReadiness"]["operationalBundleReady"])
+                self.assertFalse(any(i["code"] == "capture_slots_excluded" for i in report["issues"]))
+                self.assertEqual(self.project.to_dict(), before)
+        record.metadata = original
+        extra = deepcopy(record)
+        extra.id = "unexpected-extra-slot"
+        extra.metadata["slotId"] = "upper_99"
+        self.project.images.append(extra)
+        report = hydro_dataset_qa(self.project, self.store)
+        self.assertTrue(any(i["code"] == "unexpected_capture_slots" and i["severity"] == "error"
+                            for i in report["issues"]))
 
     def test_hydro_training_readiness_does_not_count_validation_or_test_labels(self) -> None:
         import_capture_manifest(self.store, self.project, self.create_manifest())

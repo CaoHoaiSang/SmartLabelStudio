@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 import zipfile
+from copy import deepcopy
 from pathlib import Path
 
 from PIL import Image
@@ -45,6 +46,40 @@ def capture_v2(root, counts=(5, 7, 6)):
 
 
 class HydroTopologyV2Tests(unittest.TestCase):
+    def test_qa_rejects_unknown_slot_but_keeps_missing_slot_exclusion_for_v2(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path, _ = capture_v2(root)
+            store = ProjectStore(root / "workspace")
+            project = store.create_project("QA variable topology", task="classify")
+            apply_hydroponic_slot_template(project)
+            import_capture_manifest(store, project, path)
+            original = deepcopy(project.images[0].metadata)
+            for invalid in ("tube_4_01", "", None):
+                with self.subTest(slot=invalid):
+                    project.images[0].metadata["slotId"] = invalid
+                    report = hydro_dataset_qa(project, store)
+                    issue = next(i for i in report["issues"] if i["code"] == "unexpected_capture_slots")
+                    self.assertEqual(issue["severity"], "error")
+                    self.assertEqual(issue["imageId"], project.images[0].id)
+                    self.assertEqual(report["pilotReadiness"]["status"], "dataset_qa_blocked")
+            project.images[0].metadata = deepcopy(original)
+            extra = deepcopy(project.images[0])
+            extra.id = "unexpected-extra-v2"
+            extra.metadata["slotId"] = "tube_4_01"
+            project.images.append(extra)
+            self.assertTrue(any(i["code"] == "unexpected_capture_slots" and i["severity"] == "error"
+                                for i in hydro_dataset_qa(project, store)["issues"]))
+            project.images.pop()
+            project.images[0].metadata["slotId"] = project.images[1].metadata["slotId"]
+            self.assertTrue(any(i["code"] == "incomplete_capture_slots" and i["duplicates"]
+                                for i in hydro_dataset_qa(project, store)["issues"]))
+            project.images[0].metadata = deepcopy(original)
+            project.images.pop()
+            report = hydro_dataset_qa(project, store)
+            self.assertFalse(any(i["severity"] == "error" for i in report["issues"]))
+            self.assertTrue(any(i["code"] == "capture_slots_excluded" for i in report["issues"]))
+
     def test_variable_manifest_import_qa_and_model_bundle(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); path, manifest = capture_v2(root)
