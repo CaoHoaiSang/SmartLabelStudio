@@ -26,6 +26,12 @@ def normalize_status_filter(value):
 
 
 class SupplementReviewView:
+    # Backend hooks allow managed sources to reuse the existing labeling workspace.
+    _form_attributes = staticmethod(form_attributes)
+    _load_review = staticmethod(load_review)
+    _preview_path = staticmethod(preview_path)
+    _save_review = staticmethod(save_review)
+
     def __init__(self, app, colors):
         self.app, self.colors = app, colors
         self.project = self.data = self.revision = self.selected = None
@@ -139,7 +145,7 @@ class SupplementReviewView:
             return False
         if not self.active or not self.selected:
             return True
-        if (self.values() != form_attributes(self.project, self.selected)
+        if (self.values() != self._form_attributes(self.project, self.selected)
                 or self.app.other_abnormal_var.get() != self.selected.get("otherAbnormal", "")):
             if not messagebox.askyesno("Nhãn chưa lưu", "Bỏ thay đổi chưa lưu để chuyển ảnh hoặc tải lại?", parent=self.app):
                 return False
@@ -151,7 +157,7 @@ class SupplementReviewView:
             return
         selected_id = self.selected.get("id") if self.selected else None
         try:
-            data, revision = load_review(self.app.store, self.project)
+            data, revision = self._load_review(self.app.store, self.project)
             if check_unsaved or revision != self.revision:
                 self.preview_cache.clear()
             self.data, self.revision = data, revision
@@ -167,7 +173,7 @@ class SupplementReviewView:
             self.app._set_status(f"Chưa đọc được ảnh bổ trợ: {exc}", self.colors["warn"])
 
     def record_for(self, row):
-        values = form_attributes(self.project, row)
+        values = self._form_attributes(self.project, row)
         if not isinstance(values, dict):
             raise ValueError("Thuộc tính ảnh bổ trợ không hợp lệ; cần kiểm tra manifest.")
         status = row.get("reviewStatus", "draft")
@@ -206,7 +212,7 @@ class SupplementReviewView:
         items = []
         for row in self.page_rows:
             try:
-                path = preview_path(self.app.store, self.project, row, cache=self.preview_cache)
+                path = self._preview_path(self.app.store, self.project, row, cache=self.preview_cache)
             except (OSError, ValueError):
                 path = Path("__missing_supplement_preview__")
             record = self.record_for(row)
@@ -268,7 +274,7 @@ class SupplementReviewView:
             if self.list_dirty:
                 self.render_list()
             if row:
-                path = preview_path(self.app.store, self.project, row, cache=self.preview_cache)
+                path = self._preview_path(self.app.store, self.project, row, cache=self.preview_cache)
                 signature = (path, path.stat().st_mtime_ns, path.stat().st_size, row.get("sha256"))
                 same_image = (previous and previous['id'] == row['id'] and self.preview.image is not None
                               and self.preview.record and self.preview.record.id == row['id']
@@ -307,7 +313,7 @@ class SupplementReviewView:
     def sync_details(self):
         if not self.active or self.rendering:
             return
-        values = form_attributes(self.project, self.selected) if self.selected else {}
+        values = self._form_attributes(self.project, self.selected) if self.selected else {}
         for key, widget in self.app.attribute_widgets.items():
             value = values.get(key, "")
             widget.set(display_values(self.project, key).get(value, value) if value else "— Chưa gán —")
@@ -424,7 +430,7 @@ class SupplementReviewView:
         if self.busy or not self.selected or self.project is not self.app.project or not self.app._can_change_project():
             return
         if (decision == "reviewed" and self.record_for(self.selected).review_status == "reviewed"
-                and self.values() == form_attributes(self.project, self.selected)
+                and self.values() == self._form_attributes(self.project, self.selected)
                 and self.app.other_abnormal_var.get() == self.selected.get("otherAbnormal", "")):
             return
         # Draft writes need schema/settings only. Full evidence belongs to approval.
@@ -453,7 +459,7 @@ class SupplementReviewView:
 
         def worker():
             try:
-                result = save_review(self.app.store, project, assignments, identifier, decision, revision,
+                result = self._save_review(self.app.store, project, assignments, identifier, decision, revision,
                                      attributes=attributes, save_draft_labels=save_draft_labels, other_abnormal=note,
                                      pixel_cache=self.pixel_cache)
                 self.results.put((result, None))
@@ -485,5 +491,5 @@ class SupplementReviewView:
         if self.keep_edited_row:
             self.app._label_feedback("Đã lưu nhãn. Duyệt lại ảnh sau khi sửa." if self.selected in self.filtered else
                 "Đã lưu. Ảnh này không còn thuộc bộ lọc; bạn có thể sửa tiếp hoặc chọn Ảnh sau.")
-        self.app._set_status("Đã lưu nhãn bổ trợ." + ("" if self.selected and self.selected.get("enabled") else " Duyệt ảnh để dùng train."), self.colors["good"])
+        self.app._set_status(getattr(self, 'saved_caption', None) or ("Đã lưu nhãn bổ trợ." + ("" if self.selected and self.selected.get("enabled") else " Duyệt ảnh để dùng train.")), self.colors["good"])
         self.app._request_project_statistics()

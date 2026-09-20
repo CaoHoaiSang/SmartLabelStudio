@@ -458,7 +458,7 @@ class SmartLabelApp(ctk.CTk):
             text_color=COLORS["accent"],
         )
         self.image_list_title_label.pack(side="left")
-        switch = ctk.CTkSegmentedButton(header, values=["Giàn", "Bổ trợ"],
+        switch = ctk.CTkSegmentedButton(header, values=["Giàn", "Bổ trợ", "Khách đóng góp"],
             variable=self.label_source, command=self._show_label_workspace,
             selected_color="#256481", selected_hover_color="#327b9c",
             font=("Segoe UI", 11), width=124, height=28, dynamic_resizing=False)
@@ -733,6 +733,36 @@ class SmartLabelApp(ctk.CTk):
             return False
         return True
 
+    def _start_fleet_review(self, project, code, view=None) -> bool:
+        if self.project is not project or self._project_job_busy() or not self.supplement_view.allow_leave():
+            return False
+        from .fleet_review import FleetReviewSession
+        self.import_in_progress = True
+        job = self.fleet_intake_job = object()
+        root, project_id = self.store.project_dir(project), project.id
+        self._apply_project_context_visibility()
+        def worker():
+            session = None
+            try:
+                session = FleetReviewSession(root, project_id, code)
+                session.refresh()
+                error = None
+            except Exception:
+                if session:
+                    session.close()
+                session = None
+                error = "Chưa mở được đợt đã nhập. Kiểm tra project, bộ nhận và lấy mã mới trên Fleet. Nhãn cũ không thay đổi."
+            self.event_queue.put(("fleet_review_opened", (job, project, view, session, error)))
+        self.fleet_intake_thread = Thread(target=worker, daemon=True)
+        try:
+            self.fleet_intake_thread.start()
+        except Exception:
+            self.import_in_progress = False
+            self.fleet_intake_job = None
+            self._apply_project_context_visibility()
+            return False
+        return True
+
     def _import_capture_dataset_archive(self) -> None:
         if self.import_in_progress:
             messagebox.showinfo("Đang nhập dữ liệu", "Hãy đợi lượt nhập hiện tại hoàn tất.", parent=self)
@@ -944,6 +974,9 @@ class SmartLabelApp(ctk.CTk):
 
     def _prepare_project_context(self, project: Project) -> None:
         self._show_label_workspace("Danh sách ảnh", force=True)
+        if self.fleet_label_view and self.fleet_label_view.session.project_id != project.id:
+            self.fleet_label_view.session.close()
+            self.fleet_label_view = None
         if self.project is None or self.project.id != project.id:
             self.image_list.clear_cache()
         self.supplement_view.set_project(project if is_hydroponic_project(project) else None)
@@ -1663,6 +1696,8 @@ class SmartLabelApp(ctk.CTk):
         ).pack(anchor="w", padx=12, pady=14)
 
         self.supplement_view = SupplementReviewView(self, COLORS)
+        self.supplement_base_view = self.supplement_view
+        self.fleet_label_view = None
 
     def _supplement_active(self):
         return bool(getattr(getattr(self, "supplement_view", None), "active", False))
@@ -5335,8 +5370,23 @@ class SmartLabelApp(ctk.CTk):
 
     def _show_label_workspace(self, name, *, force=False):
         if not force and not self.supplement_view.allow_leave():
-            self.label_source.set("Bổ trợ")
+            self.label_source.set("Khách đóng góp" if self.supplement_view is self.fleet_label_view else "Bổ trợ")
             return
+        if name == "Khách đóng góp" and is_hydroponic_project(self.project):
+            target = self.fleet_label_view
+            if target is None or target.session.project_id != self.project.id or not target.session.data:
+                self.label_source.set("Bổ trợ" if self._supplement_active() else "Giàn")
+                self._open_fleet_intake()
+                return
+            if self.supplement_view is not target:
+                self.supplement_view.deactivate(render=False)
+                self.supplement_view = target
+            self.label_source.set(name)
+            target.activate()
+            return
+        if self.supplement_view is self.fleet_label_view:
+            self.supplement_view.deactivate(render=not force)
+            self.supplement_view = self.supplement_base_view
         supplemental = name in {"Ảnh bổ trợ", "Bổ trợ"} and is_hydroponic_project(self.project)
         self.label_source.set("Bổ trợ" if supplemental else "Giàn")
         if supplemental:
@@ -5455,6 +5505,30 @@ class SmartLabelApp(ctk.CTk):
                     if self.project is project:
                         self._set_status(message)
                     messagebox.showinfo("Nhận dữ liệu từ Fleet", message, parent=self)
+                elif kind == "fleet_review_opened":
+                    job, project, view, session, error = payload
+                    if job is not getattr(self, "fleet_intake_job", None):
+                        if session:
+                            session.close()
+                        continue
+                    self.fleet_intake_job = None
+                    self.import_in_progress = False
+                    self._apply_project_context_visibility()
+                    if view is not None and view.winfo_exists():
+                        view.finished(error or "Đã xác minh; mở nguồn Khách đóng góp trong Gán nhãn.")
+                    if session and self.project is project:
+                        from .fleet_review_view import FleetReviewView
+                        old = self.fleet_label_view
+                        self._show_label_workspace("Giàn")
+                        if old:
+                            old.session.close()
+                        self.fleet_label_view = FleetReviewView(self, COLORS, session)
+                        self.tabs.set("GÁN NHÃN")
+                        self._show_label_workspace("Khách đóng góp")
+                    elif session:
+                        session.close()
+                    elif error:
+                        self._set_status(error, COLORS["warn"])
                 elif kind == "hydro_archive_repair_confirmation":
                     project, archive_path, plan = payload
                     if self.project is not project:

@@ -5,6 +5,11 @@ from unittest.mock import patch
 import gc
 import tkinter as tk
 import unittest
+import hashlib
+import json
+import time
+import uuid
+from PIL import Image
 
 from smartlabel import app as app_module
 from smartlabel.hydroponic import apply_hydroponic_slot_template
@@ -40,10 +45,54 @@ class FleetIntakeUiTests(unittest.TestCase):
         cls.temp.cleanup()
 
     def setUp(self):
+        if self.app.fleet_label_view:
+            self.app._show_label_workspace("Giàn", force=True)
+            self.app.fleet_label_view.session.close()
+            self.app.fleet_label_view = None
         self.app.import_in_progress = False
         self.app.fleet_intake_job = None
         self.app._change_project_context(self.project)
         gc.collect()
+
+    def test_fleet_uses_existing_canvas_and_filters_without_default_labels_or_train_admission(self):
+        from smartlabel.fleet_review import FleetReviewSession
+        from smartlabel.fleet_review_view import FleetReviewView
+        root = self.store.project_dir(self.project)
+        identifier, asset = str(uuid.uuid4()), str(uuid.uuid4())
+        folder = root / "fleet_inbox" / identifier; folder.mkdir(parents=True)
+        image = folder / f"{asset}.png"; Image.new("RGB", (64, 64), "green").save(image)
+        (folder / "custody.json").write_text(json.dumps({"importId": "b" * 64}))
+        session = FleetReviewSession(root, self.project.id, "FleetImportV1." + "a" * 43)
+        session.data = {"projectId": self.project.id, "contributionId": identifier, "importId": "b" * 64, "trainAllowed": False,
+                        "images": [{"id": asset, "file": image.name, "sha256": hashlib.sha256(image.read_bytes()).hexdigest(),
+                                    "source": "phone", "attributes": {}, "reviewStatus": "draft", "otherAbnormal": ""}]}
+        session.revision = "0" * 64; session.deadline = time.monotonic() + 30
+        before = (root / "project.json").read_bytes()
+        view = self.app.fleet_label_view = FleetReviewView(self.app, app_module.COLORS, session)
+        with patch.object(session, "refresh", return_value=(session.data, session.revision)):
+            self.app._show_label_workspace("Khách đóng góp")
+            deadline = time.monotonic() + 3
+            while view.busy and time.monotonic() < deadline:
+                self.app.update(); time.sleep(0.01)
+            self.assertFalse(view.busy); self.assertIs(view.preview, self.app.canvas)
+            self.assertIsNotNone(self.app.canvas.image); self.assertEqual(view.values(), {})
+            self.assertEqual(len(view.rows), 1); self.assertEqual(self.project.images, [])
+            self.assertFalse(session.data["trainAllowed"])
+            self.app.other_abnormal_var.set("note still being typed")
+            view.reload(check_unsaved=False, automatic=True)
+            deadline = time.monotonic() + 3
+            while view.busy and time.monotonic() < deadline:
+                self.app.update(); time.sleep(0.01)
+            self.assertEqual(self.app.other_abnormal_var.get(), "note still being typed")
+            self.app.other_abnormal_var.set("")
+            session.close(); view._tick()
+            self.assertIsNone(self.app.canvas.image)
+            self.assertEqual(self.app.image_list.rows, [])
+            self.assertIsNone(self.app.grab_current())
+            self.app._show_label_workspace("Giàn")
+            self.assertIs(self.app.supplement_view, self.app.supplement_base_view)
+            self.assertFalse(self.app._supplement_active())
+        self.assertEqual((root / "project.json").read_bytes(), before)
 
     def test_job_owns_exact_project_after_dialog_close_and_ui_remains_responsive(self):
         began, release = Event(), Event()

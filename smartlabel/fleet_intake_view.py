@@ -21,7 +21,8 @@ class FleetIntakeView(ctk.CTkToplevel):
         identity.pack(padx=20, pady=8)
         ctk.CTkLabel(self, text="1. Mở Fleet, chọn đợt đã duyệt cho phát triển model và cấp mã nhập đúng project.\n"
                     "2. Dán mã tại đây. Mã hết hạn sau tối đa 5 phút; không chia sẻ mã.\n"
-                    "Ảnh chỉ vào vùng chờ, chưa gán nhãn và KHÔNG được dùng train/export.\n"
+                    "Sau khi nhận, dùng Mở để gán nhãn trong nguồn Khách đóng góp.\n"
+                    "Duyệt nhãn chưa cho phép dùng train/export.\n"
                     "Đóng cửa sổ này không hủy lượt đang xử lý. Hạn lưu trên Fleet vẫn áp dụng.",
                     justify="left", wraplength=720).pack(padx=20, pady=8)
         ctk.CTkButton(self, text="Mở hộp thư Fleet", command=lambda: webbrowser.open(fleet_inbox_url(project.id))).pack(pady=8)
@@ -29,6 +30,8 @@ class FleetIntakeView(ctk.CTkToplevel):
         self.code.pack(padx=20, pady=8)
         self.submit = ctk.CTkButton(self, text="Nhận vào vùng chờ project này", command=self.start)
         self.submit.pack(pady=8)
+        self.review_button = ctk.CTkButton(self, text="Mở đợt đã nhập để gán nhãn", command=self.open_review)
+        self.review_button.pack(pady=4)
         self.message = ctk.CTkLabel(self, text="", wraplength=720, justify="left")
         self.message.pack(padx=20, pady=8)
         self.records = ctk.CTkTextbox(self, height=130, wrap="word")
@@ -59,8 +62,16 @@ class FleetIntakeView(ctk.CTkToplevel):
         if not self.winfo_exists():
             return
         self.submit.configure(state="normal")
+        self.review_button.configure(state="normal")
         self.message.configure(text=message)
         self.refresh()
+
+    def open_review(self):
+        if self.app._start_fleet_review(self.project, self.code.get(), self):
+            self.code.delete(0, "end")
+            self.submit.configure(state="disabled")
+            self.review_button.configure(state="disabled")
+            self.message.configure(text="Đang xác minh quyền và ảnh; nhãn cũ được giữ nguyên…")
 
     def close(self):
         self.code.delete(0, "end")
