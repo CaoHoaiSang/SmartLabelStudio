@@ -38,3 +38,9 @@ Hydro, không tạo ảnh cha giả hoặc bắt người dùng làm lại nhãn
 Kiểm chứng: full281 tests pass trước sửa duration; targeted Fleet16/16 cuối
 pass (10,314s); fixture Tk cùng widgets/không khóa chuột, API Python thật
 qua receiver/Fleet và xóa nhãn khi app đóng. Audit ảnh thật lưu tại AI_KL.
+
+Pilot Internet20/09 lúc23:43–23:44:1ảnh Hydro slot-only vào đúng project thử
+qua adapter Python SmartLabel, mở sau kiểm quyền/hash rồi lưu nháp chỉ presence
+quan sát. Nhập lại cùng mã không trùng, không ghi đè review.json/project.json;
+không có export/run/version. Chưa train, chờ xác nhận rút/xóa. Đây là nghiệm
+thu adapter/API thật, không tuyên bố đã click toàn bộ giao diện desktop thật.

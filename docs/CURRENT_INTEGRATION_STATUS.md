@@ -7,8 +7,10 @@ hiện có và nhãn riêng được receiver quản lý. Không tự lấy kế
 mở/lưu kiểm quyền ngắn hạn, CAS/hash/schema, rút đợt xóa cả ảnh lẫn nhãn khi
 app đóng. `trainAllowed:false`; chưa mở dataset/train hoặc slot-only→Giàn.
 [Cách dùng và giới hạn gán nhãn](FLEET_LABEL_REVIEW.md). Phép thử ảnh thật
-đã đến kho Windows nhưng còn chờ mã để nhập đúng project thử; chưa dùng
-fixture để tuyên bố hoàn tất luồng thật. Đợt4 vẫn chưa hoàn tất.
+đã nhập đúng project thử qua adapter Python/receiver/Fleet Internet, xem ảnh
+đúng hash và lưu nháp presence; nhập lại không trùng/ghi đè nhãn hoặc project.
+Chưa train, đang chờ xác nhận rút/xóa đợt thử. Chưa nghiệm thu thao tác toàn
+bộ desktop UI thật; không dùng fixture để thay bằng chứng này. Đợt4 chưa xong.
 
 Mốc trước (vùng chờ chưa nối gán nhãn):
 
