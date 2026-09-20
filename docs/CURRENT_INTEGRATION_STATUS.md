@@ -2,6 +2,16 @@
 
 ## Fleet: vùng chờ project có quản lý — 20/09/2026
 
+Cập nhật tiếp: đã nối vào **GÁN NHÃN → Khách đóng góp**, dùng canvas/form
+hiện có và nhãn riêng được receiver quản lý. Không tự lấy kết quả AI làm nhãn;
+mở/lưu kiểm quyền ngắn hạn, CAS/hash/schema, rút đợt xóa cả ảnh lẫn nhãn khi
+app đóng. `trainAllowed:false`; chưa mở dataset/train hoặc slot-only→Giàn.
+[Cách dùng và giới hạn gán nhãn](FLEET_LABEL_REVIEW.md). Phép thử ảnh thật
+đã đến kho Windows nhưng còn chờ mã để nhập đúng project thử; chưa dùng
+fixture để tuyên bố hoàn tất luồng thật. Đợt4 vẫn chưa hoàn tất.
+
+Mốc trước (vùng chờ chưa nối gán nhãn):
+
 Đã thêm **Nhận dữ liệu từ Fleet** vào project Hydro, job nền khóa đúng đích,
 nhận bằng quyền nhập riêng 5phút qua bộ nhận Windows hiện hữu. Receiver
 quản lý custody trước copy/retry/withdrawal kể cả SmartLabel đóng. Không

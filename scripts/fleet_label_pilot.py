@@ -20,6 +20,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=["create", "receive", "draft"])
     parser.add_argument("--project")
+    parser.add_argument("--presence", choices=["present", "absent", "uncertain"], help="Explicit observation after viewing the selected image; never an AI ground-truth label")
     args = parser.parse_args()
     store = ProjectStore(Path(__file__).resolve().parents[1] / "workspace")
     if args.action == "create":
@@ -40,13 +41,15 @@ def main():
         return
     session = FleetReviewSession(root, project.id, code)
     try:
+        if args.presence is None:
+            raise ValueError("View the selected image and explicitly provide --presence before saving a draft")
         data, revision = session.refresh()
         if len(data["images"]) != 1:
             raise ValueError("This acceptance selects exactly one plant photo")
         row = data["images"][0]
         session.preview_path(row)  # Re-hash the managed copy before a draft annotation.
         data, revision = session.save(project, row["id"], "draft", revision,
-            attributes={"plant_presence": "present", "yellow_leaf": "uncertain", "wilt": "uncertain"},
+            attributes={"plant_presence": args.presence},
             other_abnormal="Nghiệm thu luồng ảnh Fleet. Nhãn bản nháp theo ảnh xem trước; không phải nhãn đã được kỹ thuật viên kiểm định, không dùng train.")
         print(json.dumps({"ok": True, "projectId": project.id, "contributionId": data["contributionId"],
                           "source": row["source"], "reviewStatus": data["images"][0]["reviewStatus"], "trainAllowed": data["trainAllowed"]}))
