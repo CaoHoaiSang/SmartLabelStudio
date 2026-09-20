@@ -42,5 +42,7 @@ qua receiver/Fleet và xóa nhãn khi app đóng. Audit ảnh thật lưu tại 
 Pilot Internet20/09 lúc23:43–23:44:1ảnh Hydro slot-only vào đúng project thử
 qua adapter Python SmartLabel, mở sau kiểm quyền/hash rồi lưu nháp chỉ presence
 quan sát. Nhập lại cùng mã không trùng, không ghi đè review.json/project.json;
-không có export/run/version. Chưa train, chờ xác nhận rút/xóa. Đây là nghiệm
-thu adapter/API thật, không tuyên bố đã click toàn bộ giao diện desktop thật.
+không có export/run/version. Không train; chủ xác nhận rút/xóa, project xóa
+ảnh/manifest/review23:48:49 và chỉ giữ custody/tombstone; cloud tự hoàn tất
+23:58:52 sau sửa lỗi rút khi buffer đã dọn. Ảnh gốc Hydro giữ nguyên.
+Đây là nghiệm thu adapter/API thật, không tuyên bố đã click toàn bộ desktop.
