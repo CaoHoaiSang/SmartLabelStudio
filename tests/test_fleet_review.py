@@ -28,7 +28,7 @@ class FleetReviewTests(unittest.TestCase):
                      "contributionId": self.identifier, "importId": "a" * 64, "trainAllowed": False,
                      "images": [{"id": self.asset, "file": self.image.name, "sha256": hashlib.sha256(self.image.read_bytes()).hexdigest(),
                                  "attributes": {}, "reviewStatus": "draft", "source": "phone"}]}
-        self.result = {"ok": True, "data": self.data, "revision": "0" * 64,
+        self.result = {"ok": True, "data": self.data, "revision": "0" * 64, "expiresInMs": 300000,
                        "expiresAt": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()}
         self.session = FleetReviewSession(self.root, self.project.id, "FleetImportV1." + "a" * 43)
 
@@ -81,3 +81,12 @@ class FleetReviewTests(unittest.TestCase):
             self.assertEqual(body["mutation"]["reviewStatus"], "rejected")
             self.assertFalse(self.session.data["trainAllowed"])
             self.assertEqual((self.root / "project.json").read_bytes(), before)
+
+    def test_monotonic_server_duration_does_not_depend_on_desktop_wall_clock(self):
+        with patch("smartlabel.fleet_review.http.client.HTTPConnection") as factory:
+            self.result["expiresAt"] = "2000-01-01T00:00:00Z"  # The receiver already verifies the real server session.
+            self.response(factory); self.session.refresh()
+            self.assertEqual(self.session.preview_path(self.session.data["images"][0]), self.image)
+            for duration in (0, -1, 300001, True, "300000"):
+                self.result["expiresInMs"] = duration; self.response(factory)
+                with self.assertRaises(FleetIntakeError): self.session.refresh()

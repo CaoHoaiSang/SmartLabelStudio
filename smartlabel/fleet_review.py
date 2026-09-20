@@ -1,6 +1,5 @@
 """Managed Fleet label sidecars. No implicit dataset admission or local-only consent."""
 from copy import deepcopy
-from datetime import datetime, timezone
 import hashlib
 import http.client
 import json
@@ -13,6 +12,10 @@ from .fleet_intake import FleetIntakeError, HASH, UUID, _project_root, _read_jso
 from .hydro_labels import model_attributes
 from .label_schema import meaning_for
 from .training_supplements import validate_review_labels
+
+
+class FleetReviewBusy(FleetIntakeError):
+    pass
 
 
 class FleetReviewSession:
@@ -45,6 +48,8 @@ class FleetReviewSession:
                                {"Content-Type": "application/json", "Origin": f"http://127.0.0.1:{self.port}", "X-Fleet-Client": "SmartLabel"})
             response = connection.getresponse()
             raw = response.read(512 * 1024 + 1)
+            if response.status == 409:
+                raise FleetReviewBusy("Bộ nhận đang xử lý lượt khác; nhãn chưa bị thay đổi. Hãy thử lại sau ít giây.")
             if response.status != 200 or len(raw) > 512 * 1024:
                 raise FleetIntakeError("Chưa xác nhận quyền hoặc lưu nhãn. Bộ nhận có thể đang bận, mã hết hạn, nhãn vừa đổi hoặc ảnh đã được rút; hãy tải lại/lấy mã mới.")
             result = json.loads(raw)
@@ -56,15 +61,18 @@ class FleetReviewSession:
                     or not HASH.fullmatch(str(result.get("revision", "")))
                     or not isinstance(data.get("images"), list) or len(data["images"]) > 50):
                 raise FleetIntakeError("Kết quả không khớp project/contract; chưa mở ảnh.")
-            remaining = (datetime.fromisoformat(result["expiresAt"].replace("Z", "+00:00")) - datetime.now(timezone.utc)).total_seconds()
+            remaining_ms = result.get("expiresInMs")
+            if type(remaining_ms) not in (int, float) or not 0 < remaining_ms <= 300000:
+                raise FleetIntakeError("Thời hạn xác minh không hợp lệ.")
             # Maximum 30 s local display lease. Refresh cannot extend the five-minute staff grant.
-            deadline = min(started + 30, time.monotonic() + remaining)
+            deadline = min(started + 30, started + remaining_ms / 1000)
             if deadline <= time.monotonic():
                 raise FleetIntakeError("Mã đã hết hạn. Lấy mã mới trên Fleet.")
             self.data, self.revision, self.deadline = data, result["revision"], deadline
             return deepcopy(data), self.revision
         except (OSError, http.client.HTTPException, ValueError, KeyError, TypeError) as exc:
-            self.deadline = 0
+            if not isinstance(exc, FleetReviewBusy):
+                self.deadline = 0
             if isinstance(exc, FleetIntakeError):
                 raise
             raise FleetIntakeError("Không xác minh được quyền Fleet; ảnh bị khóa, nhãn cũ được giữ nguyên.") from None

@@ -4,6 +4,7 @@ from threading import Thread
 import time
 
 from .models import ImageRecord
+from .fleet_review import FleetReviewBusy
 from .supplement_review_view import SupplementReviewView
 
 
@@ -15,6 +16,7 @@ class FleetReviewView(SupplementReviewView):
         self.loaded = Queue()
         self.timer = None
         self.expired_pixels = False
+        self.retry_at = 0
 
     @staticmethod
     def _form_attributes(project, row):
@@ -58,7 +60,8 @@ class FleetReviewView(SupplementReviewView):
             self.preview_ok = False
             self.app.image_list.set_items([])  # Clear thumbnail pixels too.
             self.update_controls()
-        if not self.busy and self.session.data is not None and self.session.deadline - time.monotonic() < 10:
+        if (not self.busy and self.session.data is not None and self.session.deadline > 0
+                and time.monotonic() >= self.retry_at and self.session.deadline - time.monotonic() < 10):
             self.reload(check_unsaved=False, automatic=True)
         self._schedule()
 
@@ -73,6 +76,8 @@ class FleetReviewView(SupplementReviewView):
             try:
                 session.refresh()
                 self.loaded.put(None)
+            except FleetReviewBusy as exc:
+                self.loaded.put(exc)
             except Exception:
                 self.loaded.put("Chưa xác minh được quyền. Nhãn cũ được giữ; thử Tải lại hoặc lấy mã mới từ Fleet.")
         try:
@@ -89,6 +94,10 @@ class FleetReviewView(SupplementReviewView):
             return
         self.busy = self.app.supplement_review_running = False
         if not self.active or self.project is not self.app.project:
+            return
+        if isinstance(error, FleetReviewBusy):
+            self.retry_at = time.monotonic() + 5
+            self.update_controls()
             return
         if error:
             self.preview.clear_image()
