@@ -14,6 +14,10 @@ Phiên staff/hạn mã/quyền chủ/rút ảnh/receipt đều do Fleet kiểm t
 Receiver hiện hữu ghi custody trước copy, kiểm ảnh thật và ghi bền vững
 `fleet_inbox/<contributionId>/manifest.json` theo `FleetProjectImportV1`.
 Không sửa project.json, project.images, nhãn, split hoặc Bổ trợ hiện hữu.
+Nút nhập ảnh/thư mục thường chặn toàn bộ lượt chọn nếu có ảnh từ vùng chờ
+hoặc kho Fleet được quản lý (kể cả đường dẫn liên kết), trước khi copy ảnh nào.
+Không dùng cách nhập này để bỏ liên kết quyền/provenance. Bản sao thủ công
+ngoài hệ thống không nằm trong cam kết quản lý.
 Ảnh cha không chia sẻ được giữ đúng trạng thái, không dựng cha giả; nguồn
 Hydro/điện thoại và metadata chưa biết giữ nguyên. AI/quality không là nhãn.
 

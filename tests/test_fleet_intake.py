@@ -84,3 +84,22 @@ class FleetIntakeTests(unittest.TestCase):
         self.assertFalse(any("fleet_inbox" in str(file) for file in version.rglob("*")))
         self.assertFalse(any(file.suffix == ".png" for file in version.rglob("*")))
         self.assertEqual(self.store.load(self.project.id).images, [])
+
+    def test_generic_import_cannot_bypass_staging_or_warehouse_custody(self):
+        staged = self.folder / "fixture.png"
+        staged.write_bytes(b"fixture not decoded")
+        normal = Path(self.temp.name) / "normal.png"
+        normal.write_bytes(b"must not be copied before the whole selection passes")
+        before = (self.root / "project.json").read_bytes()
+        for selection in ([normal, staged], [self.root / "fleet_inbox"], [self.store.workspace]):
+            with self.assertRaises(fleet_intake.FleetIntakeError):
+                self.store.import_images(self.project, selection)
+        warehouse = Path(self.temp.name) / "company_store"
+        warehouse.mkdir()
+        (warehouse / ".fleet-storage-v1.json").write_text('{"schemaVersion":"FleetStorageV1"}')
+        (warehouse / "fixture.png").write_bytes(b"fixture")
+        with self.assertRaises(fleet_intake.FleetIntakeError):
+            self.store.import_images(self.project, [warehouse])
+        self.assertEqual((self.root / "project.json").read_bytes(), before)
+        self.assertEqual(self.project.images, [])
+        self.assertEqual(list((self.root / "images").iterdir()), [])

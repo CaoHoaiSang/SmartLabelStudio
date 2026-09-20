@@ -188,6 +188,8 @@ class ProjectStore:
                 files.extend(p for p in path.rglob("*") if p.suffix.lower() in IMAGE_EXTENSIONS)
             elif path.suffix.lower() in IMAGE_EXTENSIONS:
                 files.append(path)
+        from .fleet_intake import reject_generic_fleet_sources
+        reject_generic_fleet_sources(files)  # Preflight the entire selection before copying or changing labels.
         known_hashes = {self._hash_file(self.image_path(project, image)) for image in project.images if self.image_path(project, image).exists()}
         import_batch = new_id("import")
         added = skipped = 0

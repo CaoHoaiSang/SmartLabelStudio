@@ -16,6 +16,19 @@ class FleetIntakeError(ValueError):
     pass
 
 
+def reject_generic_fleet_sources(files) -> None:
+    """Do not launder managed Fleet photos through the legacy untracked importer."""
+    checked = set()
+    for source in files:
+        for candidate in (Path(source).absolute(), Path(source).resolve()):
+            for parent in candidate.parents:
+                if parent in checked:
+                    continue
+                checked.add(parent)
+                if parent.name.casefold() == "fleet_inbox" or (parent / ".fleet-storage-v1.json").exists():
+                    raise FleetIntakeError("Ảnh thuộc kho/vùng chờ Fleet không được nhập như ảnh thường. Hãy dùng luồng Fleet có quản lý quyền và nguồn gốc.")
+
+
 def fleet_inbox_url(project_id: str) -> str:
     if not PROJECT.fullmatch(project_id):
         raise FleetIntakeError("Mã project không hợp lệ.")
