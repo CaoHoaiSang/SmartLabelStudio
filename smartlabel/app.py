@@ -42,6 +42,8 @@ from .frame_filter import latest_import_records
 from .model_export import RknnExportConfig, RknnExportJob, diagnose_rknn_environment
 from .models import Annotation, Project
 from .project_store import ProjectStore
+from . import fleet_intake
+from .fleet_intake_view import FleetIntakeView
 from .supplement_review_view import SupplementReviewView
 from .project_overview import ProjectOverview
 from .quality import inspect_project
@@ -533,6 +535,9 @@ class SmartLabelApp(ctk.CTk):
         project_tools.pack(fill="both", expand=True, padx=(2, 4), pady=(0, 6))
 
         import_group = self._project_action_group(project_tools, "import")
+        self.fleet_intake_button = self._button(import_group, "Nhận dữ liệu từ Fleet", self._open_fleet_intake,
+                                                width=220, color="#486b93", tooltip="Nhận ảnh đã duyệt vào vùng chờ riêng, chưa dùng train hoặc export.")
+        self.fleet_intake_button.pack(fill="x", padx=8, pady=4)
         self.hydro_archive_import_button = self._button(
             import_group,
             "Nhập gói HydroFlow (.zip)",
@@ -686,6 +691,47 @@ class SmartLabelApp(ctk.CTk):
             messagebox.showinfo("Import hoàn tất", f"Đã nhập {added} slot; bỏ qua {skipped}.")
         except Exception as exc:
             messagebox.showerror("Import CaptureManifestV1 lỗi", str(exc))
+
+    def _open_fleet_intake(self) -> None:
+        if self._project_job_busy() or not is_hydroponic_project(self.project):
+            messagebox.showinfo("Chưa thể nhận Fleet", "Mở project Hydro và đợi tác vụ hiện tại hoàn tất.", parent=self)
+            return
+        view = getattr(self, "fleet_intake_view", None)
+        if view is not None and view.winfo_exists():
+            view.close()
+        self.fleet_intake_view = FleetIntakeView(self, self.project, self.store.project_dir(self.project))
+
+    def _start_fleet_intake(self, project, code, view=None) -> bool:
+        if self.project is not project or self._project_job_busy() or not is_hydroponic_project(project):
+            messagebox.showinfo("Project đã thay đổi", "Mở lại Nhận dữ liệu từ Fleet trong đúng project đích.", parent=self)
+            return False
+        self.import_in_progress = True
+        self._apply_project_context_visibility()
+        root, project_id = self.store.project_dir(project), project.id
+        job = object()
+        self.fleet_intake_job = job
+        self._set_status("Đang nhận Fleet vào vùng chờ · chưa dùng train")
+
+        def worker():
+            try:
+                result = fleet_intake.receive(root, project_id, code)
+                message = f"Đã lưu {result['fileCount']} ảnh vào vùng chờ của {project.name}. Chưa gán nhãn, chưa dùng train."
+            except fleet_intake.FleetIntakeError as exc:
+                message = str(exc)
+            except Exception:
+                message = "Chưa xác nhận nhập Fleet hoàn tất. Kiểm tra bộ nhận và thử lại; nhãn cũ được giữ nguyên."
+            self.event_queue.put(("fleet_intake_done", (job, project, view, message)))
+
+        self.fleet_intake_thread = Thread(target=worker, daemon=True)
+        try:
+            self.fleet_intake_thread.start()
+        except Exception:
+            self.fleet_intake_job = None
+            self.import_in_progress = False
+            self._apply_project_context_visibility()
+            messagebox.showerror("Chưa thể nhận Fleet", "Không khởi chạy được tác vụ nền. Hãy thử lại.", parent=self)
+            return False
+        return True
 
     def _import_capture_dataset_archive(self) -> None:
         if self.import_in_progress:
@@ -1303,6 +1349,7 @@ class SmartLabelApp(ctk.CTk):
                 switch.pack_forget()
             self.supplement_view.set_project(None)
         contextual_buttons = (
+            (getattr(self, "fleet_intake_button", None), getattr(self, "hydro_archive_import_button", None)),
             (getattr(self, "hydro_archive_import_button", None), getattr(self, "hydro_import_button", None)),
             (getattr(self, "hydro_import_button", None), getattr(self, "import_folder_button", None)),
         )
@@ -1314,6 +1361,9 @@ class SmartLabelApp(ctk.CTk):
                 pack_before(button, before, fill="x", padx=8, pady=4)
             elif not hydro:
                 button.pack_forget()
+
+        if hasattr(self, "fleet_intake_button"):
+            self._set_button_enabled(self.fleet_intake_button, hydro and not self._project_job_busy())
 
         hydro_qa_button = getattr(self, "hydro_qa_button", None)
         quality_check_button = getattr(self, "quality_check_button", None)
@@ -4628,6 +4678,9 @@ class SmartLabelApp(ctk.CTk):
         return ready
 
     def _start_training_for_current_mode(self) -> None:
+        if self.import_in_progress:
+            messagebox.showinfo("Đang nhập dữ liệu", "Hãy chờ nhập dữ liệu kết thúc trước khi train.", parent=self)
+            return
         if self.supplement_review_running:
             messagebox.showinfo("Đang lưu ảnh bổ trợ", "Hãy chờ duyệt ảnh bổ trợ hoàn tất trước khi train.", parent=self)
             return
@@ -5390,6 +5443,18 @@ class SmartLabelApp(ctk.CTk):
                     added, skipped = payload
                     self._refresh_everything()
                     messagebox.showinfo("Nhập hoàn tất", f"Đã thêm: {added}\nBỏ qua ảnh trùng: {skipped}")
+                elif kind == "fleet_intake_done":
+                    job, project, view, message = payload
+                    if job is not getattr(self, "fleet_intake_job", None):
+                        continue
+                    self.fleet_intake_job = None
+                    self.import_in_progress = False
+                    self._apply_project_context_visibility()
+                    if view is not None and view.winfo_exists():
+                        view.finished(message)
+                    if self.project is project:
+                        self._set_status(message)
+                    messagebox.showinfo("Nhận dữ liệu từ Fleet", message, parent=self)
                 elif kind == "hydro_archive_repair_confirmation":
                     project, archive_path, plan = payload
                     if self.project is not project:
@@ -5660,6 +5725,9 @@ class SmartLabelApp(ctk.CTk):
                 self.after(100, self._drain_events)
 
     def _on_close(self) -> None:
+        if self.import_in_progress:
+            messagebox.showinfo("Đang nhập dữ liệu", "Hãy chờ lượt nhập kết thúc rồi đóng ứng dụng.", parent=self)
+            return
         if self.supplement_review_running:
             messagebox.showinfo("Đang lưu ảnh bổ trợ", "Hãy chờ lưu kết quả duyệt hoàn tất rồi đóng ứng dụng.", parent=self)
             return

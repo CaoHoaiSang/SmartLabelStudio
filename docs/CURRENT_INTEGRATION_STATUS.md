@@ -1,4 +1,13 @@
-# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 19/09/2026
+# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 20/09/2026
+
+## Fleet: vùng chờ project có quản lý — 20/09/2026
+
+Đã thêm **Nhận dữ liệu từ Fleet** vào project Hydro, job nền khóa đúng đích,
+nhận bằng quyền nhập riêng 5phút qua bộ nhận Windows hiện hữu. Receiver
+quản lý custody trước copy/retry/withdrawal kể cả SmartLabel đóng. Không
+sửa nhãn/project.images/dataset, chưa gán nhãn hoặc train từ vùng chờ.
+[Cách dùng, contract và giới hạn](FLEET_MANAGED_INTAKE.md). Đợt4 chưa xong;
+không dùng fixture làm nghiệm thu ảnh khách thật qua Internet.
 
 ## QA rọ và khóa xóa bổ trợ — 19/09/2026
 
