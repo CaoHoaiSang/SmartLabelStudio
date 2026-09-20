@@ -42,3 +42,12 @@ tự đóng ứng dụng đang có việc của người dùng.
 Bước tiếp: nguồn gán nhãn khách TRAIN-only, contract Hydro slot-only,
 namespace nhóm chia tập, lineage dataset/model và đồng bộ rút quyền trước
 export/train/phát hành. Chưa mở các bước đó chỉ vì đã có file trong vùng chờ.
+
+Kết quả 20/09/2026: full276/276 (234,303s); Fleet10/core30 chạy riêng đạt.
+Fleet133tests/98nhóm browser, module Python thật đi hết fixture ảnh → vùng
+chờ → rút khỏi cả kho và project khi app đóng. Suite cũ vẫn có warning Tk
+khi teardown fixture;10Fleet riêng cuối sạch, không coi warning fixture là
+lỗi runtime khách. Cloud Fleet20b92c9/3MJFtk READY và receiver11040 online,
+importReady/previewReadytrue, intakeOFF. Không có batch/import mới production,
+chưa ảnh khách thật vào SmartLabel. Source app1f76256 +chốt2faee5d đã push
+nhánhfeature/fleet-managed-project-intake, không merge hoặc stage workspace.
