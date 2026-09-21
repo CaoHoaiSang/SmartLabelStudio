@@ -21,7 +21,7 @@ def reject_generic_fleet_sources(files) -> None:
     checked = set()
     for source in files:
         for candidate in (Path(source).absolute(), Path(source).resolve()):
-            for parent in candidate.parents:
+            for parent in (candidate, *candidate.parents):
                 if parent in checked:
                     continue
                 checked.add(parent)

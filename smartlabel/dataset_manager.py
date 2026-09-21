@@ -14,6 +14,7 @@ from PIL import Image, ImageDraw
 
 from .models import Annotation, Project
 from .project_store import ProjectStore
+from .fleet_boundaries import require_legacy_project
 
 
 class DatasetManager:
@@ -220,6 +221,7 @@ class DatasetManager:
         raise ValueError(f"Chiến lược phân tập không hợp lệ: {strategy}")
 
     def create_version(self, project: Project, name: str = "") -> Path:
+        require_legacy_project(project, self.store)
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         version_name = name.strip() or f"dataset_{stamp}"
         version_dir = self.store.project_dir(project) / "versions" / version_name
@@ -301,6 +303,7 @@ class DatasetManager:
         split_strategy: str = STRATEGY_LOCKED,
     ) -> Path:
         task = task or ("segment" if segmentation else "detect")
+        require_legacy_project(project, self.store)
         if task not in {"detect", "segment", "obb", "pose"}:
             raise ValueError(f"Task YOLO không hỗ trợ: {task}")
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -386,6 +389,7 @@ class DatasetManager:
         Detection/SEG first finds the object.  The classifier then receives
         each crop and predicts one configured attribute group.
         """
+        require_legacy_project(project, self.store)
         values = project.attribute_schema.get(attribute_key, [])
         if not values:
             raise ValueError("Nhóm thuộc tính Classification không tồn tại hoặc chưa có lựa chọn.")
@@ -583,6 +587,7 @@ class DatasetManager:
         return f"{ann.class_id} {(x + w / 2) / width:.6f} {(y + h / 2) / height:.6f} {w / width:.6f} {h / height:.6f}"
 
     def export_coco(self, project: Project, reviewed_only: bool = True) -> Path:
+        require_legacy_project(project, self.store)
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         target = self.store.project_dir(project) / "exports" / f"coco_{stamp}.json"
         images = []

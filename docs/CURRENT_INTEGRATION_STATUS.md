@@ -1,5 +1,19 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 21/09/2026
 
+## Fleet: chặn đường vòng dataset/train — 21/09/2026
+
+Đã thêm guard trước các exporter/version/bundle và launcher/worker train:
+nguồn Fleet không được chuyển qua luồng cũ để mất custody. Kiểm đường dẫn
+thật, junction, split YAML/TXT và metadata; giữ các project không liên quan.
+Preflight phát hiện mã vụ trùng với dữ liệu cũ thiếu namespace, không tự chứng
+nhận độc lập hoặc di chuyển holdout. [Giới hạn và bước tiếp](FLEET_DATASET_BOUNDARIES.md).
+Chưa có managed snapshot/admission/withdrawal gate hoàn chỉnh; chưa train.
+Cloud Fleet/bộ nhận Windows đã nạp nguồn mới ngày21/09; không restart Hydro.
+SmartLabel đã cập nhật source nhưng chưa cưỡng bức đóng/mở phiên người dùng.
+Lưu việc/mở lại để nghiệm thu giao diện thật; không cần làm lại project/nhãn.
+Full cuối299/299 unittest đạt249,691s; Fleet targeted33/33 và receiver15/15
+liên repo đạt. Không dùng kết quả fixture thay nghiệm thu ảnh thật/thiết bị.
+
 ## Fleet: kiểm tra nguồn trước duyệt — 21/09/2026
 
 Thêm phân loại Giàn/Hydro qua Fleet, Bổ trợ điện thoại và nguồn cần kiểm tra
@@ -8,8 +22,8 @@ server, ảnh không kèm cha có contract riêng, giống/rọ/vụ/ngày đư�
 Nhóm tương lai giữ cả vụ, không rò cùng vụ/cây giữa các tập; điện thoại chỉ
 TRAIN. Lưu nháp vẫn được nếu thiếu thông tin; Duyệt bị khóa đến khi nguồn hợp
 lệ. Giữ nhãn/project cũ; `trainAllowed:false`, chưa admission dataset.
-[Chi tiết và giới hạn](FLEET_SOURCE_QUALIFICATION.md). Đây là source/fixture
-đang kiểm chứng; không suy ra đã nạp vào desktop đang mở hoặc nghiệm thu ảnh thật.
+[Chi tiết và giới hạn](FLEET_SOURCE_QUALIFICATION.md). Source/fixture đã qua
+kiểm thử; không suy ra đã nạp vào desktop đang mở hoặc nghiệm thu ảnh thật.
 
 ## Fleet: vùng chờ project có quản lý — 20/09/2026
 

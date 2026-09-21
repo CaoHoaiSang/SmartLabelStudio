@@ -1235,6 +1235,8 @@ def write_hydro_model_bundle(
     runtime_target: str = "jetson_nano_tensorrt_fp16",
     deployment_mode: str = "shadow",
 ) -> Path:
+    from .fleet_boundaries import require_legacy_project
+    require_legacy_project(project)
     output = Path(output_dir).resolve()
     crop_code, _crop_display_name = validate_crop_identity(
         str(project.metadata.get("cropCode") or ""),

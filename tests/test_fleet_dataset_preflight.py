@@ -34,6 +34,9 @@ class FleetDatasetPreflightTests(unittest.TestCase):
                                       "groupId": "b" * 64, "parentStatus": "not_shared", "trainAllowed": False, "evaluationEligible": False}}
         self.session = FleetReviewSession(root, self.project.id, "FleetImportV1." + "a" * 43)
         self.session.data = {"contributionId": identifier, "importId": "a" * 64, "images": [self.row]}
+        self.origin = {"fleetDeviceId": str(uuid.uuid4()), "cropCycleId": "cycle1"}
+        (self.folder / "manifest.json").write_text(json.dumps({"projectId": self.project.id, "importId": "a" * 64,
+            "contributionId": identifier, "contribution": self.origin}))
         self.session.revision = "d" * 64; self.session.deadline = time.monotonic() + 30
 
     def run_preflight(self, refresh=None):
@@ -93,3 +96,16 @@ class FleetDatasetPreflightTests(unittest.TestCase):
         with patch.object(self.session, "refresh") as refresh:
             with self.assertRaises(FleetIntakeError): dataset_preflight(self.session, self.project, self.store)
             refresh.assert_not_called()
+
+    def test_same_cycle_legacy_namespace_is_ambiguous_not_assumed_independent(self):
+        file = self.session.root / "images" / "different.png"
+        Image.new("RGB", (64, 64), "blue").save(file)
+        record = ImageRecord(id="old", file_name=file.name, width=64, height=64, capture_group="old_group", metadata={"cropCycleId": "cycle1"})
+        self.project.images.append(record); self.store.save(self.project)
+        (self.session.root / "split_assignment.json").write_text(json.dumps({"groups": {"old_group": "test"}}))
+        self.assertIn("cycle_origin_ambiguous", self.run_preflight()["images"][0]["issues"])
+        record.metadata.update(fleetDeviceId=self.origin["fleetDeviceId"], fleetSourceGroupId="b" * 64)
+        self.store.save(self.project)
+        self.assertIn("existing_cycle_holdout", self.run_preflight()["images"][0]["issues"])
+        record.metadata["fleetDeviceId"] = str(uuid.uuid4()); self.store.save(self.project)
+        self.assertEqual(self.run_preflight()["images"][0]["issues"], [])

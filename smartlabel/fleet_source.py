@@ -5,7 +5,7 @@ import hashlib
 import json
 
 from PIL import Image
-from .fleet_intake import FleetIntakeError, HASH
+from .fleet_intake import FleetIntakeError, HASH, _read_json
 
 ISSUES = {
     "source_evidence_missing": "Bộ nhận chưa cung cấp bằng chứng nguồn",
@@ -30,6 +30,8 @@ ISSUES = {
     "label_review_required": "Nhãn chưa được duyệt",
     "binary_label_required": "Chưa có nhãn Có/Không rõ ràng",
     "label_semantics_invalid": "Nhãn không hợp lệ hoặc mâu thuẫn với hiện diện cây",
+    "cycle_origin_ambiguous": "Vụ trùng mã với dữ liệu cũ nhưng thiếu namespace để đối chiếu",
+    "existing_cycle_holdout": "Vụ/cây này đã có trong tập kiểm chứng",
 }
 
 
@@ -84,6 +86,13 @@ def dataset_preflight(session, project, store):
         raise FleetIntakeError("Project trên đĩa khác phiên đang mở; tải lại project trước khi kiểm tra.")
     project_hash = hashlib.sha256(project_path.read_bytes()).hexdigest()
     data, revision = session.refresh()
+    manifest_path = root / "fleet_inbox" / data["contributionId"] / "manifest.json"
+    staged = _read_json(manifest_path)
+    if (staged.get("projectId") != project.id or staged.get("importId") != data["importId"]
+            or staged.get("contributionId") != data["contributionId"]):
+        raise FleetIntakeError("Bản kê đóng góp không khớp phiên đã xác minh.")
+    contribution = staged.get("contribution", {})
+    manifest_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
     source_hash = hashlib.sha256(json.dumps(data, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
     def checkpoint():
@@ -91,6 +100,8 @@ def dataset_preflight(session, project, store):
         if (current_revision != revision or hashlib.sha256(json.dumps(current, sort_keys=True, ensure_ascii=False).encode()).hexdigest() != source_hash
                 or hashlib.sha256(project_path.read_bytes()).hexdigest() != project_hash):
             raise FleetIntakeError("Nhãn, nguồn hoặc project vừa thay đổi; chạy lại kiểm tra để không dùng kết quả cũ.")
+        if hashlib.sha256(manifest_path.read_bytes()).hexdigest() != manifest_hash:
+            raise FleetIntakeError("Bản kê nguồn vừa thay đổi; chạy lại kiểm tra.")
 
     def pixels(file):
         with Image.open(file) as image:
@@ -98,7 +109,8 @@ def dataset_preflight(session, project, store):
                 raise FleetIntakeError("Ảnh ngoài giới hạn kiểm tra.")
             image.load()
             rgb = image.convert("RGB")
-            return hashlib.sha256(str(rgb.size).encode() + rgb.tobytes()).hexdigest()
+            prefix = b"FleetRGBV1\0" + rgb.width.to_bytes(4, "big") + rgb.height.to_bytes(4, "big")
+            return hashlib.sha256(prefix + rgb.tobytes()).hexdigest()
 
     def renew_if_needed():
         import time
@@ -106,7 +118,7 @@ def dataset_preflight(session, project, store):
             checkpoint()
 
     assignments = DatasetManager(store).ensure_split_assignment(project, persist=False)["groups"]
-    known_bytes, known_pixels, existing_files = {}, {}, []
+    known_bytes, known_pixels, existing_files, existing_groups = {}, {}, [], []
     for record in project.images:
         renew_if_needed()
         file = store.image_path(project, record)
@@ -116,6 +128,7 @@ def dataset_preflight(session, project, store):
         existing_files.append((file, digest))
         group = str(record.metadata.get("plant_instance_id") or record.capture_group or record.id)
         split = assignments.get(group, "train")
+        existing_groups.append((record.metadata, split))
         known_bytes.setdefault(digest, set()).add(split)
         known_pixels.setdefault(pixels(file), set()).add(split)
     attrs = model_attributes(project)
@@ -126,6 +139,20 @@ def dataset_preflight(session, project, store):
         renew_if_needed()
         q = qualification(row)
         issues = list(q["issues"])
+        if row.get("source") == "hydro_camera" and contribution.get("cropCycleId"):
+            for metadata, split in existing_groups:
+                if metadata.get("cropCycleId") != contribution["cropCycleId"]:
+                    continue
+                existing_gateway = metadata.get("fleetDeviceId")
+                if existing_gateway and existing_gateway != contribution.get("fleetDeviceId"):
+                    continue  # Equal local IDs on a different Gateway are not the same crop cycle.
+                if metadata.get("fleetSourceGroupId") == q.get("groupId"):
+                    if split in {"val", "test"} and "existing_cycle_holdout" not in issues:
+                        issues.append("existing_cycle_holdout")
+                elif "cycle_origin_ambiguous" not in issues:
+                    # Old direct Hydro imports have no verified Gateway/ownership namespace.
+                    # Do not silently declare independence or rewrite their locked split.
+                    issues.append("cycle_origin_ambiguous")
         file = session.preview_path(row)  # Fresh lease, custody, withdrawal marker, exact bytes.
         pixel = pixels(file)
         if row["sha256"] in known_bytes or pixel in known_pixels:
@@ -156,7 +183,8 @@ def dataset_preflight(session, project, store):
     checkpoint()
     return {"schemaVersion": "FleetDatasetReadinessV1", "projectId": project.id,
             "contributionId": data["contributionId"], "importId": data["importId"], "reviewRevision": revision,
-            "projectSha256": project_hash, "checkedAt": datetime.now(timezone.utc).isoformat(),
+            "projectSha256": project_hash, "sourceManifestSha256": manifest_hash,
+            "checkedAt": datetime.now(timezone.utc).isoformat(),
             "sourceReady": bool(rows) and all(not row["issues"] for row in rows), "images": rows,
             "attributeCounts": dict(counts), "trainAllowed": False, "evaluationEligible": False,
             "blockers": ["managed_snapshot_and_withdrawal_gate_pending"],

@@ -18,6 +18,8 @@ class HydroExportCancelled(Exception):
 def build_hydro_package(project, store, output, config, progress, cancel):
     """Build from a snapshot. Neither PTs nor project/split files are modified."""
     project = deepcopy(project)
+    from .fleet_boundaries import require_legacy_project
+    require_legacy_project(project, store)
     output = Path(output).resolve()
     archive = output.with_suffix(".zip")
     if output.exists() or output.is_symlink() or archive.exists() or archive.is_symlink():

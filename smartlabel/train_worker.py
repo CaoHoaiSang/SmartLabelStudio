@@ -14,6 +14,8 @@ def main() -> int:
         print("Thiếu cấu hình train", flush=True)
         return 2
     config = json.loads(sys.argv[1])
+    from .fleet_boundaries import require_legacy_training_data
+    require_legacy_training_data(config.get("data"))  # Also covers an older, already-running desktop launcher.
     print("Đang nạp thư viện huấn luyện Ultralytics…", flush=True)
     from ultralytics import YOLO
 

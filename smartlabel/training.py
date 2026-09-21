@@ -44,6 +44,8 @@ class TrainingJob:
     def _run(self) -> None:
         try:
             self.on_line("KHỞI ĐỘNG TRAIN · Đang kiểm tra thiết bị CPU/CUDA…")
+            from .fleet_boundaries import require_legacy_training_data
+            require_legacy_training_data(self.config.data)
             device = best_ultralytics_device(self.config.device)
             self.on_line(f"Thiết bị train: {device} · Đang mở tiến trình huấn luyện…")
             payload = dict(self.config.__dict__)
