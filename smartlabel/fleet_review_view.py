@@ -5,6 +5,7 @@ import time
 
 from .models import ImageRecord
 from .fleet_review import FleetReviewBusy
+from .fleet_source import qualification, source_caption
 from .supplement_review_view import SupplementReviewView
 
 
@@ -37,7 +38,7 @@ class FleetReviewView(SupplementReviewView):
         return self.session.save(project, identifier, decision, revision, **kwargs)
 
     def record_for(self, row):
-        return ImageRecord(id=row["id"], file_name=row["file"], width=0, height=0,
+        return ImageRecord(id=row["id"], file_name=row["file"], width=row.get("width", 0), height=row.get("height", 0),
                            attributes=self._form_attributes(self.project, row), asset_role="slot",
                            review_status=row["reviewStatus"] if row["attributes"] or row["reviewStatus"] == "rejected" else "unlabeled")
 
@@ -117,8 +118,7 @@ class FleetReviewView(SupplementReviewView):
     def show_row(self, row):
         super().show_row(row)
         if row and self.preview_ok:
-            source = "Điện thoại · chỉ TRAIN khi được đưa vào dataset" if row["source"] == "phone" else "Camera Hydro · chờ kiểm định nguồn Giàn"
-            self.app.current_image_label.configure(text=f"Khách đóng góp · {source} · CHƯA DÙNG TRAIN")
+            self.app.current_image_label.configure(text=source_caption(row))
             self.app._set_status("Nhãn Fleet được lưu riêng. Duyệt nhãn chưa đưa ảnh vào dataset hoặc train.")
 
     def sync_delete_controls(self, *, force=False):
@@ -131,6 +131,14 @@ class FleetReviewView(SupplementReviewView):
 
     def update_controls(self):
         super().update_controls()
+        # Source QA can change without a label revision (e.g. project crop corrected).
+        # Update its caption/guard without discarding an operator's unsaved note.
+        current = next((row for row in (self.session.data or {}).get("images", [])
+                        if self.selected and row["id"] == self.selected["id"]), {})
+        if self.selected and qualification(current)["sourceClass"] == "unqualified":
+            self.app._set_button_enabled(self.app.approve_image_button, False)
+        if current and self.preview_ok:
+            self.app.current_image_label.configure(text=source_caption(current))
         if self.session.deadline <= time.monotonic():
             for button in (self.app.approve_image_button, self.app.unapprove_image_button,
                            self.app.reject_image_button, self.app.restore_image_button):

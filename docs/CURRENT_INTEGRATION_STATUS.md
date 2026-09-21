@@ -1,4 +1,15 @@
-# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 20/09/2026
+# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 21/09/2026
+
+## Fleet: kiểm tra nguồn trước duyệt — 21/09/2026
+
+Thêm phân loại Giàn/Hydro qua Fleet, Bổ trợ điện thoại và nguồn cần kiểm tra
+trong vùng gán nhãn có quản lý. Bằng chứng Gateway/thế hệ sở hữu/hash đến từ
+server, ảnh không kèm cha có contract riêng, giống/rọ/vụ/ngày được kiểm tra.
+Nhóm tương lai giữ cả vụ, không rò cùng vụ/cây giữa các tập; điện thoại chỉ
+TRAIN. Lưu nháp vẫn được nếu thiếu thông tin; Duyệt bị khóa đến khi nguồn hợp
+lệ. Giữ nhãn/project cũ; `trainAllowed:false`, chưa admission dataset.
+[Chi tiết và giới hạn](FLEET_SOURCE_QUALIFICATION.md). Đây là source/fixture
+đang kiểm chứng; không suy ra đã nạp vào desktop đang mở hoặc nghiệm thu ảnh thật.
 
 ## Fleet: vùng chờ project có quản lý — 20/09/2026
 

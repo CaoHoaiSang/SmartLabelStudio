@@ -12,7 +12,7 @@ class FleetIntakeView(ctk.CTkToplevel):
         super().__init__(app)
         self.app, self.project, self.root = app, project, root
         self.title("Nhận dữ liệu từ Fleet · Vùng chờ")
-        center_dialog(self, app, 850, 600)
+        center_dialog(self, app, 850, 650)
         self.protocol("WM_DELETE_WINDOW", self.close)
         ctk.CTkLabel(self, text=f"Project đích: {project.name}", font=("Segoe UI", 18, "bold")).pack(padx=20, pady=(20, 8))
         identity = ctk.CTkEntry(self, width=550)
@@ -32,6 +32,8 @@ class FleetIntakeView(ctk.CTkToplevel):
         self.submit.pack(pady=8)
         self.review_button = ctk.CTkButton(self, text="Mở đợt đã nhập để gán nhãn", command=self.open_review)
         self.review_button.pack(pady=4)
+        self.preflight_button = ctk.CTkButton(self, text="Kiểm tra nguồn và dữ liệu trước dataset", command=self.preflight)
+        self.preflight_button.pack(pady=4)
         self.message = ctk.CTkLabel(self, text="", wraplength=720, justify="left")
         self.message.pack(padx=20, pady=8)
         self.records = ctk.CTkTextbox(self, height=130, wrap="word")
@@ -63,6 +65,7 @@ class FleetIntakeView(ctk.CTkToplevel):
             return
         self.submit.configure(state="normal")
         self.review_button.configure(state="normal")
+        self.preflight_button.configure(state="normal")
         self.message.configure(text=message)
         self.refresh()
 
@@ -72,6 +75,13 @@ class FleetIntakeView(ctk.CTkToplevel):
             self.submit.configure(state="disabled")
             self.review_button.configure(state="disabled")
             self.message.configure(text="Đang xác minh quyền và ảnh; nhãn cũ được giữ nguyên…")
+
+    def preflight(self):
+        if self.app._start_fleet_review(self.project, self.code.get(), self, preflight=True):
+            self.code.delete(0, "end")
+            for button in (self.submit, self.review_button, self.preflight_button):
+                button.configure(state="disabled")
+            self.message.configure(text="Đang kiểm tra nguồn, nhãn và ảnh trùng trong project; không tạo dataset hoặc train…")
 
     def close(self):
         self.code.delete(0, "end")

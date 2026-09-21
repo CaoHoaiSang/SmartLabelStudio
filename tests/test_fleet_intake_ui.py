@@ -146,3 +146,26 @@ class FleetIntakeUiTests(unittest.TestCase):
             view.start(); receive.assert_not_called()
         view.close()
         self.assertFalse(self.app.import_in_progress)
+
+    def test_preflight_is_background_scoped_and_closing_dialog_does_not_lock_mouse(self):
+        began, release = Event(), Event()
+        def preflight(session, project, store):
+            self.assertEqual(project.id, self.project.id); began.set(); release.wait(5)
+            return {"images": [{"issues": []}], "trainAllowed": False}
+        with patch("smartlabel.fleet_source.dataset_preflight", side_effect=preflight):
+            self.app._open_fleet_intake(); view = self.app.fleet_intake_view
+            view.code.insert(0, "FleetImportV1." + "a" * 43); view.preflight()
+            try:
+                self.assertTrue(began.wait(2)); self.assertEqual(view.code.get(), "")
+                self.assertFalse(self.app._can_change_project()); view.close()
+                self.app.update(); self.assertIsNone(self.app.grab_current())
+            finally:
+                release.set(); self.app.fleet_intake_thread.join(3)
+            self.app._drain_events()
+        self.assertFalse(self.app.import_in_progress); self.assertEqual(self.project.images, [])
+
+    def test_stale_preflight_cannot_unlock_new_job(self):
+        current = object(); self.app.fleet_intake_job = current; self.app.import_in_progress = True
+        self.app.event_queue.put(("fleet_preflight_done", (object(), self.other, None, {"images": []}, None)))
+        self.app._drain_events()
+        self.assertIs(self.app.fleet_intake_job, current); self.assertTrue(self.app.import_in_progress)

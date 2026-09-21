@@ -12,6 +12,7 @@ from .fleet_intake import FleetIntakeError, HASH, UUID, _project_root, _read_jso
 from .hydro_labels import model_attributes
 from .label_schema import meaning_for
 from .training_supplements import validate_review_labels
+from .fleet_source import qualification
 
 
 class FleetReviewBusy(FleetIntakeError):
@@ -62,6 +63,10 @@ class FleetReviewSession:
                     or not isinstance(data.get("images"), list) or len(data["images"]) > 50):
                 raise FleetIntakeError("Kết quả không khớp project/contract; chưa mở ảnh.")
             remaining_ms = result.get("expiresInMs")
+            for row in data["images"]:
+                if not isinstance(row, dict):
+                    raise FleetIntakeError("Danh sách ảnh không hợp lệ.")
+                qualification(row)
             if type(remaining_ms) not in (int, float) or not 0 < remaining_ms <= 300000:
                 raise FleetIntakeError("Thời hạn xác minh không hợp lệ.")
             # Maximum 30 s local display lease. Refresh cannot extend the five-minute staff grant.
@@ -110,6 +115,9 @@ class FleetReviewSession:
         if any(key not in known or value not in known[key] for key, value in attributes.items()):
             raise FleetIntakeError("Nhãn không khớp schema project.")
         if decision == "reviewed":
+            row = next((item for item in self.data["images"] if item.get("id") == identifier), None)
+            if row is None or qualification(row)["sourceClass"] == "unqualified":
+                raise FleetIntakeError("Cần giải quyết thông tin nguồn/giống/vụ trước khi duyệt. Có thể lưu nháp hoặc từ chối.")
             presence = next(a for a in attrs if a["role"] == "presence")
             row = {"attributes": attributes, "presenceMeaning": meaning_for(presence, attributes.get(presence["id"]))}
             if not validate_review_labels(project, row):

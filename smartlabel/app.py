@@ -733,26 +733,37 @@ class SmartLabelApp(ctk.CTk):
             return False
         return True
 
-    def _start_fleet_review(self, project, code, view=None) -> bool:
+    def _start_fleet_review(self, project, code, view=None, *, preflight=False) -> bool:
         if self.project is not project or self._project_job_busy() or not self.supplement_view.allow_leave():
             return False
         from .fleet_review import FleetReviewSession
         self.import_in_progress = True
         job = self.fleet_intake_job = object()
         root, project_id = self.store.project_dir(project), project.id
+        project_snapshot = deepcopy(project) if preflight else None
         self._apply_project_context_visibility()
         def worker():
             session = None
+            report = None
             try:
                 session = FleetReviewSession(root, project_id, code)
-                session.refresh()
+                if preflight:
+                    from .fleet_source import dataset_preflight
+                    report = dataset_preflight(session, project_snapshot, self.store)
+                else:
+                    session.refresh()
                 error = None
             except Exception:
                 if session:
                     session.close()
                 session = None
                 error = "Chưa mở được đợt đã nhập. Kiểm tra project, bộ nhận và lấy mã mới trên Fleet. Nhãn cũ không thay đổi."
-            self.event_queue.put(("fleet_review_opened", (job, project, view, session, error)))
+            if preflight:
+                if session:
+                    session.close()
+                self.event_queue.put(("fleet_preflight_done", (job, project, view, report, error)))
+            else:
+                self.event_queue.put(("fleet_review_opened", (job, project, view, session, error)))
         self.fleet_intake_thread = Thread(target=worker, daemon=True)
         try:
             self.fleet_intake_thread.start()
@@ -5505,6 +5516,28 @@ class SmartLabelApp(ctk.CTk):
                     if self.project is project:
                         self._set_status(message)
                     messagebox.showinfo("Nhận dữ liệu từ Fleet", message, parent=self)
+                elif kind == "fleet_preflight_done":
+                    job, project, view, report, error = payload
+                    if job is not getattr(self, "fleet_intake_job", None):
+                        continue
+                    self.fleet_intake_job = None
+                    self.import_in_progress = False
+                    self._apply_project_context_visibility()
+                    if self.project is not project:
+                        continue
+                    if error:
+                        message = "Chưa hoàn tất kiểm tra dataset Fleet. Kiểm tra kết nối, mã còn hạn và project không bị sửa; không có ảnh/nhãn bị thay đổi."
+                    else:
+                        ready = sum(not row["issues"] for row in report["images"])
+                        issues = sorted({issue for row in report["images"] for issue in row["issues"]})
+                        from .fleet_source import ISSUES
+                        reasons = "; ".join(ISSUES.get(issue, issue) for issue in issues[:5])
+                        message = (f"Đã kiểm tra {len(report['images'])} ảnh; {ready} ảnh qua kiểm tra nguồn/nhãn/trùng trong project. "
+                                   "Chưa đưa vào dataset/train: cần cơ chế snapshot và rút dữ liệu đầy đủ."
+                                   + (" Cần xử lý: " + reasons if reasons else ""))
+                    if view is not None and view.winfo_exists():
+                        view.finished(message)
+                    self._set_status(message)
                 elif kind == "fleet_review_opened":
                     job, project, view, session, error = payload
                     if job is not getattr(self, "fleet_intake_job", None):
