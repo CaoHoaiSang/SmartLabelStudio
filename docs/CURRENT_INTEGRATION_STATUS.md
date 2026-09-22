@@ -1,4 +1,13 @@
-# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 21/09/2026
+# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 22/09/2026
+
+## Giải thích QA operational — 22/09/2026
+
+Tạo gói và Kiểm tra Dataset Hydro nay hiện số ảnh theo vụ/phân tập, lý do
+TEST chưa độc lập và hướng xử lý. Không tự chuyển split hoặc bỏ QA. Cả80
+ảnh vụ hai của project Cải Ngọt đang ở TRAIN, cũng có trong snapshot train
+21/09; chưa thể chỉ chuyển thành TEST để dùng checkpoint cũ.305/305 test
+đạt; dữ liệu/model giữ nguyên, cần mở lại Studio để nạp source. Xem
+[contract và giới hạn](HYDRO_HOLDOUT_DIAGNOSTICS.md).
 
 ## Fleet: chặn đường vòng dataset/train — 21/09/2026
 

@@ -968,7 +968,6 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
     distributions = {key: Counter() for key in keys}
     digests = defaultdict(list)
     plant_splits = defaultdict(set)
-    cycle_splits = defaultdict(set)
     capture_slots = defaultdict(list)
     assignments = dict((split_assignment or {}).get("groups", {}))
     reviewed_images = 0
@@ -1052,7 +1051,6 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
                     excluded_labels[key][label] += 1
         if split:
             plant_splits[group].add(split)
-            cycle_splits[str(record.metadata.get("cropCycleId", "unknown"))].add(split)
     for digest, image_ids in digests.items():
         if len(image_ids) > 1:
             issues.append({"severity": "error", "imageId": image_ids[0], "code": "duplicate_sha256", "related": image_ids[1:]})
@@ -1110,9 +1108,9 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
     for plant_id, splits in plant_splits.items():
         if len(splits) > 1:
             issues.append({"severity": "error", "imageId": "", "code": "plant_instance_leakage", "plantInstanceId": plant_id})
-    train_cycles = {cycle for cycle, splits in cycle_splits.items() if "train" in splits or "val" in splits}
-    test_cycles = {cycle for cycle, splits in cycle_splits.items() if "test" in splits}
-    independent_holdout = bool(test_cycles and test_cycles.isdisjoint(train_cycles) and "unknown" not in test_cycles)
+    from .hydro_holdout import holdout_diagnostics
+    holdout = holdout_diagnostics(project, assignments)
+    independent_holdout = holdout["independent"]
     if project.images and not independent_holdout:
         issues.append({"severity": "warning", "imageId": "", "code": "crop_cycle_holdout_missing"})
     validation_status = (
@@ -1176,6 +1174,7 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
         "issues": issues,
         "distributions": {key: dict(value) for key, value in distributions.items()},
         "independentCropCycleHoldout": independent_holdout,
+        "holdout": holdout,
         "validationStatus": validation_status,
         "pilotReadiness": pilot_readiness,
     }

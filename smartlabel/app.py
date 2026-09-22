@@ -830,6 +830,9 @@ class SmartLabelApp(ctk.CTk):
         )
         distributions = report.get("distributions", {})
         readiness = report.get("pilotReadiness", {})
+        if not report.get("independentCropCycleHoldout"):
+            from .hydro_holdout import describe_holdout
+            self._append_review_result("[TEST ĐỘC LẬP]\n" + describe_holdout(report))
         readiness_labels = {
             "empty_dataset": "Chưa có dữ liệu",
             "dataset_qa_blocked": "Cần sửa lỗi dataset",

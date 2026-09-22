@@ -139,6 +139,18 @@ class HydroPackageTests(unittest.TestCase):
         self.assertEqual(manifest['validationStatus'], 'validated_holdout')
         self.assert_preserved()
 
+    def test_operational_error_contains_split_evidence_and_keeps_shadow_explicit(self):
+        self.config['deploymentMode'] = 'operational'
+        self.qa.return_value['holdout'] = {
+            'cycles': [{'cropCycleId': 'season_2', 'train': 80, 'val': 0, 'test': 0, 'unassigned': 0}],
+            'testCycles': [], 'overlappingCycles': [],
+        }
+        with self.assertRaisesRegex(ValueError, 'TRAIN 80 · VAL 0 · TEST 0'):
+            self.build()
+        self.export.assert_not_called()
+        self.assertEqual(self.config['deploymentMode'], 'operational')
+        self.assert_preserved()
+
     def test_export_failure_keeps_models_and_publishes_nothing(self):
         self.export.side_effect = RuntimeError("fixture conversion failed")
         with self.assertRaisesRegex(RuntimeError, "conversion failed"):

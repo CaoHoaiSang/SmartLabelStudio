@@ -7,6 +7,7 @@ import shutil
 
 from .dataset_manager import DatasetManager
 from .hydro_labels import model_attributes
+from .hydro_holdout import describe_holdout
 from .hydroponic import (RUNTIME_TARGETS, describe_hydro_qa_issue, export_jetson_onnx,
                         hydro_dataset_qa, write_hydro_model_bundle, _sha256)
 
@@ -60,7 +61,7 @@ def build_hydro_package(project, store, output, config, progress, cancel):
                          + "\n".join(details[:5]))
     project.metadata["validationStatus"] = report["validationStatus"]
     if mode == "operational" and report["validationStatus"] != "validated_holdout":
-        raise ValueError("Chưa đủ QA holdout cho chế độ operational.")
+        raise ValueError("Chưa đủ QA holdout cho Vận hành thật (operational).\n\n" + describe_holdout(report))
     checkpoint()
     # Exporter writes beside its PT input. Copy PTs into job-owned staging first.
     with TemporaryDirectory(prefix=".hydro-package-", dir=output.parent) as directory:
