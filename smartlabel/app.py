@@ -27,7 +27,7 @@ from .hardware import inspect_hardware
 from .hydro_export import HydroBundleJob
 from . import image_filters
 from .hydro_model_tools import (propose_hydro_labels, apply_hydro_proposals,
-                                evaluate_hydro_attribute, threshold_defaults)
+                                evaluate_hydro_attribute, threshold_defaults, classifier_assessment)
 from .hydroponic import (
     CaptureRepairConfirmationRequired,
     apply_hydroponic_slot_template,
@@ -5260,12 +5260,12 @@ class SmartLabelApp(ctk.CTk):
             except Exception as exc:
                 self._append_log(self.train_log, f"Chưa lưu được kết quả trong project: {exc}; báo cáo vẫn ở {result['save_dir']}")
             self.evaluation_status_label.configure(text=f"{result['title']} · F1 {metrics['f1']:.3f}", text_color=COLORS["muted"])
-            recommendation = result.get("recommendedThresholds")
             self._append_log(self.train_log, f"\nĐÁNH GIÁ HYDRO HOÀN TẤT · {result['title']} · {result['split']}\n"
                 f"{metrics['samples']} ảnh · Accuracy={metrics['accuracy']:.3f} · Precision={metrics['precision']:.3f} · Recall={metrics['recall']:.3f} · F1={metrics['f1']:.3f}\n"
                 f"Đúng Có={metrics['tp']} · Đúng Không={metrics['tn']} · Báo nhầm Có={metrics['fp']} · Bỏ sót Có={metrics['fn']}\n"
-                f"{result['rating']}\n" + (f"Gợi ý low/high: {recommendation['lowThreshold']:.2f}/{recommendation['highThreshold']:.2f}\n" if recommendation else
-                    "Không tạo gợi ý ngưỡng: chỉ dùng val có ít nhất 20 ảnh mỗi phía và kết quả đủ phân biệt. Test không dùng để chọn ngưỡng.\n") + f"Báo cáo: {result['save_dir']}")
+                f"{classifier_assessment(result)}\n"
+                f"Checkpoint SHA-256: {result.get('modelSha256', 'Chưa ghi nhận')}\n"
+                f"Báo cáo: {result['save_dir']}")
             return
         rating = str(result.get("rating", "Đã hoàn tất"))
         lines = [

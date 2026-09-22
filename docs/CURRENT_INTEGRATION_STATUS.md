@@ -1,5 +1,12 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 22/09/2026
 
+## Nhận định classifier và trợ giúp ngưỡng — tối22/09
+
+Log phân biệt TEST/VAL ít mẫu, lỗi FP/FN, ngưỡng0.50 với low/high vận hành;
+gói có trợ giúp checkpoint và cảnh báo ngưỡng đã lưu thuộc model cũ. Không đổi
+model/ngưỡng/split thật hoặc gate.325/325test đạt. Xem
+[bằng chứng và cách đọc](CLASSIFIER_THRESHOLDS_20260922.md); mở lại Studio để nạp.
+
 ## Bộ TEST ngoài gắn checkpoint — hiện hành22/09
 
 Đã nối Dataset → tạo/nhập TEST ngoài → đánh giá → duyệt → cổng tạo gói operational.

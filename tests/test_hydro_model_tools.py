@@ -209,6 +209,22 @@ class HydroToolsTests(unittest.TestCase):
         self.assertIsNone(tools.recommend_thresholds([(0, .5)] * 20 + [(1, .5)] * 20, "val"))
         self.assertEqual(tools.binary_metrics(samples)["f1"], 1)
 
+    def test_assessment_distinguishes_test_from_insufficient_validation_and_release(self):
+        report = {"split": "test", "metrics": tools.binary_metrics([(1, .9)] * 160 + [(0, .1)] * 13)}
+        text = tools.classifier_assessment(report)
+        self.assertIn("Chưa phát hiện lỗi trên bộ ảnh này", text)
+        self.assertIn("Có=160 · Không=13", text)
+        self.assertIn("Một phía có dưới 20 ảnh", text)
+        self.assertIn("không phải lỗi hay do thiếu 20 ảnh", text)
+        self.assertIn("không tự cấp quyền phát hành", text)
+        report["split"] = "val"
+        self.assertIn("cần ít nhất 20 ảnh Có và 20 ảnh Không", tools.classifier_assessment(report))
+        report["metrics"] = tools.binary_metrics([(1, .1)] * 20 + [(0, .9)] * 20)
+        self.assertIn("20 lần báo nhầm Có và 20 lần bỏ sót Có", tools.classifier_assessment(report))
+        self.assertIn("chưa đạt 0.65", tools.classifier_assessment(report))
+        report["recommendedThresholds"] = {"lowThreshold": .3, "highThreshold": .7}
+        self.assertIn("0.30/0.70", tools.classifier_assessment(report))
+
     def test_threshold_defaults_restore_json_evidence_and_invalidate_changed_model(self):
         attr = self.attrs[0]
         report = dict(modelSha256=tools.file_hash(self.project.attribute_models[attr["id"]]),
@@ -223,8 +239,9 @@ class HydroToolsTests(unittest.TestCase):
         confirmed, _ = tools.threshold_defaults(self.project)
         self.assertEqual(confirmed[attr["id"]]["lowThreshold"], .2)
         Path(self.project.attribute_models[attr["id"]]).write_bytes(b"retrained")
-        thresholds, _ = tools.threshold_defaults(self.project)
+        thresholds, sources = tools.threshold_defaults(self.project)
         self.assertEqual(thresholds[attr["id"]], tools.INITIAL_THRESHOLDS)
+        self.assertIn("Checkpoint đã đổi", sources[attr["id"]])
 
     def test_classifier_uses_semantic_output_order_and_rejects_wrong_task_names_nan(self):
         fake = SimpleNamespace(task="classify", names={0: "present", 1: "absent"},

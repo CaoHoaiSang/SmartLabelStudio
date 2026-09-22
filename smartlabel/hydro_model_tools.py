@@ -32,6 +32,8 @@ def threshold_defaults(project):
         path = Path(project.attribute_models.get(key, ""))
         current_hash = file_hash(path) if path.is_file() else None
         saved_hash = project.metadata.get("hydroThresholdModelHashes", {}).get(key)
+        if saved and saved_hash and saved_hash != current_hash:
+            sources[key] = "Checkpoint đã đổi · không dùng ngưỡng cũ; khởi đầu 0.30 / 0.70, cần đánh giá VAL lại"
         if saved and saved_hash and saved_hash == current_hash:
             thresholds[key] = deepcopy(saved)
             sources[key] = "Giá trị đã xác nhận cho checkpoint hiện tại"
@@ -182,6 +184,36 @@ def recommend_thresholds(samples, split):
     return {"lowThreshold": round(max(0, center - 0.1), 2), "highThreshold": round(min(1, center + 0.1), 2)}
 
 
+def classifier_assessment(result):
+    """Describe measured evidence, never turn a metric band into release approval."""
+    m = result["metrics"]
+    positive, negative = m["tp"] + m["fn"], m["tn"] + m["fp"]
+    lines = ["Nhận định: " + ("Chưa phát hiện lỗi trên bộ ảnh này ở ngưỡng 0.50."
+             if m["samples"] and m["fp"] + m["fn"] == 0 else
+             f"Còn {m['fp']} lần báo nhầm Có và {m['fn']} lần bỏ sót Có ở ngưỡng 0.50.")]
+    lines.append(f"Độ phủ mẫu: Có={positive} · Không={negative}. "
+                 "Ảnh cùng cây/vụ không tương đương từng ấy tình huống độc lập.")
+    if min(positive, negative) < 20:
+        lines.append("Một phía có dưới 20 ảnh: bằng chứng còn ít, cần bổ sung trường hợp đa dạng; "
+                     "đây là lưu ý về dữ liệu, không phải điều kiện tự động đạt/rớt vận hành.")
+    lines.append("Phạm vi: chỉ thuộc tính này trên bộ ảnh của checkpoint; không chứng minh độ chính xác "
+                 "100% ngoài giàn, độc lập mùa vụ hoặc chất lượng các classifier còn lại.")
+    lines.append("Ngưỡng 0.50 chia Có/Không để so sánh; chưa đo vùng Chưa chắc chắn của bộ low/high vận hành.")
+    if result["split"] == "test":
+        lines.append("Không gợi ý ngưỡng từ TEST — đúng nguyên tắc, không phải lỗi hay do thiếu 20 ảnh. "
+                     "Muốn chọn ngưỡng, đánh giá VAL chưa dùng train của đúng checkpoint trước; giữ TEST để đánh giá sau khi chốt.")
+    elif min(positive, negative) < 20:
+        lines.append("Chưa gợi ý ngưỡng từ VAL: quy tắc hiện tại cần ít nhất 20 ảnh Có và 20 ảnh Không.")
+    elif not result.get("recommendedThresholds"):
+        lines.append("Chưa gợi ý ngưỡng từ VAL: balanced accuracy tốt nhất trong khoảng tìm kiếm chưa đạt 0.65.")
+    else:
+        t = result["recommendedThresholds"]
+        lines.append(f"Gợi ý VAL low/high: {t['lowThreshold']:.2f}/{t['highThreshold']:.2f}. "
+                     "Chỉ là điểm khởi đầu; đối chiếu báo nhầm, bỏ sót và số ảnh Chưa chắc chắn trước khi chốt.")
+    lines.append("Vận hành: đánh giá/duyệt TEST ngoài với đúng checkpoint và bộ ngưỡng đã chốt; báo cáo này không tự cấp quyền phát hành.")
+    return "\n".join(lines)
+
+
 def evaluate_hydro_attribute(project, attribute_key, store, *, split, device, progress,
                              classifier_factory=HydroClassifier):
     if not is_hydroponic_project(project) or split not in {"val", "test"}:
@@ -231,6 +263,7 @@ def evaluate_hydro_attribute(project, attribute_key, store, *, split, device, pr
               "recommendedThresholds": recommend_thresholds(samples, split), "predictions": rows,
               "thresholdMethod": "validation_balanced_accuracy_margin_0.10_min20_per_class",
               "rating": "Chỉ số ở ngưỡng 0.50; gợi ý low/high chỉ lấy từ val, cần xác nhận hiện trường."}
+    result["assessment"] = classifier_assessment(result)
     destination = store.project_dir(project) / "runs" / "evaluations" / f"hydro_{attribute_key}_{split}_{datetime.now():%Y%m%d_%H%M%S_%f}"
     destination.mkdir(parents=True, exist_ok=False)
     result["save_dir"] = str(destination)

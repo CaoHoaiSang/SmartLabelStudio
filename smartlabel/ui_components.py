@@ -265,7 +265,7 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
         ctk.CTkLabel(
             self,
             text=(
-                "Windows và Nano dùng cùng chế độ kết luận/cảnh báo AI. Vận hành thật cần QA holdout đạt; "
+                "Windows và Nano dùng cùng chế độ kết luận/cảnh báo AI. Vận hành thật cần QA và TEST ngoài được duyệt đúng checkpoint/ngưỡng; "
                 "Shadow chỉ ghi kết quả để đối chiếu. Windows chạy ONNX, Nano build TensorRT trên thiết bị."
             ),
             wraplength=660,
@@ -278,6 +278,9 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
             command=self._show_training_help,
         )
         self.training_help_button.pack(anchor="w", padx=22, pady=(0, 4))
+        self.threshold_help_button = ctk.CTkButton(self, text="Low / High và checkpoint là gì?", fg_color="#243c50", height=28,
+                                                 command=self._show_threshold_help)
+        self.threshold_help_button.pack(anchor="w", padx=22, pady=(0, 4))
         thresholds = defaults.get("thresholds", {})
         crop_display_name = str(defaults.get("cropDisplayName") or "cây mục tiêu").strip()
         self.model_titles = defaults.get("modelTitles") or {
@@ -301,6 +304,23 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
     def _show_training_help(self) -> None:
         from .hydro_holdout import training_strategy_guidance
         messagebox.showinfo("TEST và điều kiện vận hành", training_strategy_guidance(), parent=self)
+
+    def _show_threshold_help(self) -> None:
+        messagebox.showinfo("Chọn ngưỡng cho đúng checkpoint",
+            "Checkpoint là bộ trọng số .pt sau một lần train; tên best.pt không chứng minh chất lượng. "
+            "Mỗi thuộc tính có checkpoint riêng, định danh bằng SHA-256.\n\n"
+            "p là điểm model cho lớp Có: p ≤ Low → Không; p ≥ High → Có; ở giữa → Chưa chắc chắn. "
+            "Ví dụ 0.30 / 0.70: p=0.20 là Không, 0.50 chưa chắc, 0.85 là Có. "
+            "Không được chọn Low ≥ High. Với thuộc tính dấu hiệu, cần xác định có cây trước.\n\n"
+            "Bắt đầu từ 0.30 / 0.70 nếu chưa có bằng chứng. Chạy Đánh giá trên VAL chưa dùng train của đúng checkpoint; "
+            "gợi ý hiện tại cần ít nhất 20 ảnh Có và 20 ảnh Không, chọn tâm theo balanced accuracy rồi đặt biên ±0.10. "
+            "Đây là quy tắc khởi đầu, không phải chứng nhận ngưỡng tối ưu.\n\n"
+            "Tăng High thường bớt báo Có nhưng thêm Chưa chắc chắn; giảm Low làm chặt kết luận Không. "
+            "Đối chiếu số báo nhầm/bỏ sót và số ảnh chưa chắc theo nhu cầu từng thuộc tính. "
+            "Không chọn ngưỡng hoặc chọn model dựa vào TEST. Sau khi chốt, dùng TEST ngoài để đánh giá "
+            "và duyệt đúng checkpoint + ngưỡng. Đổi một trong hai cần đánh giá lại.\n\n"
+            "Các chỉ số ở 0.50 chỉ có Có/Không, không phải kết quả vận hành low/high. "
+            "Các ngưỡng EC, chất lượng ảnh, gợi ý nhãn và điều kiện gửi Email là cơ chế khác.", parent=self)
 
     def _accept(self) -> None:
         required = ("datasetVersion", "sourceCommit", "cameraProfileIds", "geometryProfileIds")
