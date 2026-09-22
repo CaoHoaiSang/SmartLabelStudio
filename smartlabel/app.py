@@ -3549,6 +3549,9 @@ class SmartLabelApp(ctk.CTk):
             tooltip="Xem capture group trong từng tập và chủ động chuyển cả nhóm sang Train, Validation hoặc Test.",
         ).pack(side="left")
 
+        self._button(split_card, "BỘ TEST NGOÀI · ĐÁNH GIÁ CHECKPOINT", self._open_external_benchmark,
+                     width=350, color="#48657a",
+                     tooltip="Nhập bộ kiểm định đã duyệt riêng, đánh giá đúng checkpoint/ngưỡng và duyệt bằng chứng phát hành.").pack(anchor="w", padx=14, pady=(0, 10))
         info = self._card(dataset_right, "THỐNG KÊ DATASET")
         info.pack(fill="both", expand=True, pady=(6, 0))
         self.dataset_info = ctk.CTkTextbox(info, fg_color="#091119", font=("Consolas", 13), corner_radius=10)
@@ -3582,9 +3585,18 @@ class SmartLabelApp(ctk.CTk):
         )
 
     def _open_split_manager(self) -> None:
-        if not self.project:
+        if not self.project or not self._can_change_project():
             return
         SplitManagerDialog(self, self.datasets, self.project, self._split_assignment_changed)
+
+    def _open_external_benchmark(self) -> None:
+        if not self.project or not self._can_change_project():
+            return
+        if not is_hydroponic_project(self.project):
+            messagebox.showinfo("Bộ TEST Hydro", "Luồng này dành cho project phân loại ảnh rọ Hydro.", parent=self)
+            return
+        from .benchmark_dialog import ExternalBenchmarkDialog
+        ExternalBenchmarkDialog(self)
 
     def _split_assignment_changed(self) -> None:
         self._refresh_split_status()

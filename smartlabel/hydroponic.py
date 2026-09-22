@@ -1233,6 +1233,7 @@ def write_hydro_model_bundle(
     input_size: int = 224,
     runtime_target: str = "jetson_nano_tensorrt_fp16",
     deployment_mode: str = "shadow",
+    release_evidence: dict | None = None,
 ) -> Path:
     from .fleet_boundaries import require_legacy_project
     require_legacy_project(project)
@@ -1261,6 +1262,18 @@ def write_hydro_model_bundle(
     validation_status = str(project.metadata.get("validationStatus", "pilot_unvalidated"))
     if deployment_mode == "operational" and validation_status != "validated_holdout":
         raise ValueError("operational deployment requires an independent validated holdout")
+    if deployment_mode == "operational":
+        from .label_schema import training_identity
+        from .benchmark_contract import canonical
+        if (not release_evidence or release_evidence.get("schemaVersion") != "HydroReleaseEvidenceV1"
+                or not release_evidence.get("reviewedAt") or not release_evidence.get("reportSha256")
+                or set(release_evidence.get("models", {})) != set(models)):
+            raise ValueError("Operational cần bằng chứng đánh giá được duyệt, gắn đúng checkpoint/ONNX/ngưỡng.")
+        for key, source in models.items():
+            proof = release_evidence["models"][key]
+            if (proof.get("onnxSha256") != _sha256(Path(source)) or proof.get("thresholds") != thresholds[key]
+                    or canonical(proof.get("attributeIdentity")) != canonical(training_identity(attrs[key])) or not proof.get("checkpointSha256")):
+                raise ValueError("Bằng chứng không khớp ONNX/schema/ngưỡng đang đóng gói.")
     label_distribution = {}
     for key in model_keys(project):
         counts = Counter(
@@ -1327,6 +1340,11 @@ def write_hydro_model_bundle(
         if extended:
             manifest["geometrySchemaVersion"] = geometry_version
             manifest["labelSchema"] = project_label_schema(project)
+        if release_evidence:
+            for key, entry in entries.items():
+                if entry["sha256"] != release_evidence["models"][key]["onnxSha256"]:
+                    raise ValueError("ONNX thay đổi khi đóng gói; không phát hành.")
+            manifest["evaluationEvidence"] = release_evidence
         if runtime_target == "jetson_nano_tensorrt_fp16":
             manifest["minimumTensorRTVersion"] = "8.2"
         (temporary / "bundle.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")

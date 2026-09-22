@@ -14,6 +14,14 @@ MESSAGE = ("Dữ liệu Fleet chưa được dùng qua luồng dataset/train cũ
 MARKERS = {"fleetContributionId", "fleetContribution", "fleetDependencies", "fleetLineage", "fleetDataset", "fleetSourceGroupId"}
 
 
+def reject_benchmark_sources(paths):
+    for path in paths:
+        resolved = Path(path).resolve()
+        for parent in (resolved, *resolved.parents):
+            if parent.is_dir() and (parent / "benchmark.json").exists():
+                raise ValueError("Bộ TEST ngoài chỉ dành cho đánh giá, không được nhập vào TRAIN/VAL.")
+
+
 def reject_fleet_metadata(value):
     pending, seen = [value], set()
     while pending:
@@ -42,6 +50,7 @@ def require_legacy_project(project, store=None):
         if record.source_path and "://" not in record.source_path:
             files.append(Path(record.source_path))
     reject_generic_fleet_sources(files)
+    reject_benchmark_sources(files)
 
 
 def _metadata(folder):
@@ -85,6 +94,7 @@ def require_legacy_training_data(data):
         return  # Existing validation is responsible for missing generic training inputs.
     file = Path(data)
     reject_generic_fleet_sources(_dataset_paths(file))
+    reject_benchmark_sources(_dataset_paths(file))
     if not file.exists():
         return
     folder = file if file.is_dir() else file.parent
@@ -117,3 +127,4 @@ def require_legacy_training_data(data):
                     if not isinstance(entry, str):
                         raise FleetIntakeError("Danh sách ảnh dataset không hợp lệ.")
                     reject_generic_fleet_sources(_dataset_paths(root / entry))
+                    reject_benchmark_sources(_dataset_paths(root / entry))

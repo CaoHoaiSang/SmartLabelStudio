@@ -8,6 +8,7 @@ import customtkinter as ctk
 
 from .dataset_manager import DatasetManager
 from .models import Project
+from .benchmark_contract import cycle_rows
 
 
 class SplitManagerDialog(ctk.CTkToplevel):
@@ -48,6 +49,13 @@ class SplitManagerDialog(ctk.CTkToplevel):
         )
         self.filter_menu.set("Tất cả")
         self.filter_menu.pack(side="right")
+        filters = ctk.CTkFrame(self, fg_color="transparent")
+        filters.pack(fill="x", padx=14)
+        self.cycle_choices = {f"{i+1}. {row['title']}": row['key'] for i, row in enumerate(cycle_rows(project))}
+        self.cycle_menu = ctk.CTkOptionMenu(filters, values=["Tất cả vụ", *self.cycle_choices],
+                                          command=lambda _: self._refresh(), width=530)
+        self.cycle_menu.pack(side="left")
+        ctk.CTkButton(filters, text="Chọn các nhóm đang lọc", command=lambda: self.listbox.select_set(0, tk.END)).pack(side="right")
 
         self.listbox = tk.Listbox(
             self,
@@ -58,6 +66,8 @@ class SplitManagerDialog(ctk.CTkToplevel):
             highlightthickness=1,
             highlightbackground="#263b50",
             font=("Consolas", 11),
+            selectmode=tk.EXTENDED,
+            exportselection=False,
         )
         self.listbox.pack(fill="both", expand=True, padx=14, pady=6)
         self.listbox.bind("<<ListboxSelect>>", lambda _event: self._show_selected())
@@ -74,12 +84,14 @@ class SplitManagerDialog(ctk.CTkToplevel):
 
     def _refresh(self) -> None:
         wanted = self.FILTERS.get(self.filter_menu.get(), "")
-        self.rows = [row for row in self.manager.split_group_rows(self.project) if not wanted or row["split"] == wanted]
+        cycle = self.cycle_choices.get(self.cycle_menu.get())
+        self.rows = [row for row in self.manager.split_group_rows(self.project)
+                     if (not wanted or row["split"] == wanted) and (not cycle or cycle in row["cycles"])]
         self.listbox.delete(0, tk.END)
         for row in self.rows:
             self.listbox.insert(
                 tk.END,
-                f"[{row['split'].upper():5}] {row['images']:4} ảnh · {row['annotations']:4} nhãn · {row['group']}",
+                f"[{row['split'].upper():5}] {row['images']} ảnh · {row['sources']} · {', '.join(row['dates']) or 'Chưa rõ ngày'} · {row['group']}",
             )
         self.detail.configure(text=f"Đang hiển thị {len(self.rows)} capture group.")
 
@@ -96,20 +108,20 @@ class SplitManagerDialog(ctk.CTkToplevel):
             )
 
     def _move(self, target: str) -> None:
-        row = self._selected()
-        if not row:
+        rows = [self.rows[i] for i in self.listbox.curselection() if i < len(self.rows)]
+        if not rows:
             messagebox.showinfo("Chưa chọn nhóm", "Hãy chọn một capture group trước.", parent=self)
             return
-        if row["split"] == target:
+        if all(row["split"] == target for row in rows):
             return
         if not messagebox.askyesno(
             "Đổi tập của capture group?",
-            f"Chuyển toàn bộ {row['images']} ảnh của nhóm:\n{row['group']}\n\n"
-            f"Từ {row['split'].upper()} → {target.upper()}?\n\n"
+            f"Chuyển {len(rows)} nhóm / {sum(row['images'] for row in rows)} ảnh → {target.upper()}?\n\n"
+            + "\n".join(sorted({row['sources'] for row in rows})) + "\n\n"
             "Việc đổi Validation/Test có thể làm kết quả không còn so sánh trực tiếp với model đã train trước đó.",
             parent=self,
         ):
             return
-        self.manager.set_group_split(self.project, row["group"], target)
+        self.manager.set_groups_split(self.project, [row["group"] for row in rows], target)
         self.on_changed()
         self._refresh()

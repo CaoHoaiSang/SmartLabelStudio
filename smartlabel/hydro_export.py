@@ -8,6 +8,7 @@ import shutil
 from .dataset_manager import DatasetManager
 from .hydro_labels import model_attributes
 from .hydro_holdout import describe_holdout
+from .external_evaluation import release_evidence
 from .hydroponic import (RUNTIME_TARGETS, describe_hydro_qa_issue, export_jetson_onnx,
                         hydro_dataset_qa, write_hydro_model_bundle, _sha256)
 
@@ -60,8 +61,13 @@ def build_hydro_package(project, store, output, config, progress, cancel):
         raise ValueError(f"Dataset còn {len(errors)} lỗi QA. Hãy mở Kiểm tra Dataset Hydro để xử lý.\n"
                          + "\n".join(details[:5]))
     project.metadata["validationStatus"] = report["validationStatus"]
-    if mode == "operational" and report["validationStatus"] != "validated_holdout":
-        raise ValueError("Chưa đủ QA holdout cho Vận hành thật (operational).\n\n" + describe_holdout(report))
+    evidence = None
+    if mode == "operational":
+        try:
+            evidence = release_evidence(project, store, thresholds)
+        except ValueError as error:
+            raise ValueError(str(error) + "\n\n" + describe_holdout(report)) from error
+        project.metadata["validationStatus"] = "validated_holdout"
     checkpoint()
     # Exporter writes beside its PT input. Copy PTs into job-owned staging first.
     with TemporaryDirectory(prefix=".hydro-package-", dir=output.parent) as directory:
@@ -77,15 +83,23 @@ def build_hydro_package(project, store, output, config, progress, cancel):
             source = model_dir / "model.pt"
             shutil.copy2(models[key], source)
             model_hashes[key] = _sha256(source)
+            if evidence and evidence["models"][key]["checkpointSha256"] != model_hashes[key]:
+                raise ValueError("Checkpoint thay đổi khi chuyển ONNX; cần đánh giá lại.")
             checkpoint()
             onnx[key] = export_jetson_onnx(source, model_dir / "model.onnx", input_size=224, opset=12)
             checkpoint()
         progress("[3/3] Kiểm tra hợp đồng model và đóng gói ZIP…")
+        if evidence:
+            if release_evidence(project, store, thresholds) != evidence:
+                raise ValueError("Bằng chứng đánh giá thay đổi trong lúc tạo gói.")
+            for key in onnx:
+                evidence["models"][key]["onnxSha256"] = _sha256(onnx[key])
         bundle = write_hydro_model_bundle(
             project, staging / "bundle", onnx, config["thresholds"],
             dataset_version=config["datasetVersion"], source_commit=config["sourceCommit"],
             camera_profile_ids=config["cameraProfileIds"], geometry_profile_ids=config["geometryProfileIds"],
             input_size=224, runtime_target=config["runtimeTarget"], deployment_mode=config["deploymentMode"],
+            release_evidence=evidence,
         )
         checkpoint()
         # Exclusive destinations: never replace a previous package. On failure,
@@ -108,7 +122,7 @@ def build_hydro_package(project, store, output, config, progress, cancel):
                 shutil.rmtree(output)
             raise
     return {
-        "bundle": output, "archive": archive, "validationStatus": report["validationStatus"],
+        "bundle": output, "archive": archive, "validationStatus": project.metadata["validationStatus"],
         "onnxModels": {key: str(output / "models" / f"{key}.onnx") for key in models},
         "modelHashes": model_hashes,
     }

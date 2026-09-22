@@ -1,5 +1,15 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 22/09/2026
 
+## Bộ TEST ngoài gắn checkpoint — hiện hành22/09
+
+Đã nối Dataset → tạo/nhập TEST ngoài → đánh giá → duyệt → cổng tạo gói operational.
+Ràng buộc bộ ảnh/schema/PT/ngưỡng/inventory và ONNX đóng gói; không tự dùng QA
+phân tập thay bằng chứng đo. Split UI thêm nguồn vụ/ngày/lọc/chọn nhiều nhóm.
+324/324test đầy đủ bản cuối đạt (294,645s). Không train hoặc
+đánh giá model thật, không thay dữ liệu người dùng. Cần mở lại Studio; xem
+[cách dùng, contract và giới hạn](EXTERNAL_BENCHMARK_CHECKPOINT.md).
+Các mục dưới là lịch sử, đặc biệt câu benchmark ngoài “chưa nối” đã được thay thế.
+
 ## Final Train / TEST / thử Email — bổ sung22/09
 
 Cửa sổ cấu hình gói có trợ giúp `TEST, Final Train và thử Email`: phân biệt

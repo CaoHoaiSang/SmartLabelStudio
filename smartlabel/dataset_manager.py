@@ -171,7 +171,8 @@ class DatasetManager:
         }
 
     def split_group_rows(self, project: Project) -> list[dict[str, Any]]:
-        assignment = self.ensure_split_assignment(project)
+        from .benchmark_contract import source_identity, cycle_title, cycle_key
+        assignment = self.ensure_split_assignment(project, persist=False)
         groups = self._record_groups(project.images)
         rows = []
         for key, records in groups.items():
@@ -181,22 +182,37 @@ class DatasetManager:
                 "images": len(records),
                 "reviewed": sum(record.review_status == "reviewed" for record in records),
                 "annotations": sum(len(record.annotations) for record in records),
+                "cycles": sorted({cycle_key(source_identity(record)) for record in records}),
+                "sources": " | ".join(sorted({cycle_title(source_identity(record)) for record in records})),
+                "dates": sorted({str(record.metadata.get("capturedAt") or "")[:10] for record in records} - {""}),
             })
         order = {"test": 0, "val": 1, "train": 2}
         return sorted(rows, key=lambda item: (order[item["split"]], -item["images"], item["group"]))
 
     def set_group_split(self, project: Project, group_key: str, split: str) -> None:
+        self.set_groups_split(project, [group_key], split)
+
+    def set_groups_split(self, project: Project, group_keys: list[str], split: str) -> None:
         if split not in {"train", "val", "test"}:
             raise ValueError(f"Tập không hợp lệ: {split}")
-        assignment = self.ensure_split_assignment(project)
-        if group_key not in assignment["groups"]:
-            raise KeyError(f"Không tìm thấy capture group: {group_key}")
-        assignment["groups"][group_key] = split
+        assignment = self.ensure_split_assignment(project, persist=False)
+        if not group_keys or any(key not in assignment["groups"] for key in group_keys):
+            raise KeyError("Không tìm thấy nhóm đã chọn; chưa thay đổi phân tập.")
+        for key in group_keys:
+            assignment["groups"][key] = split
         assignment["updated_at"] = datetime.now().isoformat(timespec="seconds")
         assignment["source"] = "manual"
-        self.split_assignment_path(project).write_text(
-            json.dumps(assignment, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        import os
+        from tempfile import NamedTemporaryFile
+        target = self.split_assignment_path(project)
+        with NamedTemporaryFile(mode="w", encoding="utf-8", dir=target.parent, delete=False) as staged:
+            staged.write(json.dumps(assignment, ensure_ascii=False, indent=2))
+            staged.flush()
+            os.fsync(staged.fileno())
+        try:
+            os.replace(staged.name, target)
+        finally:
+            Path(staged.name).unlink(missing_ok=True)
 
     def _split_keys_for_strategy(
         self,
@@ -513,9 +529,12 @@ class DatasetManager:
                 f"Không có crop nào để train nhóm “{title}”. Hãy gán thuộc tính cho nhãn"
                 + (" và Duyệt ảnh." if reviewed_only else ".")
             )
+        from .benchmark_contract import source_identity
         metadata = {
             "project_id": project.id,
             "task": "classify",
+            "source_records": [{"fileName": r.file_name, "source": source_identity(r), "originalSha256": r.sha256}
+                               for r in records] if scope == "image" else [],
             "attribute_key": attribute_key,
             "attribute_title": title,
             "classification_scope": scope,

@@ -129,14 +129,11 @@ class HydroPackageTests(unittest.TestCase):
         self.export.assert_not_called()
         self.assert_preserved()
 
-    def test_windows_operational_package_preserves_explicit_mode_with_validated_qa(self):
+    def test_windows_operational_rejects_qa_flag_without_checkpoint_bound_evidence(self):
         self.config['deploymentMode'] = 'operational'
         self.qa.return_value = {'issues': [], 'validationStatus': 'validated_holdout'}
-        result = self.build()
-        manifest = json.loads((result['bundle'] / 'bundle.json').read_text(encoding='utf-8'))
-        self.assertEqual(manifest['runtimeTarget'], 'windows_onnxruntime_cpu')
-        self.assertEqual(manifest['deploymentMode'], 'operational')
-        self.assertEqual(manifest['validationStatus'], 'validated_holdout')
+        with self.assertRaisesRegex(ValueError, 'Chưa có đánh giá'):
+            self.build()
         self.assert_preserved()
 
     def test_operational_error_contains_split_evidence_and_keeps_shadow_explicit(self):
