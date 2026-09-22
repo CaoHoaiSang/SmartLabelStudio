@@ -2,6 +2,23 @@
 from collections import Counter, defaultdict
 
 
+def training_strategy_guidance():
+    return (
+        "TEST dùng để đánh giá model trên dữ liệu chưa học. Điều kiện TEST vụ độc lập là chính sách "
+        "kiểm định/phát hành của Hydro hiện tại, không phải giới hạn kỹ thuật của ONNX hay Windows/Nano.\n\n"
+        "• Final · Train+Val, giữ Test: gộp TRAIN và VAL để học, vẫn giữ TEST. Có thể dùng cho bản vận hành "
+        "nếu TEST độc lập, checkpoint chưa học TEST và các điều kiện QA/đánh giá đạt.\n"
+        "• Final · Train 100%: học cả TEST cũ, nên TEST cũ không còn là bằng chứng độc lập. Muốn kiểm định "
+        "checkpoint này cần bộ benchmark khác chưa dùng để học hoặc chọn model/ngưỡng. Hiện cổng xuất "
+        "Hydro chưa nối bằng chứng benchmark ngoài với hash checkpoint; không tự coi phân tập của project "
+        "là bằng chứng cho checkpoint đã học 100%.\n\n"
+        "Không chuyển ảnh đã học sang TEST rồi dùng checkpoint cũ. QA phân tập cũng không phải độ chính xác model.\n\n"
+        "Nếu chỉ kiểm thử gửi ảnh Gmail: dùng Hydro → Kiểm tra tự động → chọn rọ → Phóng to ảnh rọ → "
+        "Gửi thử ảnh rọ qua Gmail. Xem trước và xác nhận người nhận; không cần đổi model sang Vận hành. "
+        "Backend Hydro phải được cập nhật chức năng gửi thử ảnh."
+    )
+
+
 def holdout_diagnostics(project, assignments):
     cycles = defaultdict(Counter)
     for record in project.images:
@@ -48,5 +65,7 @@ def describe_holdout(report):
         "Ảnh/vụ đã dùng để học không trở thành holdout chỉ bằng cách chuyển sang TEST; cần train lại không dùng vụ đó hoặc thu vụ độc lập khác.",
         "Sau đó đánh giá từng model trên TEST. QA phân tập không phải phép đo độ chính xác model. "
         "Nếu chỉ thử luồng, có thể chủ động chọn Chạy thử (Shadow); hệ thống không tự hạ chế độ.",
+        "Final Train+Val vẫn giữ TEST; Train 100% đã dùng TEST cũ để học. "
+        "Xem 'TEST, Final Train và thử Email' trong cửa sổ cấu hình gói để chọn đúng luồng.",
     ])
     return "\n".join(lines)

@@ -1,10 +1,15 @@
 from copy import deepcopy
 from types import SimpleNamespace
 import unittest
-from smartlabel.hydro_holdout import holdout_diagnostics, describe_holdout
+from smartlabel.hydro_holdout import holdout_diagnostics, describe_holdout, training_strategy_guidance
 
 
 class HoldoutDiagnosticsTests(unittest.TestCase):
+    def test_final_training_help_separates_export_policy_from_technical_and_email_tests(self):
+        text = training_strategy_guidance()
+        for expected in ("không phải giới hạn kỹ thuật", "vẫn giữ TEST", "học cả TEST cũ", "chưa nối bằng chứng", "không cần đổi model"):
+            self.assertIn(expected, text)
+
     def project(self, rows):
         return SimpleNamespace(images=[SimpleNamespace(id=str(i), capture_group=str(i),
             metadata={"cropCycleId": cycle}) for i, cycle in enumerate(rows)])

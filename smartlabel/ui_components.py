@@ -273,6 +273,11 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
             text_color="#8298aa",
         ).pack(anchor="w", padx=22, pady=(2, 4))
         ctk.CTkLabel(self, text="NGƯỠNG TỪNG CLASSIFIER", text_color="#22b9ee", font=("Segoe UI Semibold", 12)).pack(anchor="w", padx=22, pady=(14, 4))
+        self.training_help_button = ctk.CTkButton(
+            self, text="TEST, Final Train và thử Email", fg_color="#243c50", height=28,
+            command=self._show_training_help,
+        )
+        self.training_help_button.pack(anchor="w", padx=22, pady=(0, 4))
         thresholds = defaults.get("thresholds", {})
         crop_display_name = str(defaults.get("cropDisplayName") or "cây mục tiêu").strip()
         self.model_titles = defaults.get("modelTitles") or {
@@ -292,6 +297,10 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
                 self.variables[f"{key}.{bound}"] = variable
             ctk.CTkLabel(card, text=defaults.get("thresholdSources", {}).get(key, "Khởi đầu 0.30 / 0.70 · chưa hiệu chỉnh"),
                          wraplength=540, justify="left", text_color="#8298aa", font=("Segoe UI", 11)).pack(anchor="w", padx=10, pady=(0, 6))
+
+    def _show_training_help(self) -> None:
+        from .hydro_holdout import training_strategy_guidance
+        messagebox.showinfo("TEST và điều kiện vận hành", training_strategy_guidance(), parent=self)
 
     def _accept(self) -> None:
         required = ("datasetVersion", "sourceCommit", "cameraProfileIds", "geometryProfileIds")

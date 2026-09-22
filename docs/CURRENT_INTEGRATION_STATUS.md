@@ -1,5 +1,13 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 22/09/2026
 
+## Final Train / TEST / thử Email — bổ sung22/09
+
+Cửa sổ cấu hình gói có trợ giúp `TEST, Final Train và thử Email`: phân biệt
+Final Train+Val giữ TEST với Train100% đã học TEST, chính sách phát hành với
+giới hạn ONNX, và đường thử Email ảnh rọ độc lập của Hydro.306/306test đạt.
+Không đổi gate, split, checkpoint hay train thật; benchmark ngoài gắn hash
+checkpoint vẫn chưa nối vào cổng phát hành. Cần mở lại Studio để nạp trợ giúp.
+
 ## Giải thích QA operational — 22/09/2026
 
 Tạo gói và Kiểm tra Dataset Hydro nay hiện số ảnh theo vụ/phân tập, lý do
