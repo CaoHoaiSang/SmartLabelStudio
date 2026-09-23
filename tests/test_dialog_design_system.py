@@ -290,8 +290,10 @@ class StudioDialogTests(unittest.TestCase):
         self.assertEqual(str(popup.transient()), str(parent))
         self.assertIs(self.root.grab_current(), popup)
         self.assertGreaterEqual(popup.winfo_width(), menu.winfo_width())
-        self.assertGreaterEqual(popup.listbox.winfo_rootx() - popup.winfo_rootx(), 8)
-        self.assertEqual(popup.listbox.curselection(), (1,))
+        self.assertGreaterEqual(popup.rows[0].winfo_rootx() - popup.winfo_rootx(), 8)
+        self.assertEqual(popup.index, 1)
+        self.assertGreaterEqual(popup.rows[0].winfo_height(), 34)
+        self.assertGreater(popup.rows[0].cget("corner_radius"), 0)
         popup.select(2); popup.commit()
         self.assertEqual(variable.get(), "Ba")
         self.assertEqual(calls, ["Ba"])
@@ -346,17 +348,20 @@ class StudioDialogTests(unittest.TestCase):
         menu.pack(fill="x", padx=20, pady=10)
         self.settle()
         previous = self.root.bind("<Configure>")
+        previous_wheel = self.root.bind_all("<MouseWheel>")
         menu._canvas.focus_force()
         menu._canvas.event_generate("<Down>"); self.settle()
         popup = menu.popup
         self.assertIsNotNone(popup)
-        self.assertIn("✓", popup.listbox.get(0))
-        self.assertLess(popup.listbox.xview()[1], 1)
-        popup.listbox.event_generate("<Down>")
-        popup.listbox.event_generate("<Return>"); self.settle()
+        self.assertEqual(popup.rows[0].cget("fg_color"), "#153d4c")
+        self.assertEqual(popup.rows[2].cget("text"), "Tên dự án dài " * 30)
+        self.assertGreater(popup.rows[2].winfo_height(), popup.rows[0].winfo_height())
+        popup.event_generate("<Down>")
+        popup.event_generate("<Return>"); self.settle()
         self.assertEqual(calls, ["Hai"])
         self.assertEqual(value.get(), "Hai")
         self.assertEqual(self.root.bind("<Configure>"), previous)
+        self.assertEqual(self.root.bind_all("<MouseWheel>"), previous_wheel)
         for _ in range(3):
             menu._open_dropdown_menu(); self.settle()
             value.set("Một")
@@ -366,6 +371,88 @@ class StudioDialogTests(unittest.TestCase):
         menu._open_dropdown_menu(); self.settle()
         menu.master.event_generate("<Unmap>"); self.settle()
         self.assertIsNone(menu.popup)
+        self.assertIsNone(self.root.grab_current())
+
+    def test_attribute_toolbar_uses_row_width_and_is_stable_when_resized(self):
+        from smartlabel.ui_components import ProjectSettingsDialog
+        for project in (self.root.project, self.root.store.create_project("Generic")):
+            dialog = ProjectSettingsDialog(self.root, project, lambda: None)
+            tabs = next(w for w in dialog.winfo_children() if isinstance(w, ctk.CTkTabview))
+            tabs.set("THUỘC TÍNH")
+            for width in (980, 650, 1100, 650):
+                dialog.geometry(f"{width}x600"); self.settle()
+                help_label = dialog.attribute_help
+                self.assertGreater(help_label.winfo_width(), width - 300)
+                self.assertLessEqual(help_label.winfo_height(), 80)
+                height = help_label.winfo_height()
+                self.settle()
+                self.assertEqual(help_label.winfo_height(), height)
+            dialog.destroy()
+
+    def test_dialog_canvas_and_inputs_match_hydro_surface_even_on_dynamic_rows(self):
+        from smartlabel.ui_components import ProjectSettingsDialog, NewProjectDialog
+        from smartlabel.trash_dialog import ProjectTrashDialog
+        from smartlabel.ui_layout import SURFACE, INPUT
+        for dialog in (ProjectTrashDialog(self.root, [self.root.project], lambda _: None),
+                       NewProjectDialog(self.root, "hydroponic_slot"),
+                       ProjectSettingsDialog(self.root, self.root.project, lambda: None)):
+            self.settle()
+            for scroll in (w for w in self.descendants(dialog) if isinstance(w, ctk.CTkScrollableFrame)):
+                self.assertEqual(scroll._parent_canvas.cget("bg"), SURFACE)
+                self.assertEqual(tk.Frame.cget(scroll, "bg"), SURFACE)
+            if isinstance(dialog, ProjectSettingsDialog):
+                dialog._add_class()
+            entries = [w for w in self.descendants(dialog) if isinstance(w, ctk.CTkEntry)]
+            for entry in entries:
+                self.assertEqual(entry.cget("fg_color"), INPUT)
+            dialog.destroy()
+
+    def test_generic_attribute_menus_keep_original_native_renderer(self):
+        from smartlabel.ui_components import ProjectSettingsDialog
+        from smartlabel.dropdown import StudioOptionMenu
+        generic = self.root.store.create_project("Localisation")
+        dialog = ProjectSettingsDialog(self.root, generic, lambda: None)
+        menus = [w for w in self.descendants(dialog) if isinstance(w, ctk.CTkOptionMenu)]
+        self.assertTrue(menus)
+        self.assertTrue(all(type(w) is ctk.CTkOptionMenu for w in menus))
+        dialog.destroy()
+        dialog = ProjectSettingsDialog(self.root, self.root.project, lambda: None)
+        self.assertTrue(all(isinstance(g["default_menu"], StudioOptionMenu) for g in dialog.attribute_groups.values()))
+        dialog.destroy()
+
+    def test_dropdown_last_row_scroll_and_mouse_selection_preserve_clipboard(self):
+        from smartlabel.dropdown import StudioOptionMenu
+        calls = []
+        menu = StudioOptionMenu(self.root, values=[f"Lô {i}" for i in range(100)], command=calls.append)
+        menu.set("Lô 99"); menu.pack(padx=20, pady=20); self.settle()
+        # Never touch the real Windows clipboard, even in a temporary-project test.
+        for operation in ("clipboard_clear", "clipboard_append", "selection_own"):
+            guard = patch.object(tk.Misc, operation, side_effect=AssertionError("Menu touched clipboard"))
+            guard.start()
+            self.addCleanup(guard.stop)
+        menu._open_dropdown_menu(); self.settle()
+        popup = menu.popup
+        self.assertEqual(popup.index, 99)
+        self.assertGreater(popup.canvas.yview()[0], .8)
+        self.assertLessEqual(popup.rows[-1].winfo_rooty() + popup.rows[-1].winfo_height(),
+                             popup.winfo_rooty() + popup.winfo_height())
+        popup.event_generate("<Home>"); self.settle()
+        self.assertEqual(popup.index, 0)
+        self.assertEqual(popup.canvas.yview()[0], 0)
+        popup.rows[1].invoke(); self.settle()
+        self.assertEqual(calls, ["Lô 1"])
+        self.assertEqual(menu.get(), "Lô 1")
+        self.assertIsNone(self.root.grab_current())
+
+    def test_dropdown_immediate_close_cancels_its_pending_layout(self):
+        from smartlabel.dropdown import StudioOptionMenu
+        menu = StudioOptionMenu(self.root, values=["Một", "Hai"])
+        menu.pack(); self.settle()
+        baseline = set(self.root.tk.call("after", "info"))
+        menu._open_dropdown_menu()
+        menu.close_popup()  # Before Tk has drawn any rows or run idle callbacks.
+        self.assertEqual(set(self.root.tk.call("after", "info")), baseline)
+        self.settle()
         self.assertIsNone(self.root.grab_current())
 
     def test_generic_attribute_entries_leave_delete_action_visible(self):

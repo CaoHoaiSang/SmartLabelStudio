@@ -1,7 +1,7 @@
 """Project trash presentation; recovery still uses the existing ProjectStore."""
 import customtkinter as ctk
 from .ui_layout import (StudioToplevel, setup_dialog, dialog_header, dialog_footer,
-                        wrapped_label, PANEL, BORDER, MUTED)
+                        wrapped_label, PANEL, BORDER, MUTED, SURFACE)
 
 
 class ProjectTrashDialog(StudioToplevel):
@@ -13,7 +13,7 @@ class ProjectTrashDialog(StudioToplevel):
         ctk.CTkButton(footer, text="Đóng", width=100, command=self.destroy,
                       fg_color="#294153").pack(side="right")
         dialog_header(self, "DỰ ÁN ĐÃ XÓA", "Khôi phục dự án cùng ảnh và nhãn đã lưu. Không tạo dự án bản sao.")
-        content = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        content = ctk.CTkScrollableFrame(self, fg_color=SURFACE)
         content.pack(fill="both", expand=True, padx=14, pady=(0, 14))
         self.restore_buttons = []
         if not projects:
@@ -29,4 +29,4 @@ class ProjectTrashDialog(StudioToplevel):
                                   command=lambda p=project: self.on_restore(p))
             button.grid(row=0, column=1, rowspan=2, padx=(8, 16), pady=12)
             self.restore_buttons.append(button)
-        setup_dialog(self, parent, 760, 480)
+        setup_dialog(self, parent, 760, min(600, max(320, 200 + 94 * len(projects))))

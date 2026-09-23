@@ -5,6 +5,7 @@ accept on Escape/window close; long help and errors scroll inside a bounded dial
 """
 import tkinter as tk
 import customtkinter as ctk
+from .ui_layout import StudioEntry
 from .ui_layout import StudioToplevel
 
 from .ui_layout import (setup_dialog, dialog_header, dialog_footer, wrapped_label,
@@ -103,7 +104,7 @@ class InputDialog(StudioToplevel):
         body = ctk.CTkScrollableFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=14, pady=(0, 12))
         wrapped_label(body, prompt, color=MUTED).pack(fill="x", padx=6, pady=(0, 10))
-        self.entry = ctk.CTkEntry(body, height=38, show=show or "")
+        self.entry = StudioEntry(body, height=38, show=show or "")
         self.entry.pack(fill="x", padx=6)
         if initialvalue is not None:
             self.entry.insert(0, str(initialvalue))

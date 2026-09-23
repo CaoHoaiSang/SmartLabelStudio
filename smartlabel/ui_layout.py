@@ -9,7 +9,8 @@ import customtkinter as ctk
 logger = logging.getLogger(__name__)
 
 
-SURFACE = "#0b151f"
+SURFACE = "#0a131c"  # Matches the Hydro whole-image classifier panel.
+INPUT = "#05090d"
 PANEL = "#142333"
 BORDER = "#294153"
 TEXT = "#e1edf5"
@@ -28,9 +29,22 @@ class StudioToplevel(ctk.CTkToplevel):
     _deactivate_windows_window_header_manipulation = True
 
     def __init__(self, parent, **kwargs):
+        kwargs.setdefault("fg_color", SURFACE)
         super().__init__(parent, **kwargs)
         self.withdraw()
         self.transient(parent.winfo_toplevel())
+
+
+class StudioEntry(ctk.CTkEntry):
+    """Black input surface, including rows added after a dialog has opened."""
+    def __init__(self, master, **kwargs):
+        defaults = dict(fg_color=INPUT, border_color=BORDER, border_width=1,
+                        text_color=TEXT, placeholder_text_color=MUTED,
+                        corner_radius=8)
+        if isinstance(master.winfo_toplevel(), StudioToplevel):
+            defaults["height"] = 34
+        defaults.update(kwargs)
+        super().__init__(master, **defaults)
 
 
 def dialog_bounds(work_area, owner, width, height, scale=1.0):
@@ -140,6 +154,11 @@ def setup_dialog(dialog, parent, width, height, *, close=None, modal=True):
 def style_dialog_content(parent):
     """Apply desktop typography to dialog controls, not the main workspace/canvas."""
     for widget in parent.winfo_children():
+        if isinstance(widget, ctk.CTkScrollableFrame):
+            # CTkScrollableFrame owns a separate Tk canvas. Styling its outer
+            # CTkFrame alone leaves a gray rectangle behind the content.
+            if widget.cget("fg_color") != SURFACE:
+                widget.configure(fg_color=SURFACE)
         if isinstance(widget, (ctk.CTkLabel, ctk.CTkButton, ctk.CTkEntry, ctk.CTkCheckBox, ctk.CTkOptionMenu)):
             font = widget.cget("font")
             if isinstance(font, ctk.CTkFont):
@@ -156,12 +175,16 @@ def style_dialog_content(parent):
                     options["height"] = 34
                 if widget.cget("corner_radius") != 8:
                     options["corner_radius"] = 8
+            if isinstance(widget, ctk.CTkEntry):
+                for key, value in (("fg_color", INPUT), ("border_color", BORDER), ("border_width", 1)):
+                    if widget.cget(key) != value:
+                        options[key] = value
             if options:
                 widget.configure(**options)
             if isinstance(widget, ctk.CTkLabel) and widget.cget("wraplength"):
                 _fit_label(widget)
         if isinstance(widget, ctk.CTkFrame) and widget.cget("fg_color") in (ctk.ThemeManager.theme["CTkFrame"]["fg_color"], ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"]):
-            widget.configure(fg_color=PANEL, corner_radius=12)
+            widget.configure(fg_color=SURFACE, corner_radius=12)
         style_dialog_content(widget)
 
 
@@ -200,6 +223,10 @@ def _fit_label(label):
             if layout["side"] in ("top", "bottom") and layout["fill"] not in ("x", "both"):
                 label.pack_configure(fill="x")
                 label.configure(anchor="w")
+                return
+            if layout["side"] in ("left", "right") and not layout["expand"]:
+                # A content-sized horizontal label has no independent width.
+                # Never feed its measured text width back into wraplength.
                 return
         allocated = label.winfo_width()
         if allocated <= 1:

@@ -1,19 +1,19 @@
-"""Shared dark dropdown with owned, bounded popup and local-grab restoration.
+"""Hydro-only dropdown; general/localization controls retain CTk's native menu.
 
-Preserves CTkOptionMenu's variables/callbacks/get/set/configure contract. The list
-is rendered by Tk (not hundreds of CTk buttons), so long project lists stay fast.
+Preserves CTkOptionMenu's variable/callback API and modal ownership. The popup
+uses spaced, rounded rows rather than the previous desktop Listbox selection bar.
 """
 import tkinter as tk
 from tkinter import font as tkfont
 import customtkinter as ctk
 
-from .ui_layout import PANEL, BORDER, TEXT, MUTED, _work_area
+from .ui_layout import SURFACE, INPUT, PANEL, BORDER, TEXT, MUTED, _work_area
 
 
 class StudioOptionMenu(ctk.CTkOptionMenu):
     def __init__(self, master, **kwargs):
         self.popup = None
-        defaults = dict(fg_color="#1b3042", button_color="#29475d", button_hover_color="#365d77",
+        defaults = dict(fg_color=INPUT, button_color=INPUT, button_hover_color="#243c4e",
                         text_color=TEXT, text_color_disabled=MUTED, corner_radius=8,
                         height=34, font=("Segoe UI", 13), dynamic_resizing=False)
         defaults.update(kwargs)
@@ -64,7 +64,9 @@ class _DropdownPopup(tk.Toplevel):
         self.previous_grab = menu.grab_current()
         self.closed = False
         self.bindings = []
-        super().__init__(self.owner, bg=BORDER, takefocus=1)
+        self._content_size = None
+        self._scroll_timer = None
+        super().__init__(self.owner, bg=SURFACE, takefocus=1)
         self.withdraw()
         self.overrideredirect(True)
         self.transient(self.owner)
@@ -74,32 +76,50 @@ class _DropdownPopup(tk.Toplevel):
         left, top, right, bottom = _work_area(menu, self.owner)
         width = min(right - left - 24, max(menu.winfo_width(),
                     min(round(680 * scale), max(font.measure(v) for v in values) + inset * 3 + 24)))
-        # Exportselection=False is essential: never disturb the user's copied code.
-        panel = tk.Frame(self, bg=PANEL, highlightthickness=1, highlightbackground=BORDER)
+        panel = ctk.CTkFrame(self, fg_color=SURFACE, bg_color=SURFACE,
+                             border_width=1, border_color=BORDER, corner_radius=10)
         panel.pack(fill="both", expand=True)
-        self.listbox = tk.Listbox(panel, bg=PANEL, fg=TEXT, selectbackground="#28566e",
-            selectforeground="#ffffff", activestyle="none", font=font, borderwidth=0,
-            highlightthickness=0, exportselection=False, selectmode="browse",
-            height=min(9, len(values)), relief="flat")
-        scrollbar = ctk.CTkScrollbar(panel, orientation="vertical", command=self.listbox.yview,
-                                     fg_color=PANEL, button_color="#355467", button_hover_color="#48738e", width=12)
-        self.listbox.configure(yscrollcommand=scrollbar.set)
-        if len(values) > 9:
-            scrollbar.pack(side="right", fill="y", padx=(0, inset), pady=inset)
-        self.listbox.pack(fill="both", expand=True, padx=inset, pady=inset)
-        for value in values:
-            self.listbox.insert("end", ("✓  " if value == menu.get() else "    ") + value)
-        # Particularly long project/benchmark names remain readable, not clipped.
-        needs_horizontal = max(font.measure(v) for v in values) + inset * 3 + 24 > width
-        if needs_horizontal:
-            horizontal = ctk.CTkScrollbar(panel, orientation="horizontal", command=self.listbox.xview,
-                                          fg_color=PANEL, button_color="#355467", button_hover_color="#48738e", height=12)
-            horizontal.pack(side="bottom", fill="x", padx=inset, pady=(0, inset), before=self.listbox)
-            self.listbox.configure(xscrollcommand=horizontal.set)
-        index = values.index(menu.get()) if menu.get() in values else 0
-        self.select(index)
-        height = min(bottom - top - 24, (font.metrics("linespace") + 4) * min(9, len(values))
-                     + inset * 2 + (round(20 * scale) if needs_horizontal else 0))
+        self.rows = []
+        self.row_heights = []
+        self.selected = values.index(menu.get()) if menu.get() in values else 0
+        # Local canvas, not CTkScrollableFrame: opening a menu must not install
+        # bind_all wheel handlers that linger after it is destroyed.
+        viewport = ctk.CTkFrame(panel, fg_color=SURFACE, corner_radius=0)
+        viewport.pack(fill="both", expand=True, padx=8, pady=8)
+        self.canvas = tk.Canvas(viewport, bg=SURFACE, highlightthickness=0, borderwidth=0)
+        scrollbar = ctk.CTkScrollbar(viewport, command=self.canvas.yview, width=12,
+            fg_color=SURFACE, button_color=BORDER, button_hover_color="#48738e")
+        scrollbar.pack(side="right", fill="y", padx=(6, 0))
+        self.canvas.configure(yscrollcommand=scrollbar.set)
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scroll_area = tk.Frame(self.canvas, bg=SURFACE, borderwidth=0, highlightthickness=0)
+        window_id = self.canvas.create_window(0, 0, window=self.scroll_area, anchor="nw")
+        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(window_id, width=e.width))
+        tk.Misc.bind(self.scroll_area, "<Configure>", self.layout_rows, add="+")
+        # Long names wrap rather than being cut or requiring sideways scrolling.
+        text_width = max(80, width - inset * 4 - round(30 * scale))
+        for index, value in enumerate(values):
+            line_width, lines = 0, 1
+            for word in value.split():
+                measured = font.measure(word + " ")
+                if line_width and line_width + measured > text_width:
+                    lines += 1
+                    line_width = 0
+                lines += max(0, (measured - 1) // text_width)
+                line_width += measured % text_width
+            row_height = max(34, round((lines * font.metrics("linespace")) / scale) + 16)
+            button = ctk.CTkButton(self.scroll_area, text=value, width=1, height=row_height,
+                anchor="w", font=("Segoe UI", 13), corner_radius=7, border_width=1,
+                fg_color=PANEL, hover_color="#233f51", border_color=PANEL, text_color=TEXT,
+                command=lambda i=index: self.choose(i))
+            button._text_label.configure(wraplength=text_width, justify="left")
+            button.pack(fill="x", pady=2)
+            button.bind("<MouseWheel>", self.scroll)
+            self.rows.append(button)
+            self.row_heights.append(round((row_height + 4) * scale))
+        self.index = self.selected
+        self.select(self.index)
+        height = min(bottom - top - 24, round(360 * scale), sum(self.row_heights) + inset * 2 + 8)
         x = max(left + 8, min(menu.winfo_rootx(), right - width - 8))
         y = menu.winfo_rooty() + menu.winfo_height() + 5
         if y + height > bottom - 8:
@@ -110,9 +130,13 @@ class _DropdownPopup(tk.Toplevel):
         self.bind("<Tab>", self.tab_out)
         self.bind("<Return>", self.commit)
         self.bind("<space>", self.commit)
-        self.listbox.bind("<ButtonRelease-1>", self.commit)
-        self.listbox.bind("<Motion>", self.hover)
-        self.listbox.bind("<MouseWheel>", self.scroll)
+        self.bind("<Down>", lambda _e: self.move(1))
+        self.bind("<Up>", lambda _e: self.move(-1))
+        self.bind("<Home>", lambda _e: self.select(0))
+        self.bind("<End>", lambda _e: self.select(len(values) - 1))
+        self.bind("<Next>", lambda _e: self.move(8))
+        self.bind("<Prior>", lambda _e: self.move(-8))
+        self.bind("<MouseWheel>", self.scroll)
         self.bind("<ButtonPress-1>", self.outside)
         self.bind("<FocusOut>", self.focus_out)
         self.bind("<Destroy>", self.destroyed, add="+")
@@ -122,27 +146,66 @@ class _DropdownPopup(tk.Toplevel):
         self.deiconify()
         self.lift()
         self.grab_set()  # Local only, never grab_set_global().
-        self.listbox.focus_set()
+        self.focus_set()
+        if self._scroll_timer is None:
+            self._scroll_timer = self.after_idle(self.finish_layout)
 
     def select(self, index):
-        self.listbox.selection_clear(0, "end")
-        self.listbox.selection_set(index)
-        self.listbox.activate(index)
-        self.listbox.see(index)
+        self.index = max(0, min(index, len(self.values) - 1))
+        for i, row in enumerate(self.rows):
+            row.configure(fg_color="#153d4c" if i == self.selected else PANEL,
+                          border_color="#58b8d7" if i == self.index else PANEL)
+        self.ensure_visible()
+        return "break"
 
-    def hover(self, event):
-        self.select(self.listbox.nearest(event.y))
+    def layout_rows(self, event):
+        size = (event.width, event.height)
+        if size == self._content_size:
+            return  # Scrolling moves the inner window; it does not resize it.
+        self._content_size = size
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        if self._scroll_timer:
+            self.after_cancel(self._scroll_timer)
+        self._scroll_timer = self.after_idle(self.finish_layout)
+
+    def finish_layout(self):
+        self._scroll_timer = None
+        if not self.closed:
+            self.ensure_visible()
+
+    def ensure_visible(self):
+        canvas = self.canvas
+        if not self.rows or self.rows[self.index].winfo_height() <= 1:
+            return
+        if self.index == 0:
+            canvas.yview_moveto(0)
+            return
+        total = self.scroll_area.winfo_height()
+        row = self.rows[self.index]
+        row_top = row.winfo_y()
+        row_bottom = row_top + row.winfo_height() + 2
+        start, end = canvas.yview()
+        if row_top < start * total:
+            canvas.yview_moveto(row_top / total)
+        elif row_bottom > end * total:
+            canvas.yview_moveto(max(0, row_bottom - canvas.winfo_height()) / total)
+
+    def move(self, delta):
+        return self.select(self.index + delta)
+
+    def choose(self, index):
+        self.index = index
+        self.commit()
 
     def scroll(self, event):
-        self.listbox.yview_scroll(-1 if event.delta > 0 else 1, "units")
+        self.canvas.yview_scroll(-3 if event.delta > 0 else 3, "units")
         return "break"  # Do not also scroll the form beneath the menu.
 
     def commit(self, event=None):
         if event is not None and hasattr(event, "x_root") and event.type == tk.EventType.ButtonRelease:
             if not self.contains(event.x_root, event.y_root):
                 return "break"
-        selection = self.listbox.curselection()
-        value = self.values[selection[0]] if selection else None
+        value = self.values[self.index]
         self.close()
         if value is not None and self.menu.winfo_exists() and self.menu.cget("state") != "disabled":
             self.menu._dropdown_callback(value)
@@ -183,6 +246,9 @@ class _DropdownPopup(tk.Toplevel):
             return
         self.closed = True
         self.menu.popup = None
+        if self._scroll_timer:
+            self.after_cancel(self._scroll_timer)
+            self._scroll_timer = None
         for event, token in self.bindings:
             if self.owner.winfo_exists():
                 # Python 3.10's unbind(sequence, funcid) clears ALL callbacks for

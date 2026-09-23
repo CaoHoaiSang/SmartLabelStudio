@@ -16,6 +16,7 @@ from tkinter import filedialog
 from . import studio_dialogs as messagebox, studio_dialogs as simpledialog
 
 import customtkinter as ctk
+from .ui_layout import StudioEntry
 from .dropdown import StudioOptionMenu
 
 from .annotation_canvas import AnnotationCanvas
@@ -321,7 +322,7 @@ class SmartLabelApp(ctk.CTk):
 
         actions = ctk.CTkFrame(header, fg_color="transparent")
         actions.pack(side="right", padx=18)
-        self.project_menu = StudioOptionMenu(actions, width=260, values=["Chưa có dự án"], command=self._switch_project)
+        self.project_menu = ctk.CTkOptionMenu(actions, width=260, values=["Chưa có dự án"], command=self._switch_project)
         self.project_menu.pack(side="left", padx=6)
         self._button(actions, "Dự án mới", self._new_project, width=110).pack(side="left", padx=6)
         self._button(actions, "Lưu", self.save_project, width=80, color=COLORS["good"]).pack(side="left", padx=6)
@@ -1508,12 +1509,12 @@ class SmartLabelApp(ctk.CTk):
         left, self.label_workspace_switch = self._label_list_card(body)
         self.capture_list_card = left
         left.pack(side="left", fill="y", padx=(0, 5))
-        self.image_filter = StudioOptionMenu(left, width=260, values=["Tất cả", "Chưa gán nhãn", "Bản nháp", "Đã duyệt", "Từ chối"], command=self._change_image_filter)
+        self.image_filter = ctk.CTkOptionMenu(left, width=260, values=["Tất cả", "Chưa gán nhãn", "Bản nháp", "Đã duyệt", "Từ chối"], command=self._change_image_filter)
         self.image_filter.pack(padx=10, pady=6)
-        self.label_filter_field = StudioOptionMenu(left, width=260, values=[image_filters.ALL],
+        self.label_filter_field = ctk.CTkOptionMenu(left, width=260, values=[image_filters.ALL],
                                                    command=self._label_filter_changed)
         self.label_filter_field.pack(padx=10, pady=(0, 5))
-        self.label_filter_value = StudioOptionMenu(left, width=260, values=[image_filters.ANY],
+        self.label_filter_value = ctk.CTkOptionMenu(left, width=260, values=[image_filters.ANY],
                                                    command=self._change_image_filter)
         self.label_filter_value.pack(padx=10, pady=(0, 6))
         page_row = ctk.CTkFrame(left, fg_color="transparent")
@@ -1620,7 +1621,7 @@ class SmartLabelApp(ctk.CTk):
         ctk.CTkLabel(self.class_quick_frame, text="CLASS · chọn nhanh", text_color=COLORS["muted"]).pack(anchor="w", padx=12)
         self.class_search_var = tk.StringVar()
         self.class_search_var.trace_add("write", lambda *_args: self._refresh_label_choices())
-        self.class_search_entry = ctk.CTkEntry(self.class_quick_frame, width=240, textvariable=self.class_search_var, placeholder_text="Tìm class…")
+        self.class_search_entry = StudioEntry(self.class_quick_frame, width=240, textvariable=self.class_search_var, placeholder_text="Tìm class…")
         self.class_search_entry.pack(padx=12, pady=(3, 5))
         self.class_choices = ctk.CTkFrame(self.class_quick_frame, width=240, fg_color="transparent")
         self.class_choices.pack(fill="x", padx=12, pady=(0, 10))
@@ -1655,7 +1656,7 @@ class SmartLabelApp(ctk.CTk):
             text_color=COLORS["muted"],
             font=("Segoe UI Semibold", 10),
         ).pack(anchor="w", padx=10, pady=(8, 2))
-        self.other_abnormal_entry = ctk.CTkEntry(
+        self.other_abnormal_entry = StudioEntry(
             self.hydro_metadata_frame,
             width=220,
             textvariable=self.other_abnormal_var,
@@ -2171,7 +2172,8 @@ class SmartLabelApp(ctk.CTk):
                 **dict(zip(display_values, raw_values)),
                 "— Chưa gán —": "",
             }
-            widget = StudioOptionMenu(
+            menu_type = StudioOptionMenu if is_hydroponic_project(self.project) else ctk.CTkOptionMenu
+            widget = menu_type(
                 self.attribute_panel,
                 width=220,
                 values=choices,
@@ -2810,7 +2812,7 @@ class SmartLabelApp(ctk.CTk):
         settings = self._card(tab, "MODEL PHÁT HIỆN")
         self.auto_settings_title = settings.winfo_children()[0]
         settings.pack(side="left", fill="y", padx=(8, 5), pady=8)
-        self.model_entry = ctk.CTkEntry(settings, width=330, textvariable=self.model_path)
+        self.model_entry = StudioEntry(settings, width=330, textvariable=self.model_path)
         self.model_entry.pack(padx=14, pady=5)
         self.auto_classifier_panel = ctk.CTkScrollableFrame(settings, width=310, height=165, fg_color="#0a131c")
         self.active_model_status_label = ctk.CTkLabel(
@@ -2842,7 +2844,7 @@ class SmartLabelApp(ctk.CTk):
         )
         self.auto_model_help.pack(anchor="w", padx=14, pady=(0, 4))
         ctk.CTkLabel(settings, text="Thiết bị", text_color=COLORS["muted"]).pack(anchor="w", padx=14, pady=(12, 2))
-        self.device_menu = StudioOptionMenu(settings, width=330, values=["auto", "cpu", "cuda"])
+        self.device_menu = ctk.CTkOptionMenu(settings, width=330, values=["auto", "cpu", "cuda"])
         self.device_menu.pack(padx=14, pady=4)
         ctk.CTkLabel(settings, text="Confidence", text_color=COLORS["muted"]).pack(anchor="w", padx=14, pady=(12, 2))
         self.confidence_slider = ctk.CTkSlider(settings, from_=0.05, to=0.95, number_of_steps=90, command=self._confidence_changed)
@@ -2863,12 +2865,12 @@ class SmartLabelApp(ctk.CTk):
         self.auto_sam_card = sam
         sam.pack(side="left", fill="y", padx=5, pady=8)
         ctk.CTkLabel(sam, text="Checkpoint SAM2 / SAM2.1", text_color=COLORS["muted"]).pack(anchor="w", padx=14, pady=(4, 2))
-        ctk.CTkEntry(sam, width=300, textvariable=self.sam_checkpoint).pack(padx=14, pady=4)
+        StudioEntry(sam, width=300, textvariable=self.sam_checkpoint).pack(padx=14, pady=4)
         self._button(sam, "Chọn checkpoint", self._choose_sam_checkpoint, width=300).pack(padx=14, pady=4)
         self._button(sam, "Tải SAM2 Small tương thích", self._download_sam2_small, width=300, color="#2b906d", tooltip="Tải checkpoint SAM2 Hiera Small chính thức của Meta vào workspace; file khá lớn.").pack(padx=14, pady=4)
         ctk.CTkLabel(sam, text="Config tìm thấy trong package", text_color=COLORS["muted"]).pack(anchor="w", padx=14, pady=(10, 2))
         available_configs = Sam2Adapter.available_configs()
-        self.sam_config_menu = StudioOptionMenu(
+        self.sam_config_menu = ctk.CTkOptionMenu(
             sam,
             width=300,
             variable=self.sam_config,
@@ -3780,7 +3782,7 @@ class SmartLabelApp(ctk.CTk):
         settings = ctk.CTkScrollableFrame(settings_card, width=350, fg_color="transparent", corner_radius=0)
         settings.pack(fill="both", expand=True, padx=4, pady=(0, 8))
         ctk.CTkLabel(settings, text="Task train", text_color=COLORS["muted"]).pack(anchor="w", padx=14, pady=(7, 1))
-        self.train_task_menu = StudioOptionMenu(
+        self.train_task_menu = ctk.CTkOptionMenu(
             settings,
             width=330,
             values=["detect", "segment", "obb", "pose", "classify"],
@@ -3791,7 +3793,7 @@ class SmartLabelApp(ctk.CTk):
         split_label = ctk.CTkLabel(settings, text="Chiến lược dữ liệu", text_color=COLORS["muted"])
         split_label.pack(anchor="w", padx=14, pady=(8, 1))
         ToolTip(split_label, "Phát triển giữ Test cố định. Hai chế độ Final tận dụng thêm dữ liệu nhưng tắt validation trong lúc train.")
-        self.train_split_strategy_menu = StudioOptionMenu(
+        self.train_split_strategy_menu = ctk.CTkOptionMenu(
             settings,
             width=330,
             variable=self.train_split_strategy,
@@ -3882,7 +3884,7 @@ class SmartLabelApp(ctk.CTk):
             label_widget.pack(anchor="w", padx=14, pady=(7, 1))
             if name in field_help:
                 ToolTip(label_widget, field_help[name])
-            entry = ctk.CTkEntry(settings, width=330)
+            entry = StudioEntry(settings, width=330)
             entry.insert(0, value)
             entry.pack(padx=14, pady=2)
             setattr(self, name, entry)
@@ -3913,7 +3915,7 @@ class SmartLabelApp(ctk.CTk):
             font=("Segoe UI", 10),
         ).pack(anchor="w", padx=14, pady=(1, 3))
         ctk.CTkLabel(settings, text="Thiết bị", text_color=COLORS["muted"]).pack(anchor="w", padx=14, pady=(7, 1))
-        self.train_device_menu = StudioOptionMenu(settings, width=330, values=["auto", "cpu", "cuda"])
+        self.train_device_menu = ctk.CTkOptionMenu(settings, width=330, values=["auto", "cpu", "cuda"])
         self.train_device_menu.pack(padx=14, pady=2)
         self.train_start_button = self._button(
             settings,
@@ -3944,7 +3946,7 @@ class SmartLabelApp(ctk.CTk):
         self.deploy_help_label.pack(anchor="w", padx=14, pady=(1, 5))
         self.deploy_source_row = ctk.CTkFrame(deploy_card, fg_color="transparent")
         self.deploy_source_row.pack(fill="x", padx=14, pady=3)
-        self.deploy_model_entry = ctk.CTkEntry(self.deploy_source_row, textvariable=self.deploy_model_path)
+        self.deploy_model_entry = StudioEntry(self.deploy_source_row, textvariable=self.deploy_model_path)
         self.deploy_model_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
         self._button(
             self.deploy_source_row,
@@ -4025,7 +4027,7 @@ class SmartLabelApp(ctk.CTk):
         self.evaluation_help.pack(anchor="w", padx=14, pady=(1, 5))
         evaluation_model_row = ctk.CTkFrame(evaluation_card, fg_color="transparent")
         evaluation_model_row.pack(fill="x", padx=14, pady=3)
-        self.evaluation_model_entry = ctk.CTkEntry(evaluation_model_row, textvariable=self.evaluation_model_path)
+        self.evaluation_model_entry = StudioEntry(evaluation_model_row, textvariable=self.evaluation_model_path)
         self.evaluation_model_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
         self.evaluation_choose_model = self._button(
             evaluation_model_row,
@@ -4038,7 +4040,7 @@ class SmartLabelApp(ctk.CTk):
         self.evaluation_choose_model.pack(side="left")
         evaluation_data_row = ctk.CTkFrame(evaluation_card, fg_color="transparent")
         evaluation_data_row.pack(fill="x", padx=14, pady=3)
-        self.evaluation_data_entry = ctk.CTkEntry(evaluation_data_row, textvariable=self.evaluation_data_path)
+        self.evaluation_data_entry = StudioEntry(evaluation_data_row, textvariable=self.evaluation_data_path)
         self.evaluation_data_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
         self.evaluation_choose_data = self._button(
             evaluation_data_row,
@@ -4052,7 +4054,7 @@ class SmartLabelApp(ctk.CTk):
         evaluation_action_row = ctk.CTkFrame(evaluation_card, fg_color="transparent")
         evaluation_action_row.pack(fill="x", padx=14, pady=(4, 4))
         ctk.CTkLabel(evaluation_action_row, text="Tập:", text_color=COLORS["muted"]).pack(side="left", padx=(2, 5))
-        self.evaluation_split_menu = StudioOptionMenu(
+        self.evaluation_split_menu = ctk.CTkOptionMenu(
             evaluation_action_row,
             variable=self.evaluation_split,
             values=["test", "val"],

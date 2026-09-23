@@ -5,7 +5,7 @@
 - Giữ CustomTkinter5.2.2/Python3.10.11 hiện có trên Windows; không đổi framework,
   không cài dependency mới. Kiểm thử DPI bằng tính toán/widget, chưa nghiệm thu
   trên nhiều màn hình vật lý hoặc Linux/Nano.
-- Nền navy `#0b151f`, thẻ `#142333`, viền `#294153`; **mọi tiêu đề popup/nhóm
+- Nền navy `#0a131c`, thẻ `#142333`, viền `#294153`; **mọi tiêu đề popup/nhóm
   popup dùng cyan `#22b9ee`** như Quản lý nhãn dự án. Màu trạng thái giữ riêng.
 - Segoe UI: nội dung tối thiểu 13 px logic, tiêu đề nhóm 15 px, tiêu đề popup 20 px.
   Nút/ô nhập tối thiểu 34 px, bo 8 px; thẻ bo 12 px. Màu cảnh báo và lỗi tách riêng.
@@ -25,7 +25,32 @@
 - Thông báo/trợ giúp/xác nhận/nhập chữ hoặc số dùng giao diện chung. X/Esc không
   đồng nghĩa xác nhận. Hộp chọn tệp/thư mục/màu vẫn là hộp chuẩn Windows.
 
-### Bổ sung sau phản hồi về mật độ bố cục — 23/09
+### Hiện hành: nền Hydro, ô nhập đen và phạm vi dropdown — 23/09
+
+- Nền bao quanh và canvas của vùng cuộn popup dùng `#0a131c`, cùng màu với
+  Thuộc tính toàn ảnh Hydro. Thẻ nội dung vẫn `#142333`; viền `#294153`.
+  Khởi tạo StudioToplevel với đúng nền trước khi dựng con; không chỉ tô frame
+  bên ngoài rồi để canvas Tk bên trong màu xám. Tiêu đề giữ cyan `#22b9ee`.
+- `StudioEntry` dùng nền đen `#05090d`, viền mỏng, chữ sáng. Áp dụng cả ô tạo
+  động khi thêm Class/giá trị; không đổi validation, trạng thái khóa hoặc nội dung.
+  Kích thước ô ở màn hình chính giữ mặc định, popup giữ chiều cao34px.
+- Dropdown **không thay toàn ứng dụng**. Các menu chung (project, bộ lọc, SAM,
+  task/device/chiến lược train, phân tập) và thuộc tính bài định vị trở lại
+  CTkOptionMenu gốc. Chỉ luồng Hydro cụ thể dùng StudioOptionMenu mới.
+- Menu Hydro nền tối liền với nút mở, danh sách inset8px, hàng tối thiểu34px
+  bo7px, lựa chọn hiện tại có nền và focus bàn phím có viền riêng. Tên dài
+  xuống dòng; menu có cuộn, giữ chiều cao tối đa360px và nằm trong workarea.
+  Giữ Enter/Esc/Tab/mũi tên, thêm Home/End/PageUp/PageDown. Không bind_all,
+  không chạm clipboard, không cướp grab của popup cha sau khi đóng.
+- Quản lý nhãn: toolbar dùng grid với cột hướng dẫn weight1, không lấy chính
+  chiều rộng nội dung để co wraplength. Hướng dẫn mặc định gom một vùng ngang;
+  mỗi tình trạng có tiêu đề/hành động, mặc định, bảng tên giá trị/ý nghĩa.
+  Contract cố định trình bày ngắn; chi tiết mã vẫn thu gọn. Không đổi schema,
+  ý nghĩa Có/Không, model, default/required hoặc điều kiện xóa/đổi tên.
+- Thùng rác điều chỉnh chiều cao theo số dự án trong giới hạn320–600px,
+  nền canvas đồng nhất; không thay hành vi khôi phục.
+
+### Lịch sử: bổ sung sau phản hồi về mật độ bố cục — 23/09
 
 - Đoạn mô tả xếp dọc phải `fill=x`; bỏ việc tự thu hẹp theo kích thước chữ.
   Bỏ qua Configure1px tạm thời và nhãn ẩn; fit khi Map. Không áp callback wrap
@@ -36,7 +61,7 @@
 - Không thêm nhiều tầng thông báo hoặc bỏ các cảnh báo an toàn để giảm chiều cao.
   Gom hai nút trợ giúp ngưỡng trên một hàng; ngày gieo/số cây cạnh nhau; bộ lọc
   phân tập/vụ/chọn nhóm cùng hàng. Thẻ và control có khoảng đệm12–16px.
-- Dropdown dùng `StudioOptionMenu` toàn ứng dụng, giữ nguyên API CTkOptionMenu:
+- Bản trước dùng `StudioOptionMenu` toàn ứng dụng (đã thu hẹp phạm vi ở mục hiện hành), giữ nguyên API CTkOptionMenu:
   nền navy, mũi tên riêng, menu tối cùng chiều rộng tối thiểu với ô chọn, inset8px,
   dấu chọn hiện tại, cuộn danh sách/tên dài; phím mũi tên/Enter/Esc/Tab.
   Nhấn ngoài/hết focus/ẩn owner/đổi values hoặc variable/hủy widget đều đóng
@@ -83,6 +108,12 @@ các thống kê này. Dữ liệu/nhãn thật và cổng QA/checkpoint giữ n
 
 ## Kiểm chứng và giới hạn
 
+Đợt nền Hydro/label editor: toàn bộ377/377test đạt487,693s. Sau chỉnh hủy
+idle-layout cuối, nhóm popup **27/27 đạt66,337s** trên mã cuối; không gọi lượt
+377test trước đó là lượt đầy đủ378test. Thêm kiểm toolbar650/980/1100px,
+canvas/input đen, menu native sau đổi project, cuộn hàng100 và đóng menu ngay.
+Clipboard test được chặn bằng mock; không dùng clipboard người dùng làm fixture.
+
 Các test thêm tại `tests/test_dialog_design_system.py`: vị trí/DPI giả lập
 1–2×, màn hình âm, chữ nguồn 2×2 ở sidebar hẹp, Fleet transient/no grab/no
 topmost, popup lồng nhau, trợ giúp dài/cuộn, input sai/hủy, footer khi thu nhỏ,
@@ -114,3 +145,9 @@ Tham chiếu chính thức tra ngày 23/09/2026:
 đối chiếu khái niệm ownership; hành vi thực tế kiểm ở Tcl/Tk của Python3.10
 đang cài, không suy ra tương thích Tk9.
 Chỉ áp dụng vào CTk hiện cài; không nâng cấp framework để sửa bố cục.
+
+Đợt nền/dropdown tiếp theo đối chiếu tài liệu chính thức ngày23/09/2026:
+[CTkOptionMenu](https://customtkinter.tomschimansky.com/documentation/widgets/optionmenu/),
+[CTkScrollableFrame](https://customtkinter.tomschimansky.com/documentation/widgets/scrollableframe/).
+Source CTk5.2.2 thực cài xác nhận vùng cuộn có `_parent_canvas` riêng và chỉ
+`configure(fg_color=...)` trên scroll widget mới cập nhật đủ các bề mặt.

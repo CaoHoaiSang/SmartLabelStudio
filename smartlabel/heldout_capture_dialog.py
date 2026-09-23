@@ -9,6 +9,7 @@ from . import studio_dialogs as messagebox
 import tkinter as tk
 
 import customtkinter as ctk
+from .ui_layout import StudioEntry
 from .dropdown import StudioOptionMenu
 from .ui_layout import StudioToplevel
 from PIL import Image, ImageTk
@@ -69,9 +70,9 @@ class HeldoutCaptureDialog(StudioToplevel):
         details.grid_columnconfigure(1, weight=1)
         wrapped_label(details, "Ngày gieo · YYYY-MM-DD", color=MUTED).grid(row=0, column=0, sticky="ew", padx=(0, 8))
         wrapped_label(details, "Số cây", color=MUTED).grid(row=0, column=1, sticky="ew")
-        self.date_entry = ctk.CTkEntry(details, width=1)
+        self.date_entry = StudioEntry(details, width=1)
         self.date_entry.grid(row=1, column=0, sticky="ew", padx=(0, 8), pady=(2, 4))
-        self.count_entry = ctk.CTkEntry(details, width=1)
+        self.count_entry = StudioEntry(details, width=1)
         self.count_entry.insert(0, "16")
         self.count_entry.grid(row=1, column=1, sticky="ew", pady=(2, 4))
         self.controls.extend((self.date_entry, self.count_entry))
@@ -134,7 +135,7 @@ class HeldoutCaptureDialog(StudioToplevel):
 
     def entry(self, parent, title, value):
         self.label(parent, title)
-        widget = ctk.CTkEntry(parent, height=34); widget.insert(0, value); widget.pack(fill="x", padx=12, pady=2)
+        widget = StudioEntry(parent, height=34); widget.insert(0, value); widget.pack(fill="x", padx=12, pady=2)
         self.controls.append(widget); return widget
 
     def check(self, parent, title):
@@ -207,7 +208,7 @@ class HeldoutCaptureDialog(StudioToplevel):
             variable = tk.BooleanVar(value=False)
             checkbox = ctk.CTkCheckBox(card, text=f"{key} · Trống", variable=variable, font=("Segoe UI", 12), command=self.draw_preview)
             checkbox.pack(side="left", padx=8, pady=7)
-            entry = ctk.CTkEntry(card, width=90, placeholder_text="Mã cây?"); entry.pack(side="right", padx=5)
+            entry = StudioEntry(card, width=90, placeholder_text="Mã cây?"); entry.pack(side="right", padx=5)
             self.empty_vars[key] = variable; self.plant_entries[key] = entry
             self.controls.extend((checkbox, entry))
         self._slot_columns = None

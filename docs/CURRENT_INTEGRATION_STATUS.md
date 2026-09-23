@@ -1,6 +1,24 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 23/09/2026
 
-## Sửa mật độ popup/dropdown sau phản hồi — 23/09
+## Hiện hành: sửa nền và quản lý nhãn, trả dropdown định vị — 23/09
+
+Nhánh `fix/smartlabel-hydro-surfaces-label-editor`. Vùng cuộn popup cùng nền
+`#0a131c` với Thuộc tính toàn ảnh Hydro, kể cả canvas Tk; ô nhập dùng nền đen
+qua StudioEntry (bao gồm dòng thêm mới). Khôi phục CTkOptionMenu gốc cho
+menu chung và bài định vị; menu Hydro riêng có hàng bo nhẹ, khoảng đệm,
+tên dài xuống dòng, cuộn và bàn phím. Không bind_all hoặc truy cập clipboard.
+Popup Quản lý nhãn sửa toolbar grid, thu gọn phần contract và tách rõ tên
+giá trị/ý nghĩa; thùng rác bớt khoảng trống theo số dự án. Giữ các guard nhãn,
+schema, model và QA. Xem [quy tắc hiện hành](DIALOG_DESIGN_SYSTEM.md).
+
+377/377test toàn bộ đạt487,693s,14/14test nhãn Hydro đạt. Sau cleanup timer
+cuối, nhóm popup chạy lại **27/27 đạt66,337s** (có test mới đóng ngay trước idle).
+Compileall/diff check đạt. Không tăng timeout hoặc nới guard để vượt test.
+Chưa nghiệm thu trực quan trên app thật: Computer Use vẫn lỗi
+SetIsBorderRequired/0x80004002 sau một lần phục hồi. Không tự đóng app đang
+làm; cần lưu việc và mở lại để nạp source. Kết quả test cuối ghi ở báo cáo AI_KL.
+
+## Mốc trước: sửa mật độ popup/dropdown sau phản hồi — 23/09
 
 Nhánh `fix/smartlabel-popup-density-dropdowns`: sửa vòng tự co wraplength khiến
 mô tả còn100px dù khung rộng; title cyan#22b9ee, inset12–16px, gom các hàng ngắn.

@@ -3,6 +3,7 @@ from __future__ import annotations
 import tkinter as tk
 
 import customtkinter as ctk
+from .ui_layout import StudioEntry
 from .ui_layout import StudioToplevel
 from .ui_layout import setup_dialog, dialog_footer, wrapped_label, MUTED
 
@@ -40,7 +41,7 @@ class DatasetVersionDialog(StudioToplevel):
         wrapped_label(panel, "Nhập tên để dễ nhận biết, hoặc để trống để hệ thống tự đặt tên theo thời gian.",
                       color=MUTED).pack(fill="x", padx=18, pady=(0, 10))
 
-        self.name_entry = ctk.CTkEntry(
+        self.name_entry = StudioEntry(
             panel,
             height=38,
             textvariable=self.name_var,

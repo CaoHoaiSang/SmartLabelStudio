@@ -5,7 +5,6 @@ import tkinter as tk
 from . import studio_dialogs as messagebox
 
 import customtkinter as ctk
-from .dropdown import StudioOptionMenu
 from .ui_layout import StudioToplevel
 
 from .dataset_manager import DatasetManager
@@ -38,7 +37,7 @@ class SplitManagerDialog(StudioToplevel):
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", padx=14, pady=(14, 6))
         ctk.CTkLabel(header, text="Lọc theo tập", text_color=MUTED).pack(side="left", padx=(0, 12))
-        self.filter_menu = StudioOptionMenu(
+        self.filter_menu = ctk.CTkOptionMenu(
             header,
             values=list(self.FILTERS),
             width=150,
@@ -48,7 +47,7 @@ class SplitManagerDialog(StudioToplevel):
         self.filter_menu.pack(side="left")
         filters = header
         self.cycle_choices = {f"{i+1}. {row['title']}": row['key'] for i, row in enumerate(cycle_rows(project))}
-        self.cycle_menu = StudioOptionMenu(filters, values=["Tất cả vụ", *self.cycle_choices],
+        self.cycle_menu = ctk.CTkOptionMenu(filters, values=["Tất cả vụ", *self.cycle_choices],
                                           command=lambda _: self._refresh(), width=200)
         ctk.CTkButton(filters, text="Chọn nhóm đang lọc", width=146, command=lambda: self.listbox.select_set(0, tk.END)).pack(side="right")
         self.cycle_menu.pack(side="left", fill="x", expand=True, padx=12)

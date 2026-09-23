@@ -41,6 +41,11 @@ def main():
                 time.sleep(.01)
             profiler.disable()
             print(type(dialog).__name__, "construct_ms", round(constructed * 1000), flush=True)
+            if isinstance(dialog, ProjectSettingsDialog):
+                print("attribute_toolbar", dialog.attribute_help.winfo_width(),
+                      dialog.attribute_help.winfo_height(), flush=True)
+                print("attribute_card_heights", [group["frame"].winfo_height()
+                      for group in dialog.attribute_groups.values()], flush=True)
             for child in descendants(dialog):
                 if isinstance(child, ctk.CTkLabel) and any(str(child.cget("text")).startswith(s)
                         for s in ("Mỗi tình trạng", "Thông tin đã có")):

@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import filedialog
 from . import studio_dialogs as messagebox
 import customtkinter as ctk
+from .ui_layout import StudioEntry
 from .dropdown import StudioOptionMenu
 from .ui_layout import StudioToplevel
 
@@ -64,7 +65,7 @@ class ExternalBenchmarkDialog(StudioToplevel):
             entries = {}
             for col, (name, title) in enumerate((("lowThreshold", "Low"), ("highThreshold", "High"))):
                 ctk.CTkLabel(bounds, text=title, font=("Segoe UI", 12), text_color=MUTED).grid(row=0, column=col)
-                entry = ctk.CTkEntry(bounds, width=72); entry.insert(0, str(defaults[key][name])); entry.grid(row=1, column=col, padx=4)
+                entry = StudioEntry(bounds, width=72); entry.insert(0, str(defaults[key][name])); entry.grid(row=1, column=col, padx=4)
                 entries[name] = entry; self.controls.append(entry)
             self.thresholds[key] = entries
         self.attest = ctk.CTkCheckBox(model, text="Tôi xác nhận TEST chưa dùng để học, chọn model/ngưỡng,\nkể cả các checkpoint cha.", font=("Segoe UI", 13))

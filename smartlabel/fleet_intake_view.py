@@ -2,6 +2,7 @@
 import webbrowser
 
 import customtkinter as ctk
+from .ui_layout import StudioEntry
 from .ui_layout import StudioToplevel
 
 from .fleet_intake import fleet_inbox_url, list_staged
@@ -20,7 +21,7 @@ class FleetIntakeView(StudioToplevel):
         body = ctk.CTkScrollableFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=12, pady=(0, 12))
         destination = dialog_section(body, "Project đích", project.name)
-        identity = ctk.CTkEntry(destination, height=34)
+        identity = StudioEntry(destination, height=34)
         identity.insert(0, project.id)
         identity.configure(state="readonly")
         identity.pack(fill="x")
@@ -28,7 +29,7 @@ class FleetIntakeView(StudioToplevel):
             "Mở Fleet, chọn đợt đã duyệt cho phát triển model và cấp mã nhập đúng project. Mã hết hạn sau tối đa 5 phút; không chia sẻ mã.")
         ctk.CTkButton(intake, text="Mở hộp thư Fleet ↗", height=34, fg_color="#294153",
             command=lambda: webbrowser.open(fleet_inbox_url(project.id))).pack(anchor="w", pady=(0, 10))
-        self.code = ctk.CTkEntry(intake, height=38, placeholder_text="Dán mã FleetImportV1.…", show="•")
+        self.code = StudioEntry(intake, height=38, placeholder_text="Dán mã FleetImportV1.…", show="•")
         self.code.pack(fill="x", pady=(0, 10))
         self.submit = ctk.CTkButton(intake, text="Nhận vào vùng chờ project này", height=36, command=self.start)
         self.submit.pack(anchor="e")

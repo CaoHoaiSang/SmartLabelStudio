@@ -87,6 +87,22 @@ class HydroReviewUiTests(unittest.TestCase):
         self.assertEqual(tools.master.master.pack_slaves().index(tools.master) + 1,
                          tools.master.master.pack_slaves().index(self.app.dataset_statistics_card))
 
+    def test_localization_keeps_native_menus_when_switching_from_hydro(self):
+        import customtkinter as ctk
+        from smartlabel.dropdown import StudioOptionMenu
+        from smartlabel.ui_layout import INPUT
+        self.assertTrue(all(isinstance(w, StudioOptionMenu) for w in self.app.attribute_widgets.values()))
+        self.app._change_project_context(deepcopy(self.bottle))
+        for name in ("project_menu", "device_menu", "sam_config_menu", "train_task_menu",
+                     "train_split_strategy_menu", "train_device_menu", "evaluation_split_menu",
+                     "image_filter", "label_filter_field", "label_filter_value"):
+            self.assertIs(type(getattr(self.app, name)), ctk.CTkOptionMenu, name)
+        self.assertTrue(all(type(w) is ctk.CTkOptionMenu for w in self.app.attribute_widgets.values()))
+        for name in ("model_entry", "deploy_model_entry", "evaluation_model_entry", "evaluation_data_entry"):
+            self.assertEqual(getattr(self.app, name).cget("fg_color"), INPUT)
+        self.app._change_project_context(deepcopy(self.hydro))
+        self.assertTrue(all(isinstance(w, StudioOptionMenu) for w in self.app.attribute_widgets.values()))
+
     def test_overview_counts_hydro_attributes_and_keeps_bottle_geometry(self):
         self.app.project.images[0].review_status = "reviewed"
         self.app._refresh_project_statistics()

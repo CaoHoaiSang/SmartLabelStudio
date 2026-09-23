@@ -10,7 +10,7 @@ from tkinter import ttk
 from . import studio_dialogs as messagebox
 
 import customtkinter as ctk
-from .dropdown import StudioOptionMenu
+from .ui_layout import StudioEntry
 from .ui_layout import StudioToplevel
 from PIL import Image, ImageOps, ImageTk
 
@@ -108,7 +108,7 @@ class SmartFrameFilterDialog(StudioToplevel):
         self.source_var = tk.StringVar(value="Tất cả ảnh")
         self.include_existing_var = tk.BooleanVar(value=False)
         ctk.CTkLabel(settings_top, text="Nguồn", text_color="#a9bdcc").pack(side="left", padx=(12, 4), pady=6)
-        self.source_menu = StudioOptionMenu(
+        self.source_menu = ctk.CTkOptionMenu(
             settings_top,
             values=list(self.SOURCE_LABELS),
             variable=self.source_var,
@@ -122,7 +122,7 @@ class SmartFrameFilterDialog(StudioToplevel):
             ("Giữ nền (%)", self.negative_var, 58),
         ):
             ctk.CTkLabel(settings_bottom, text=label, text_color="#a9bdcc").pack(side="left", padx=(12, 4), pady=5)
-            ctk.CTkEntry(settings_bottom, width=width, textvariable=variable).pack(side="left", padx=(0, 8), pady=5)
+            StudioEntry(settings_bottom, width=width, textvariable=variable).pack(side="left", padx=(0, 8), pady=5)
         model_exists = bool(self.project.active_model and Path(self.project.active_model).exists()
                             and self.project.metadata.get("template") != "Hydroponic Slot Condition")
         self.use_model = ctk.CTkCheckBox(settings_top, text="Dùng model", width=125)
