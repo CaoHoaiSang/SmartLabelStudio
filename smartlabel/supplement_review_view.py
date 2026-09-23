@@ -8,7 +8,7 @@ import gc
 from pathlib import Path
 from queue import Queue, Empty
 from threading import Event, Thread
-from tkinter import messagebox
+from . import studio_dialogs as messagebox
 
 from . import image_filters
 from .hydro_labels import display_values, enforce_presence

@@ -70,6 +70,21 @@ class HydroReviewUiTests(unittest.TestCase):
         self.app.label_filter_value.set(value)
         self.app._change_image_filter()
 
+    def test_test_tools_stay_together_in_dataset_and_hide_for_other_projects(self):
+        import customtkinter as ctk
+        tools = self.app.heldout_tools
+        self.assertTrue(tools.winfo_manager())
+        actions = next(w for w in tools.winfo_children() if isinstance(w, ctk.CTkFrame)
+                       and len([b for b in w.winfo_children() if isinstance(b, ctk.CTkButton)]) == 2)
+        buttons = [w for w in actions.winfo_children() if isinstance(w, ctk.CTkButton)]
+        self.assertEqual([b.cget("text") for b in buttons], ["1. Thu thập ảnh TEST", "2. Bộ TEST ngoài"])
+        self.assertEqual([int(b.grid_info()["row"]) for b in buttons], [0, 0])
+        self.app._change_project_context(deepcopy(self.bottle))
+        self.assertFalse(tools.winfo_manager())
+        self.app._change_project_context(deepcopy(self.hydro))
+        self.assertEqual(tools.master.pack_slaves().index(tools) + 1,
+                         tools.master.pack_slaves().index(self.app.dataset_statistics_card))
+
     def test_overview_counts_hydro_attributes_and_keeps_bottle_geometry(self):
         self.app.project.images[0].review_status = "reviewed"
         self.app._refresh_project_statistics()

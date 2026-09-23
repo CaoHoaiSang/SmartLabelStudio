@@ -4,7 +4,7 @@ import webbrowser
 import customtkinter as ctk
 
 from .fleet_intake import fleet_inbox_url, list_staged
-from .ui_layout import center_dialog
+from .ui_layout import setup_dialog, dialog_header, dialog_section, dialog_footer, wrapped_label, MUTED
 
 
 class FleetIntakeView(ctk.CTkToplevel):
@@ -12,34 +12,39 @@ class FleetIntakeView(ctk.CTkToplevel):
         super().__init__(app)
         self.app, self.project, self.root = app, project, root
         self.title("Nhận dữ liệu từ Fleet · Vùng chờ")
-        center_dialog(self, app, 850, 650)
-        self.protocol("WM_DELETE_WINDOW", self.close)
-        ctk.CTkLabel(self, text=f"Project đích: {project.name}", font=("Segoe UI", 18, "bold")).pack(padx=20, pady=(20, 8))
-        identity = ctk.CTkEntry(self, width=550)
+        footer = dialog_footer(self)
+        ctk.CTkButton(footer, text="Đóng", width=100, height=36, fg_color="#294153", command=self.close).pack(side="right")
+        wrapped_label(footer, "Đóng cửa sổ không hủy lượt đang xử lý.", color=MUTED).pack(side="left", fill="x", expand=True, padx=(0, 16))
+        dialog_header(self, "Nhận dữ liệu từ Fleet", "Nhận vào vùng chờ → kiểm tra nguồn → gán nhãn")
+        body = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        destination = dialog_section(body, "Project đích", project.name)
+        identity = ctk.CTkEntry(destination, height=34)
         identity.insert(0, project.id)
         identity.configure(state="readonly")
-        identity.pack(padx=20, pady=8)
-        ctk.CTkLabel(self, text="1. Mở Fleet, chọn đợt đã duyệt cho phát triển model và cấp mã nhập đúng project.\n"
-                    "2. Dán mã tại đây. Mã hết hạn sau tối đa 5 phút; không chia sẻ mã.\n"
-                    "Sau khi nhận, dùng Mở để gán nhãn trong nguồn Khách đóng góp.\n"
-                    "Duyệt nhãn chưa cho phép dùng train/export.\n"
-                    "Đóng cửa sổ này không hủy lượt đang xử lý. Hạn lưu trên Fleet vẫn áp dụng.",
-                    justify="left", wraplength=720).pack(padx=20, pady=8)
-        ctk.CTkButton(self, text="Mở hộp thư Fleet", command=lambda: webbrowser.open(fleet_inbox_url(project.id))).pack(pady=8)
-        self.code = ctk.CTkEntry(self, width=650, placeholder_text="FleetImportV1.…", show="•")
-        self.code.pack(padx=20, pady=8)
-        self.submit = ctk.CTkButton(self, text="Nhận vào vùng chờ project này", command=self.start)
-        self.submit.pack(pady=8)
-        self.review_button = ctk.CTkButton(self, text="Mở đợt đã nhập để gán nhãn", command=self.open_review)
-        self.review_button.pack(pady=4)
-        self.preflight_button = ctk.CTkButton(self, text="Kiểm tra nguồn và dữ liệu trước dataset", command=self.preflight)
-        self.preflight_button.pack(pady=4)
-        self.message = ctk.CTkLabel(self, text="", wraplength=720, justify="left")
-        self.message.pack(padx=20, pady=8)
-        self.records = ctk.CTkTextbox(self, height=130, wrap="word")
-        self.records.pack(fill="both", expand=True, padx=20, pady=8)
-        ctk.CTkButton(self, text="Đóng", command=self.close).pack(pady=(8, 20))
+        identity.pack(fill="x")
+        intake = dialog_section(body, "01  ·  Cấp mã và nhận ảnh",
+            "Mở Fleet, chọn đợt đã duyệt cho phát triển model và cấp mã nhập đúng project. Mã hết hạn sau tối đa 5 phút; không chia sẻ mã.")
+        ctk.CTkButton(intake, text="Mở hộp thư Fleet ↗", height=34, fg_color="#294153",
+            command=lambda: webbrowser.open(fleet_inbox_url(project.id))).pack(anchor="w", pady=(0, 10))
+        self.code = ctk.CTkEntry(intake, height=38, placeholder_text="Dán mã FleetImportV1.…", show="•")
+        self.code.pack(fill="x", pady=(0, 10))
+        self.submit = ctk.CTkButton(intake, text="Nhận vào vùng chờ project này", height=36, command=self.start)
+        self.submit.pack(anchor="e")
+        review = dialog_section(body, "02  ·  Dữ liệu tại máy",
+            "Mở để gán nhãn trong nguồn Khách đóng góp. Duyệt nhãn chưa cho phép dùng train/export; hạn lưu và quyền hiện tại trên Fleet vẫn áp dụng.")
+        self.records = ctk.CTkTextbox(review, height=130, wrap="word", font=("Segoe UI", 13), fg_color="#0b151f", corner_radius=8)
+        self.records.pack(fill="x", pady=(0, 10))
+        actions = ctk.CTkFrame(review, fg_color="transparent")
+        actions.pack(fill="x"); actions.grid_columnconfigure((0, 1), weight=1, uniform="review")
+        self.review_button = ctk.CTkButton(actions, text="Mở để gán nhãn", height=36, command=self.open_review)
+        self.review_button.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        self.preflight_button = ctk.CTkButton(actions, text="Kiểm tra trước dataset", height=36, fg_color="#294153", command=self.preflight)
+        self.preflight_button.grid(row=0, column=1, sticky="ew", padx=(6, 0))
+        self.message = wrapped_label(body, "")
+        self.message.pack(fill="x", padx=12, pady=4)
         self.refresh()
+        setup_dialog(self, app, 850, 770, close=self.close, modal=False)
 
     def refresh(self):
         try:

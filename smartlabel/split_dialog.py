@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from typing import Callable
 import tkinter as tk
-from tkinter import messagebox
+from . import studio_dialogs as messagebox
 
 import customtkinter as ctk
 
 from .dataset_manager import DatasetManager
 from .models import Project
 from .benchmark_contract import cycle_rows
+from .ui_layout import setup_dialog, dialog_header, dialog_footer, wrapped_label, MUTED
 
 
 class SplitManagerDialog(ctk.CTkToplevel):
@@ -29,18 +30,12 @@ class SplitManagerDialog(ctk.CTkToplevel):
         self.on_changed = on_changed
         self.rows: list[dict] = []
         self.title("Quản lý Train / Validation / Test theo capture group")
-        self.geometry("920x650")
-        self.minsize(760, 520)
-        self.transient(parent)
-        self.grab_set()
+        actions = dialog_footer(self)
+        dialog_header(self, "Phân tập theo nhóm ảnh", "Cả nhóm luôn di chuyển cùng nhau để tránh ảnh liên quan lọt sang nhiều tập.")
 
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", padx=14, pady=(14, 6))
-        ctk.CTkLabel(
-            header,
-            text="Mỗi dòng là một capture group; toàn bộ frame trong nhóm luôn di chuyển cùng nhau.",
-            text_color="#8fa6b8",
-        ).pack(side="left")
+        ctk.CTkLabel(header, text="Lọc theo tập", text_color=MUTED).pack(side="left", padx=(0, 12))
         self.filter_menu = ctk.CTkOptionMenu(
             header,
             values=list(self.FILTERS),
@@ -48,14 +43,14 @@ class SplitManagerDialog(ctk.CTkToplevel):
             command=lambda _value: self._refresh(),
         )
         self.filter_menu.set("Tất cả")
-        self.filter_menu.pack(side="right")
+        self.filter_menu.pack(side="left")
         filters = ctk.CTkFrame(self, fg_color="transparent")
         filters.pack(fill="x", padx=14)
         self.cycle_choices = {f"{i+1}. {row['title']}": row['key'] for i, row in enumerate(cycle_rows(project))}
         self.cycle_menu = ctk.CTkOptionMenu(filters, values=["Tất cả vụ", *self.cycle_choices],
-                                          command=lambda _: self._refresh(), width=530)
-        self.cycle_menu.pack(side="left")
+                                          command=lambda _: self._refresh(), width=200)
         ctk.CTkButton(filters, text="Chọn các nhóm đang lọc", command=lambda: self.listbox.select_set(0, tk.END)).pack(side="right")
+        self.cycle_menu.pack(side="left", fill="x", expand=True, padx=(0, 12))
 
         self.listbox = tk.Listbox(
             self,
@@ -72,15 +67,17 @@ class SplitManagerDialog(ctk.CTkToplevel):
         self.listbox.pack(fill="both", expand=True, padx=14, pady=6)
         self.listbox.bind("<<ListboxSelect>>", lambda _event: self._show_selected())
 
-        self.detail = ctk.CTkLabel(self, text="Chọn một nhóm để xem.", anchor="w", text_color="#8fa6b8")
+        self.detail = wrapped_label(self, "Chọn một nhóm để xem.", color=MUTED)
         self.detail.pack(fill="x", padx=14, pady=(2, 6))
-        actions = ctk.CTkFrame(self, fg_color="transparent")
-        actions.pack(fill="x", padx=14, pady=(0, 14))
-        ctk.CTkButton(actions, text="→ TRAIN", width=150, fg_color="#217fa9", command=lambda: self._move("train")).pack(side="left", padx=3)
-        ctk.CTkButton(actions, text="→ VALIDATION", width=170, fg_color="#7655b5", command=lambda: self._move("val")).pack(side="left", padx=3)
-        ctk.CTkButton(actions, text="→ TEST", width=150, fg_color="#a94747", command=lambda: self._move("test")).pack(side="left", padx=3)
-        ctk.CTkButton(actions, text="Đóng", width=120, fg_color="#415466", command=self.destroy).pack(side="right", padx=3)
+        actions.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="actions")
+        for index, (text, color, command) in enumerate((
+                ("→ TRAIN", "#217fa9", lambda: self._move("train")),
+                ("→ VALIDATION", "#7655b5", lambda: self._move("val")),
+                ("→ TEST", "#a94747", lambda: self._move("test")),
+                ("Đóng", "#415466", self.destroy))):
+            ctk.CTkButton(actions, text=text, width=1, height=36, fg_color=color, command=command).grid(row=0, column=index, sticky="ew", padx=3)
         self._refresh()
+        setup_dialog(self, parent, 980, 720)
 
     def _refresh(self) -> None:
         wanted = self.FILTERS.get(self.filter_menu.get(), "")

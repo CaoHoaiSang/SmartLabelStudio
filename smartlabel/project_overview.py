@@ -6,6 +6,8 @@ from .hydro_labels import model_attributes
 from .label_schema import meaning_for
 from .supplement_review import load_review
 from .training_supplements import review_attributes
+from .heldout_collection import load_collection
+from .ui_layout import wrapped_label
 
 
 def summarize_supplement_rows(project, rows):
@@ -38,6 +40,20 @@ def summarize_supplement_rows(project, rows):
         "rejected": len(excluded),
         "legacy_archived": sum(row.get("archived") is True for row in rows),
         "attributes": attributes,
+    }
+
+
+def summarize_heldout_rows(project, rows):
+    """Only reviewed local TEST labels, never guesses from empty-slot declarations."""
+    rows = list(rows or [])
+    reviewed = [row for row in rows if row.get("reviewStatus") == "reviewed"]
+    rejected = sum(row.get("reviewStatus") == "rejected" for row in rows)
+    return {
+        "total": len(rows), "reviewed": len(reviewed), "rejected": rejected,
+        "pending": len(rows) - len(reviewed) - rejected,
+        "attributes": [{"id": attr["id"], "title": attr["displayName"],
+            "counts": Counter(meaning_for(attr, row.get("attributes", {}).get(attr["id"])) or "missing"
+                              for row in reviewed)} for attr in model_attributes(project)],
     }
 
 
@@ -100,23 +116,10 @@ class ProjectOverview(ctk.CTkScrollableFrame):
         self.label(self, "Có / Không: số ảnh rọ đã duyệt theo từng thuộc tính.", color=muted)
         rows = summary["image_attributes"]
         for row in rows:
-            card = ctk.CTkFrame(self, fg_color=self.colors["panel2"], corner_radius=10)
-            card.pack(fill="x", padx=6, pady=5)
-            header = ctk.CTkFrame(card, fg_color="transparent")
-            header.pack(fill="x", padx=12, pady=(8, 4))
-            header.grid_columnconfigure(0, weight=1)
-            ctk.CTkLabel(header, text=row["title"], anchor="w", justify="left", width=1, wraplength=170,
-                         font=("Segoe UI Semibold", 14)).grid(row=0, column=0, sticky="ew", padx=(0, 8))
             counts = row["reviewed"]
-            for col, (key, caption, color) in enumerate((("positive", "Có", "#69d7bd"), ("negative", "Không", "#9bc7dd")), 1):
-                ctk.CTkLabel(header, text=f"{caption}  {counts.get(key, 0):,}", fg_color="#1b3546",
-                    corner_radius=6, font=("Segoe UI Semibold", 13), text_color=color).grid(row=0, column=col, padx=(6, 0), ipadx=8, ipady=2)
-            details = [f"{caption} {counts[key]}" for key, caption in
-                       (("uncertain", "Chưa chắc"), ("not_applicable", "Không áp dụng"), ("missing", "Thiếu nhãn")) if counts.get(key)]
             pending = sum(row["pending"].values())
-            if pending:
-                details.append(f"Chưa duyệt / bị loại {pending}")
-            self.label(card, "   ·   ".join(details) if details else "Các ảnh đã duyệt đều có nhãn Có / Không.", color=muted, size=11)
+            card = self.attribute_card(self, row["title"], counts,
+                f"Chưa duyệt / bị loại {pending}" if pending else "")
             splits = ctk.CTkFrame(card, fg_color="#10202d", corner_radius=8)
             splits.grid_columnconfigure((0, 1, 2, 3), weight=1)
             for i, caption in enumerate(("Ảnh đủ điều kiện", "TRAIN", "VAL", "TEST")):
@@ -136,6 +139,26 @@ class ProjectOverview(ctk.CTkScrollableFrame):
             self.label(self, "TEST còn thiếu một trong hai nhóm Có / Không: " + ", ".join(missing)
                        + ". Chưa đủ dữ liệu để đánh giá hai nhóm.", color=self.colors["warn"], size=11)
         self.render_supplements(store, project, muted)
+        self.render_heldout(store, project, muted)
+
+    def attribute_card(self, parent, title, counts, detail=""):
+        """Same count chips and label hierarchy for Giàn / Bổ trợ / TEST."""
+        card = ctk.CTkFrame(parent, fg_color=self.colors["panel2"], corner_radius=10)
+        card.pack(fill="x", padx=6, pady=5)
+        header = ctk.CTkFrame(card, fg_color="transparent")
+        header.pack(fill="x", padx=12, pady=(8, 4))
+        header.grid_columnconfigure(0, weight=1)
+        wrapped_label(header, title, size=14, bold=True).grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        for col, (key, caption, color) in enumerate((("positive", "Có", "#69d7bd"), ("negative", "Không", "#9bc7dd")), 1):
+            ctk.CTkLabel(header, text=f"{caption}  {counts.get(key, 0):,}", fg_color="#1b3546",
+                corner_radius=6, font=("Segoe UI Semibold", 13), text_color=color).grid(row=0, column=col, padx=(6, 0), ipadx=8, ipady=2)
+        details = [f"{caption} {counts[key]}" for key, caption in
+                   (("uncertain", "Chưa chắc"), ("not_applicable", "Không áp dụng"), ("missing", "Thiếu nhãn")) if counts.get(key)]
+        if detail:
+            details.append(detail)
+        wrapped_label(card, "   ·   ".join(details) if details else "Các ảnh được tính đều có nhãn Có / Không.",
+                      size=12, color=self.colors["muted"]).pack(fill="x", padx=12, pady=(0, 8))
+        return card
 
     def render_supplements(self, store, project, muted):
         """Render the separate TRAIN-only source after all captured-image facts."""
@@ -162,13 +185,10 @@ class ProjectOverview(ctk.CTkScrollableFrame):
             if supplement_summary["rejected"]:
                 details.append(f"Từ chối {supplement_summary['rejected']}")
             self.label(supplement, "   ·   ".join(details), color=muted, size=11)
+            self.label(supplement, "Có / Không: ảnh đã duyệt và đang bật dùng TRAIN.", color=muted)
             for attribute in supplement_summary["attributes"]:
-                self.label(
-                    supplement,
-                    f"{attribute['title']}:  Có {attribute['positive']:,}   ·   Không {attribute['negative']:,}",
-                    color="#b9d7e8",
-                    size=11,
-                )
+                self.attribute_card(supplement, attribute["title"], attribute,
+                    f"Chưa duyệt {supplement_summary['pending']} · Tạm tắt {supplement_summary['paused']} · Từ chối {supplement_summary['rejected']}")
             self.label(
                 supplement,
                 "Ảnh bổ trợ đã duyệt chỉ bổ sung TRAIN; không thay ảnh giàn trong VAL / TEST.",
@@ -177,6 +197,24 @@ class ProjectOverview(ctk.CTkScrollableFrame):
             )
         except (OSError, ValueError, TypeError, KeyError) as exc:
             self.label(supplement, f"Cần kiểm tra danh sách bổ trợ: {exc}", color=self.colors["warn"], size=11)
+
+    def render_heldout(self, store, project, muted):
+        section = ctk.CTkFrame(self, fg_color="#1c243b", corner_radius=10)
+        section.pack(fill="x", padx=6, pady=(2, 12))
+        self.label(section, "BỘ TEST ĐỘC LẬP · KHÔNG DÙNG TRAIN", size=13, bold=True, color="#c0b7ef")
+        try:
+            data, _ = load_collection(store, project)
+            stats = summarize_heldout_rows(project, data["images"])
+            self.label(section, f"{len(data['lots'])} lô · {stats['total']:,} ảnh thu thập · "
+                f"{stats['reviewed']:,} đã duyệt · {stats['pending']:,} chưa duyệt", color=muted)
+            for attribute in stats["attributes"]:
+                self.attribute_card(section, attribute["title"], attribute["counts"],
+                    f"Chưa duyệt {stats['pending']} · Từ chối {stats['rejected']}")
+            self.label(section, "Chỉ tính ảnh trong nguồn Bộ TEST, không cộng vào TRAIN/VAL. "
+                "Bản bộ TEST đã đóng băng/nhập ngoài được quản lý riêng tại Dataset → Bộ TEST ngoài, không cộng lặp ở đây.",
+                color=muted, size=12)
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            self.label(section, f"Chưa đọc được kho TEST: {exc}", color=self.colors["warn"], size=12)
 
     def render_geometry(self, project, summary):
         self.label(self, f"{summary['annotations']:,} nhãn vật thể", size=18, bold=True)

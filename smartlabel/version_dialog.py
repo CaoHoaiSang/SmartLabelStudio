@@ -3,6 +3,7 @@ from __future__ import annotations
 import tkinter as tk
 
 import customtkinter as ctk
+from .ui_layout import setup_dialog, dialog_footer, wrapped_label, MUTED
 
 
 class DatasetVersionDialog(ctk.CTkToplevel):
@@ -14,15 +15,12 @@ class DatasetVersionDialog(ctk.CTkToplevel):
         self.name_var = tk.StringVar(value="")
 
         self.title("Tạo phiên bản dataset")
-        self.geometry("520x230")
-        self.resizable(False, False)
         self.configure(fg_color="#081019")
-        self.transient(parent)
-        self.grab_set()
         self.protocol("WM_DELETE_WINDOW", self._cancel)
         self.bind("<Escape>", lambda _event: self._cancel())
         self.bind("<Return>", lambda _event: self._create())
 
+        actions = dialog_footer(self)
         panel = ctk.CTkFrame(
             self,
             corner_radius=14,
@@ -38,13 +36,8 @@ class DatasetVersionDialog(ctk.CTkToplevel):
             font=("Segoe UI Semibold", 18),
             text_color="#22b9ee",
         ).pack(anchor="w", padx=18, pady=(16, 4))
-        ctk.CTkLabel(
-            panel,
-            text="Nhập tên để dễ nhận biết, hoặc để trống để hệ thống tự đặt tên theo thời gian.",
-            wraplength=455,
-            justify="left",
-            text_color="#9bb0c0",
-        ).pack(anchor="w", padx=18, pady=(0, 10))
+        wrapped_label(panel, "Nhập tên để dễ nhận biết, hoặc để trống để hệ thống tự đặt tên theo thời gian.",
+                      color=MUTED).pack(fill="x", padx=18, pady=(0, 10))
 
         self.name_entry = ctk.CTkEntry(
             panel,
@@ -54,8 +47,6 @@ class DatasetVersionDialog(ctk.CTkToplevel):
         )
         self.name_entry.pack(fill="x", padx=18)
 
-        actions = ctk.CTkFrame(panel, fg_color="transparent")
-        actions.pack(fill="x", padx=18, pady=(16, 14))
         ctk.CTkButton(
             actions,
             text="HỦY",
@@ -73,16 +64,12 @@ class DatasetVersionDialog(ctk.CTkToplevel):
             command=self._create,
         ).pack(side="right")
 
+        setup_dialog(self, parent, 580, 340, close=self._cancel)
         self.after(80, self._focus_and_center)
 
     def _focus_and_center(self) -> None:
         if not self.winfo_exists():
             return
-        self.update_idletasks()
-        parent = self.master
-        x = parent.winfo_rootx() + max(0, (parent.winfo_width() - self.winfo_width()) // 2)
-        y = parent.winfo_rooty() + max(0, (parent.winfo_height() - self.winfo_height()) // 2)
-        self.geometry(f"+{x}+{y}")
         self.name_entry.focus_set()
 
     def _create(self) -> None:

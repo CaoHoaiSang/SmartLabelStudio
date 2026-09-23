@@ -6,7 +6,8 @@ from threading import Event, Thread
 import textwrap
 import logging
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
+from . import studio_dialogs as messagebox
 
 import customtkinter as ctk
 from PIL import Image, ImageOps, ImageTk
@@ -23,7 +24,7 @@ from .frame_filter import (
 from .models import Project
 from .project_store import ProjectStore
 from .ui_components import ToolTip
-from .ui_layout import center_dialog
+from .ui_layout import setup_dialog
 
 logger = logging.getLogger(__name__)
 
@@ -78,12 +79,10 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
         self.preview_photo = None
         self.preview_source = None
         self.title("Lọc ảnh thông minh")
-        self.transient(parent)
         self.configure(fg_color="#081019")
         self.protocol("WM_DELETE_WINDOW", self._close)
         self._build()
-        center_dialog(self, parent, 1380, 850)
-        self.grab_set()
+        setup_dialog(self, parent, 1380, 850, close=self._close)
         self.poll_job = self.after(120, self._poll)
 
     def _build(self):

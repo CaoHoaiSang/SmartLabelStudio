@@ -4,7 +4,8 @@ from pathlib import Path
 from queue import Queue, Empty
 from threading import Thread, Event
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
+from . import studio_dialogs as messagebox
 import customtkinter as ctk
 
 from .benchmark_contract import (cycle_rows, export_benchmark, import_benchmark, list_benchmarks,
@@ -12,6 +13,7 @@ from .benchmark_contract import (cycle_rows, export_benchmark, import_benchmark,
 from .external_evaluation import evaluate_external, approve_evaluation, load_evaluation
 from .hydro_labels import model_attributes
 from .hydro_model_tools import threshold_defaults, file_hash
+from .ui_layout import setup_dialog, dialog_header, dialog_section, dialog_footer, wrapped_label, MUTED
 
 
 class ExternalBenchmarkDialog(ctk.CTkToplevel):
@@ -22,61 +24,62 @@ class ExternalBenchmarkDialog(ctk.CTkToplevel):
         self.events, self.cancel = Queue(), Event()
         self.controls = []
         self.title("Bộ TEST ngoài · Đánh giá đúng checkpoint")
-        self.geometry("1080x820")
-        self.minsize(900, 680)
-        self.transient(app)
-        self.grab_set()
-        self.protocol("WM_DELETE_WINDOW", self.close)
-        body = ctk.CTkScrollableFrame(self)
-        body.pack(fill="both", expand=True, padx=12, pady=12)
-        ctk.CTkLabel(body, text="1. Tạo hoặc nhập bộ TEST độc lập", font=("Arial", 18, "bold")).pack(anchor="w")
-        ctk.CTkLabel(body, text="Ảnh đã duyệt từ vụ Hydro hoặc lô TEST riêng. Bộ TEST cách ly; không tự thêm vào TRAIN/VAL hay đổi phân tập.",
-                     anchor="w").pack(fill="x")
+        footer = dialog_footer(self)
+        ctk.CTkButton(footer, text="Đóng", width=90, height=36, fg_color="#294153", command=self.close).pack(side="right")
+        ctk.CTkButton(footer, text="Dừng tác vụ", width=120, height=36, fg_color="#294153", command=self.cancel.set).pack(side="right", padx=8)
+        self.status = wrapped_label(footer, "Sẵn sàng", color=MUTED)
+        self.status.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        dialog_header(self, "Bộ TEST ngoài", "Đánh giá và duyệt bằng chứng cho đúng checkpoint + bộ ngưỡng đã chốt")
+        body = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        source = dialog_section(body, "01  ·  Tạo hoặc nhập bộ TEST độc lập",
+            "Ảnh đã duyệt từ vụ Hydro hoặc lô TEST riêng. Bộ TEST cách ly; không tự thêm vào TRAIN/VAL hay đổi phân tập.")
         self.cycles = cycle_rows(self.project, only_slots=True)
-        self.cycle_list = tk.Listbox(body, height=4, selectmode=tk.EXTENDED, exportselection=False,
-                                    bg="#10212e", fg="#e7f3fb", selectbackground="#217fa9")
+        self.cycle_list = tk.Listbox(source, height=4, selectmode=tk.EXTENDED, exportselection=False,
+                                    font=("Segoe UI", 10), relief="flat", highlightthickness=0,
+                                    bg="#0b151f", fg="#e7f3fb", selectbackground="#217fa9")
         self.cycle_list.pack(fill="x", pady=6)
         for row in self.cycles:
             self.cycle_list.insert(tk.END, f"{row['title']} · {row['images']} ảnh / {row['reviewed']} đã duyệt")
-        actions = ctk.CTkFrame(body, fg_color="transparent"); actions.pack(fill="x")
+        actions = ctk.CTkFrame(source, fg_color="transparent"); actions.pack(fill="x", pady=6)
         self.button(actions, "Tạo bộ TEST từ vụ đã chọn…", self.export).pack(side="left", padx=(0, 8))
         self.button(actions, "Nhập bộ TEST ngoài…", self.select_import).pack(side="left")
-        self.benchmark_menu = ctk.CTkOptionMenu(body, values=["Chưa nhập bộ TEST"], command=lambda _: self.clear_report())
+        self.benchmark_menu = ctk.CTkOptionMenu(source, values=["Chưa nhập bộ TEST"], command=lambda _: self.clear_report(), height=36)
         self.benchmark_menu.pack(fill="x", pady=10); self.controls.append(self.benchmark_menu)
-        ctk.CTkLabel(body, text="2. Cố định checkpoint và ngưỡng trước khi đánh giá", font=("Arial", 18, "bold")).pack(anchor="w")
+        model = dialog_section(body, "02  ·  Checkpoint và ngưỡng cố định",
+            "Low: kết luận Không · High: kết luận Có · Khoảng giữa: Chưa chắc chắn")
         defaults, _ = threshold_defaults(self.project)
         self.thresholds = {}
         for attr in model_attributes(self.project):
-            key = attr["id"]; row = ctk.CTkFrame(body); row.pack(fill="x", pady=2)
+            key = attr["id"]; row = ctk.CTkFrame(model, fg_color="#0b151f", corner_radius=8); row.pack(fill="x", pady=4)
+            row.grid_columnconfigure(0, weight=1)
             path = Path(self.project.attribute_models.get(key, ""))
             identity = f"{path.name} · SHA256 {file_hash(path)[:12]}…" if path.is_file() else "Chưa chọn checkpoint"
-            ctk.CTkLabel(row, text=f"{attr['displayName']} · {identity}").pack(side="left", padx=8)
+            wrapped_label(row, attr["displayName"], bold=True).grid(row=0, column=0, sticky="ew", padx=12, pady=(10, 0))
+            wrapped_label(row, identity, size=12, color=MUTED).grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 10))
+            bounds = ctk.CTkFrame(row, fg_color="transparent")
+            bounds.grid(row=0, column=1, rowspan=2, padx=12, pady=10)
             entries = {}
-            for name, title in (("highThreshold", "High"), ("lowThreshold", "Low")):
-                entry = ctk.CTkEntry(row, width=72); entry.insert(0, str(defaults[key][name])); entry.pack(side="right", padx=4)
-                ctk.CTkLabel(row, text=title).pack(side="right")
+            for col, (name, title) in enumerate((("lowThreshold", "Low"), ("highThreshold", "High"))):
+                ctk.CTkLabel(bounds, text=title, font=("Segoe UI", 12), text_color=MUTED).grid(row=0, column=col)
+                entry = ctk.CTkEntry(bounds, width=72); entry.insert(0, str(defaults[key][name])); entry.grid(row=1, column=col, padx=4)
                 entries[name] = entry; self.controls.append(entry)
             self.thresholds[key] = entries
-        self.attest = ctk.CTkCheckBox(body, text="Tôi xác nhận TEST chưa dùng để học, chọn model/ngưỡng, kể cả các checkpoint cha.")
+        self.attest = ctk.CTkCheckBox(model, text="Tôi xác nhận TEST chưa dùng để học, chọn model/ngưỡng,\nkể cả các checkpoint cha.", font=("Segoe UI", 13))
         self.attest.pack(anchor="w", pady=10); self.controls.append(self.attest)
-        ctk.CTkLabel(body, text="Kiểm tra ảnh trùng và vụ không chứng minh toàn bộ lịch sử train. Không dùng kết quả TEST để dò ngưỡng.",
-                     text_color="#dca75f", anchor="w").pack(fill="x")
-        self.button(body, "Đánh giá checkpoint trên bộ TEST", self.evaluate).pack(anchor="w", pady=8)
-        ctk.CTkLabel(body, text="3. Xem và duyệt bằng chứng", font=("Arial", 18, "bold")).pack(anchor="w")
-        self.report_menu = ctk.CTkOptionMenu(body, values=["Chưa có báo cáo"], command=self.select_report)
+        wrapped_label(model, "Kiểm tra ảnh trùng và vụ không chứng minh toàn bộ lịch sử train. Không dùng kết quả TEST để dò ngưỡng.", color="#dca75f").pack(fill="x")
+        self.button(model, "Đánh giá checkpoint trên bộ TEST", self.evaluate).pack(anchor="w", pady=(12, 0))
+        evidence = dialog_section(body, "03  ·  Xem và duyệt bằng chứng")
+        self.report_menu = ctk.CTkOptionMenu(evidence, values=["Chưa có báo cáo"], command=self.select_report, height=36)
         self.report_menu.pack(fill="x", pady=6); self.controls.append(self.report_menu)
-        self.result = ctk.CTkTextbox(body, height=175, font=("Consolas", 12)); self.result.pack(fill="x")
-        self.button(body, "Duyệt kết quả cho đúng checkpoint và ngưỡng này", self.approve).pack(anchor="w", pady=8)
-        ctk.CTkLabel(body, text="QA không phải cam kết độ chính xác. Cần xem số mẫu, lỗi bỏ sót/báo nhầm và độ phủ; mẫu ít có thể không đại diện.",
-                     anchor="w").pack(fill="x")
-        footer = ctk.CTkFrame(self, fg_color="transparent"); footer.pack(fill="x", padx=14, pady=(0, 12))
-        self.status = ctk.CTkLabel(footer, text="Sẵn sàng", anchor="w"); self.status.pack(side="left", fill="x", expand=True)
-        ctk.CTkButton(footer, text="Dừng tác vụ", width=115, command=self.cancel.set).pack(side="right", padx=5)
-        ctk.CTkButton(footer, text="Đóng", width=80, command=self.close).pack(side="right")
+        self.result = ctk.CTkTextbox(evidence, height=175, font=("Consolas", 13), fg_color="#0b151f", corner_radius=8); self.result.pack(fill="x")
+        self.button(evidence, "Duyệt kết quả cho checkpoint và ngưỡng này", self.approve).pack(anchor="w", pady=10)
+        wrapped_label(evidence, "QA không phải cam kết độ chính xác. Cần xem số mẫu, lỗi bỏ sót/báo nhầm và độ phủ; mẫu ít có thể không đại diện.", color=MUTED).pack(fill="x")
         self.refresh()
+        setup_dialog(self, app, 1000, 820, close=self.close)
 
     def button(self, parent, title, command):
-        button = ctk.CTkButton(parent, text=title, command=command)
+        button = ctk.CTkButton(parent, text=title, command=command, height=36, corner_radius=8, font=("Segoe UI", 13))
         self.controls.append(button)
         return button
 

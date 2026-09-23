@@ -4,7 +4,8 @@ from pathlib import Path
 from queue import Queue
 from tempfile import TemporaryDirectory
 from threading import Event
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
+from . import studio_dialogs as messagebox
 import tkinter as tk
 
 import customtkinter as ctk
@@ -14,7 +15,7 @@ from .benchmark_dialog import ExternalBenchmarkDialog
 from .benchmark_contract import import_benchmark, read_json, canonical
 from . import heldout_collection as storage
 from .heldout_camera import prepare_profiles, run_worker
-from .ui_layout import center_dialog
+from .ui_layout import setup_dialog, dialog_header, dialog_footer, wrapped_label, PANEL, BORDER, MUTED
 
 
 class HeldoutCaptureDialog(ctk.CTkToplevel):
@@ -31,15 +32,30 @@ class HeldoutCaptureDialog(ctk.CTkToplevel):
         self.temp = TemporaryDirectory(prefix="smartlabel-heldout-")
         self.empty_vars, self.plant_entries = {}, {}
         self.title("Thu thập TEST · SmartLabel")
-        self.geometry("1180x850"); self.minsize(1050, 740)
-        center_dialog(self, app, 1180, 850)
-        self.transient(app); self.grab_set(); self.protocol("WM_DELETE_WINDOW", self.close)
-        self.grid_columnconfigure(1, weight=1); self.grid_rowconfigure(1, weight=1)
-        banner = ctk.CTkLabel(self, text="BỘ KIỂM ĐỊNH RIÊNG  ·  Không ghi vào vụ Hydro  ·  Không dùng TRAIN/VAL",
-            font=("Segoe UI", 16, "bold"), text_color="#61d5ba", anchor="w")
-        banner.grid(row=0, column=0, columnspan=2, padx=18, pady=12, sticky="ew")
-        left = ctk.CTkScrollableFrame(self, width=330); left.grid(row=1, column=0, sticky="nsew", padx=(12, 6))
-        right = ctk.CTkScrollableFrame(self); right.grid(row=1, column=1, sticky="nsew", padx=(6, 12))
+        footer = dialog_footer(self)
+        ctk.CTkButton(footer, text="Đóng", width=90, height=36, fg_color="#294153", command=self.close).pack(side="right")
+        ctk.CTkButton(footer, text="Dừng tác vụ", width=120, height=36, fg_color="#294153", command=self.cancel.set).pack(side="right", padx=8)
+        self.status = wrapped_label(footer, "Sẵn sàng", color=MUTED)
+        self.status.pack(side="left", expand=True, fill="x", padx=(0, 10))
+        dialog_header(self, "Thu thập ảnh TEST", "Bộ kiểm định riêng · Không ghi vào vụ Hydro · Không dùng TRAIN/VAL")
+        body = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        body.grid_columnconfigure(1, weight=1)
+        left = ctk.CTkFrame(body, fg_color=PANEL, corner_radius=12, border_color=BORDER, border_width=1, width=350)
+        left.grid(row=0, column=0, sticky="new", padx=(0, 12))
+        right = ctk.CTkFrame(body, fg_color=PANEL, corner_radius=12, border_color=BORDER, border_width=1)
+        right.grid(row=0, column=1, sticky="new")
+        # One scroll surface: on narrow/high-DPI desktops the two panes stack.
+        self._compact_layout = None
+        def reflow(event):
+            compact = event.width / body._get_widget_scaling() < 940
+            if compact == self._compact_layout:
+                return
+            self._compact_layout = compact
+            body.grid_columnconfigure(0, weight=1 if compact else 0)
+            left.grid_configure(padx=(0, 0 if compact else 12))
+            right.grid_configure(row=1 if compact else 0, column=0 if compact else 1, pady=(12 if compact else 0, 0))
+        body.bind("<Configure>", reflow, add="+")
         self.label(left, "1. Lô cây dành riêng cho TEST", bold=True)
         self.lot_menu = ctk.CTkOptionMenu(left, values=["Chưa có lô"], command=self.lot_changed)
         self.lot_menu.pack(fill="x", pady=6); self.controls.append(self.lot_menu)
@@ -62,26 +78,23 @@ class HeldoutCaptureDialog(ctk.CTkToplevel):
         self.button(left, "Lưu đủ 10 ROI đã xem", self.save).pack(fill="x", pady=4)
         self.label(left, "Ảnh rọ trống vẫn được lưu. Khai báo bố trí không tự trở thành nhãn đã duyệt.")
         self.label(right, "Xem trước toàn giàn và vị trí ROI", bold=True)
-        self.canvas = tk.Canvas(right, width=680, height=383, bg="#0b1820", highlightthickness=0)
-        self.canvas.pack(fill="x", pady=8)
+        self.canvas = tk.Canvas(right, width=1, height=360, bg="#0b1820", highlightthickness=0)
+        self.canvas.pack(fill="x", padx=12, pady=8)
         self.canvas.bind("<Configure>", lambda _: self.draw_preview())
         self.quality_info = self.label(right, "Chưa chụp ảnh. Ảnh chỉ được lưu vào lô sau khi bạn xác nhận.")
-        presets = ctk.CTkFrame(right, fg_color="transparent"); presets.pack(fill="x", pady=5)
+        presets = ctk.CTkFrame(right, fg_color="transparent"); presets.pack(fill="x", padx=12, pady=5)
         self.button(presets, "Lượt 1: 10 cây", lambda: self.preset(False)).pack(side="left", padx=(0, 8))
         self.button(presets, "Lượt 2: 6 cây + 4 trống", lambda: self.preset(True)).pack(side="left")
         self.label(right, "Đánh dấu đúng 4 vị trí để trống ở lượt 2; các vị trí được thay đổi mỗi ngày.")
-        self.slot_panel = ctk.CTkFrame(right, fg_color="transparent"); self.slot_panel.pack(fill="x", pady=8)
+        self.slot_panel = ctk.CTkFrame(right, fg_color="transparent"); self.slot_panel.pack(fill="x", padx=12, pady=8)
         self.slot_panel.grid_columnconfigure((0, 1), weight=1)
+        self.slot_panel.bind("<Configure>", self.reflow_slots, add="+")
         self.label(right, "3. Duyệt ảnh → tạo bộ TEST", bold=True)
-        actions = ctk.CTkFrame(right, fg_color="transparent"); actions.pack(fill="x", pady=8)
+        actions = ctk.CTkFrame(right, fg_color="transparent"); actions.pack(fill="x", padx=12, pady=8)
         self.button(actions, "Gán nhãn TEST", self.review).pack(side="left", padx=(0, 8))
         self.button(actions, "Tạo & nhập bộ TEST đã duyệt…", self.export).pack(side="left")
         self.label(right, "Dùng form gán nhãn hiện có. Rọ không có cây: Có cây = Không; các dấu hiệu = Không áp dụng.\n"
                          "Cần cả mẫu Có/Không cho mỗi classifier. 16 cây khỏe chưa đủ kiểm định lá vàng và héo.")
-        footer = ctk.CTkFrame(self, fg_color="transparent"); footer.grid(row=2, column=0, columnspan=2, sticky="ew", padx=15, pady=10)
-        self.status = ctk.CTkLabel(footer, text="Sẵn sàng", anchor="w"); self.status.pack(side="left", expand=True, fill="x")
-        ctk.CTkButton(footer, text="Dừng tác vụ", width=115, command=self.cancel.set).pack(side="right", padx=6)
-        ctk.CTkButton(footer, text="Đóng", width=80, command=self.close).pack(side="right")
         self.refresh()
         saved = storage.root_for(self.store, self.project) / "acquisition_settings.json"
         if saved.is_file():
@@ -90,19 +103,30 @@ class HeldoutCaptureDialog(ctk.CTkToplevel):
                 self.show_profiles()
             except (ValueError, OSError, KeyError):
                 self.config = None
+        setup_dialog(self, app, 1180, 850, close=self.close)
 
     def label(self, parent, text, bold=False):
-        widget = ctk.CTkLabel(parent, text=text, anchor="w", justify="left", wraplength=320 if parent.cget("width") == 330 else 660,
-                             font=("Segoe UI", 14, "bold" if bold else "normal"))
-        widget.pack(fill="x", pady=(8 if bold else 3, 3)); return widget
+        widget = wrapped_label(parent, text, size=15 if bold else 13, bold=bold,
+                               color="#68d7c0" if bold else MUTED)
+        widget.pack(fill="x", padx=12, pady=(14 if bold else 4, 4)); return widget
+
+    def reflow_slots(self, event=None):
+        width = event.width if event is not None else self.slot_panel.winfo_width()
+        columns = 1 if width / self.slot_panel._get_widget_scaling() < 590 else 2
+        if getattr(self, "_slot_columns", None) == columns:
+            return
+        self._slot_columns = columns
+        self.slot_panel.grid_columnconfigure(1, weight=1 if columns == 2 else 0)
+        for index, card in enumerate(self.slot_panel.winfo_children()):
+            card.grid_configure(row=index // columns, column=index % columns)
 
     def entry(self, parent, title, value):
         self.label(parent, title)
-        widget = ctk.CTkEntry(parent); widget.insert(0, value); widget.pack(fill="x", pady=2)
+        widget = ctk.CTkEntry(parent, height=34); widget.insert(0, value); widget.pack(fill="x", padx=12, pady=2)
         self.controls.append(widget); return widget
 
     def check(self, parent, title):
-        widget = ctk.CTkCheckBox(parent, text=title, font=("Segoe UI", 12)); widget.pack(anchor="w", pady=7)
+        widget = ctk.CTkCheckBox(parent, text=title, font=("Segoe UI", 12)); widget.pack(anchor="w", padx=12, pady=7)
         self.controls.append(widget); return widget
 
     def refresh(self):
@@ -129,6 +153,7 @@ class HeldoutCaptureDialog(ctk.CTkToplevel):
             lot_id = storage.create_lot(self.store, self.project, self.name_entry.get(), self.date_entry.get(),
                 int(self.count_entry.get()), reserved=bool(self.reserved.get()), same_sowing_batch=bool(self.same_batch.get()))
             self.refresh(); self.lot_menu.set(next(k for k, v in self.lots.items() if v["lotId"] == lot_id)); self.lot_changed()
+            self.notify_statistics()
         except (ValueError, OSError) as error:
             messagebox.showerror("Lô TEST", str(error), parent=self)
 
@@ -173,6 +198,13 @@ class HeldoutCaptureDialog(ctk.CTkToplevel):
             entry = ctk.CTkEntry(card, width=90, placeholder_text="Mã cây?"); entry.pack(side="right", padx=5)
             self.empty_vars[key] = variable; self.plant_entries[key] = entry
             self.controls.extend((checkbox, entry))
+        self._slot_columns = None
+        self.reflow_slots()
+
+    def notify_statistics(self):
+        refresh = getattr(self.app, "_request_project_statistics", None)
+        if refresh and self.owned():
+            refresh()
 
     def preset(self, second):
         for index, (key, value) in enumerate(self.empty_vars.items()):
@@ -230,6 +262,7 @@ class HeldoutCaptureDialog(ctk.CTkToplevel):
         def done(_):
             self.payload = self.frame = None; self.draw_preview(); self.refresh()
             self.status.configure(text="Đã lưu 10 ROI · mở Gán nhãn TEST để duyệt")
+            self.notify_statistics()
         self.run(lambda: storage.save_capture(self.store, project, lot["lotId"], payload,
             empty_slots=empty, plant_ids=codes, session_name=title, expected_revision=revision), done)
 

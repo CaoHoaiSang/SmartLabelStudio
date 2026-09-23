@@ -12,7 +12,8 @@ import os
 import shutil
 import subprocess
 import tkinter as tk
-from tkinter import filedialog, messagebox, simpledialog
+from tkinter import filedialog
+from . import studio_dialogs as messagebox, studio_dialogs as simpledialog
 
 import customtkinter as ctk
 
@@ -58,7 +59,7 @@ from .ui_components import (
     ask_new_project,
 )
 from .version_dialog import ask_dataset_version_name
-from .ui_layout import pack_before, center_dialog
+from .ui_layout import pack_before, setup_dialog, SourceTabs
 
 
 logger = logging.getLogger(__name__)
@@ -457,11 +458,8 @@ class SmartLabelApp(ctk.CTk):
             font=("Segoe UI Semibold", 14),
             text_color=COLORS["accent"],
         )
-        self.image_list_title_label.pack(side="left")
-        switch = ctk.CTkSegmentedButton(header, values=["Giàn", "Bổ trợ", "Khách đóng góp", "TEST"],
-            variable=self.label_source, command=self._show_label_workspace,
-            selected_color="#256481", selected_hover_color="#327b9c",
-            font=("Segoe UI", 11), width=124, height=28, dynamic_resizing=False)
+        self.image_list_title_label.pack(anchor="w")
+        switch = SourceTabs(header, variable=self.label_source, command=self._show_label_workspace)
         self.label_source_switches.append(switch)
         return card, switch
 
@@ -1133,8 +1131,6 @@ class SmartLabelApp(ctk.CTk):
             return
         dialog = ctk.CTkToplevel(self)
         dialog.title("Khôi phục dự án")
-        dialog.transient(self)
-        dialog.grab_set()
         container = ctk.CTkScrollableFrame(dialog, label_text="DỰ ÁN ĐÃ XÓA")
         container.pack(fill="both", expand=True, padx=16, pady=16)
         def restore(project):
@@ -1153,8 +1149,8 @@ class SmartLabelApp(ctk.CTk):
                           command=lambda p=project: restore(p)).pack(side="right", padx=10, pady=10)
             ctk.CTkLabel(row, text=f"{project.name}\n{len(project.images)} ảnh", anchor="w",
                          wraplength=350).pack(side="left", padx=12, pady=8)
-        ctk.CTkButton(dialog, text="Đóng", command=dialog.destroy).pack(pady=(0, 12))
-        center_dialog(dialog, self, 620, 460)
+        ctk.CTkButton(dialog, text="Đóng", command=dialog.destroy, height=36).pack(side="bottom", pady=(0, 12), before=container)
+        setup_dialog(dialog, self, 620, 460)
 
     def _import_folder(self) -> None:
         folder = filedialog.askdirectory(title="Chọn thư mục ảnh")
@@ -1389,12 +1385,18 @@ class SmartLabelApp(ctk.CTk):
         if hydro:
             for switch in self.label_source_switches:
                 if not switch.winfo_manager():
-                    switch.pack(side="right", padx=(8, 0))
+                    switch.pack(fill="x", pady=(8, 0))
         else:
             self._show_label_workspace("Danh sách ảnh", force=True)
             for switch in self.label_source_switches:
                 switch.pack_forget()
             self.supplement_view.set_project(None)
+        heldout_tools = getattr(self, "heldout_tools", None)
+        if heldout_tools is not None:
+            if hydro and not heldout_tools.winfo_manager():
+                pack_before(heldout_tools, self.dataset_statistics_card, fill="x", pady=(0, 6))
+            elif not hydro:
+                heldout_tools.pack_forget()
         contextual_buttons = (
             (getattr(self, "fleet_intake_button", None), getattr(self, "hydro_archive_import_button", None)),
             (getattr(self, "hydro_archive_import_button", None), getattr(self, "hydro_import_button", None)),
@@ -3551,13 +3553,20 @@ class SmartLabelApp(ctk.CTk):
             tooltip="Xem capture group trong từng tập và chủ động chuyển cả nhóm sang Train, Validation hoặc Test.",
         ).pack(side="left")
 
-        self._button(split_card, "BỘ TEST NGOÀI · ĐÁNH GIÁ CHECKPOINT", self._open_external_benchmark,
-                     width=350, color="#48657a",
-                     tooltip="Nhập bộ kiểm định đã duyệt riêng, đánh giá đúng checkpoint/ngưỡng và duyệt bằng chứng phát hành.").pack(anchor="w", padx=14, pady=(0, 10))
-        self._button(split_card, "THU THẬP TEST · CAMERA RIÊNG", self._open_heldout_collector,
-                     width=350, color="#48657a",
-                     tooltip="Chụp lô cây riêng, gồm rọ trống; không thêm vào vụ Hydro hoặc TRAIN/VAL.").pack(anchor="w", padx=14, pady=(0, 10))
-        info = self._card(dataset_right, "THỐNG KÊ DATASET")
+        self.heldout_tools = self._card(dataset_right, "BỘ KIỂM ĐỊNH ĐỘC LẬP")
+        self.heldout_tools.pack(fill="x", pady=(0, 6))
+        ctk.CTkLabel(self.heldout_tools, text="Tách khỏi TRAIN/VAL · Chụp và duyệt ảnh trước khi đánh giá checkpoint",
+                    anchor="w", font=("Segoe UI", 12), text_color=COLORS["muted"]).pack(fill="x", padx=14, pady=(0, 8))
+        test_actions = ctk.CTkFrame(self.heldout_tools, fg_color="transparent")
+        test_actions.pack(fill="x", padx=14, pady=(0, 12))
+        test_actions.grid_columnconfigure((0, 1), weight=1, uniform="test_actions")
+        self._button(test_actions, "1. Thu thập ảnh TEST", self._open_heldout_collector,
+                     width=1, color="#256481",
+                     tooltip="Chụp lô cây riêng, gồm rọ trống; không thêm vào vụ Hydro hoặc TRAIN/VAL.").grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        self._button(test_actions, "2. Bộ TEST ngoài", self._open_external_benchmark,
+                     width=1, color="#48657a",
+                     tooltip="Nhập bộ kiểm định đã duyệt riêng, đánh giá đúng checkpoint/ngưỡng và duyệt bằng chứng phát hành.").grid(row=0, column=1, sticky="ew", padx=(6, 0))
+        info = self.dataset_statistics_card = self._card(dataset_right, "THỐNG KÊ DATASET")
         info.pack(fill="both", expand=True, pady=(6, 0))
         self.dataset_info = ctk.CTkTextbox(info, fg_color="#091119", font=("Consolas", 13), corner_radius=10)
         self.dataset_info.pack(fill="both", expand=True, padx=14, pady=(4, 14))

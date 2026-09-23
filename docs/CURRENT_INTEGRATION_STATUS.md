@@ -1,5 +1,18 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 23/09/2026
 
+## Popup và phân nhóm nguồn ảnh — 23/09
+
+Chuẩn hóa vị trí/DPI/cửa sổ con, chữ và hành động popup. Fleet non-modal có
+transient owner, không luôn nổi trên ứng dụng khác; modal con trả grab cho cha.
+Trợ giúp dài cuộn, xác nhận/nhập liệu dùng cùng bộ giao diện. Bốn nguồn danh
+sách ảnh thành2×2; thẻ Có/Không của Bổ trợ giống Giàn, thêm TEST riêng không
+cộng train/bản benchmark đóng băng. Dataset có nhóm Bộ kiểm định độc lập:
+Thu thập ảnh TEST → Bộ TEST ngoài, không đưa thêm công cụ R&D vào Hydro.
+[Quy tắc, ngữ nghĩa và giới hạn nghiệm thu](DIALOG_DESIGN_SYSTEM.md).
+362/362test đầy đủ đạt463,296s, gồm13test mới; compileall/diff check đạt.
+Cần lưu việc/mở lại Studio. Chưa đối chiếu hình ảnh runtime do lỗi công cụ
+capture Windows; không thay việc test widget bằng tuyên bố nghiệm thu trực quan.
+
 ## Thu ảnh lô TEST riêng — Windows pilot 23/09
 
 DATASET → Thu thập TEST: camera/ROI Hydro chỉ đọc, worker riêng không inference;
