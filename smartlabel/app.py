@@ -814,7 +814,8 @@ class SmartLabelApp(ctk.CTk):
             return
         assignment = self.datasets.ensure_split_assignment(self.project)
         report = hydro_dataset_qa(self.project, self.store, assignment)
-        self.project.metadata["validationStatus"] = report["validationStatus"]
+        # Dataset membership is not an evaluation of the currently selected model.
+        self.project.metadata["hydroDatasetQaStatus"] = report["validationStatus"]
         self.store.save(self.project)
         issues = list(report.get("issues", []))
         errors = sum(issue.get("severity") == "error" for issue in issues)
@@ -824,7 +825,7 @@ class SmartLabelApp(ctk.CTk):
             "KẾT QUẢ · DATASET HYDROPONIC",
             (
                 f"{report.get('images', 0)} ảnh · {errors} lỗi · {warnings} cảnh báo · "
-                f"{report.get('validationStatus', 'pilot_unvalidated')}"
+                + ("Có vụ TEST riêng trong phân tập" if report.get("independentCropCycleHoldout") else "Chưa có vụ TEST riêng trong phân tập")
             ),
             color,
         )
@@ -4059,6 +4060,7 @@ class SmartLabelApp(ctk.CTk):
             variable=self.evaluation_split,
             values=["test", "val"],
             width=95,
+            command=lambda _: self._refresh_evaluation_defaults(),
         )
         self.evaluation_split_menu.pack(side="left", padx=(0, 8))
         self.evaluation_button = self._button(
@@ -4205,6 +4207,7 @@ class SmartLabelApp(ctk.CTk):
         for button in (self.evaluation_choose_model, self.evaluation_choose_data):
             self._set_button_enabled(button, not hydro)
         if hydro:
+            self.evaluation_split_menu.configure(values=["test", "val", "TEST độc lập (chọn bộ…)"], width=210)
             self.hydro_evaluation_lookup = {f"{a['displayName']} · {a['id']}": a["id"] for a in model_attributes(self.project)}
             self.hydro_evaluation_group.configure(values=list(self.hydro_evaluation_lookup))
             if self.hydro_evaluation_group.get() not in self.hydro_evaluation_lookup:
@@ -4214,8 +4217,14 @@ class SmartLabelApp(ctk.CTk):
             key = self.hydro_evaluation_lookup[self.hydro_evaluation_group.get()]
             self.evaluation_model_path.set(self.project.attribute_models.get(key, ""))
             self.evaluation_data_path.set("Tự lấy dataset gốc đã train từ checkpoint" if self.evaluation_model_path.get() else "")
-            self.evaluation_help.configure(text="Hydro: chọn thuộc tính đã train. Test đo kết quả; Val có thể gợi ý ngưỡng. Chỉ dùng tập độc lập, không sửa nhãn.")
+            self.evaluation_help.configure(text=(
+                "TEST độc lập: mở bộ đánh giá riêng, chọn vụ/lô và đánh giá tất cả checkpoint đang dùng với ngưỡng đã chốt. Không đổi dữ liệu train."
+                if self.evaluation_split.get() == "TEST độc lập (chọn bộ…)" else
+                "Hydro: test/val lấy từ dataset gốc của checkpoint đã chọn. Val có thể gợi ý ngưỡng; test không dùng để chọn ngưỡng. Chọn TEST độc lập để dùng bộ ảnh từ vụ/lô riêng."))
             return
+        self.evaluation_split_menu.configure(values=["test", "val"], width=95)
+        if self.evaluation_split.get() not in {"test", "val"}:
+            self.evaluation_split.set("test")
         self.hydro_evaluation_group.pack_forget()
         self.evaluation_help.configure(text="Model đánh giá và Dataset riêng. Chọn model và tập test/val phù hợp với task.")
         best = self._latest_best_pt()
@@ -4465,12 +4474,9 @@ class SmartLabelApp(ctk.CTk):
             "geometryProfileIds": self.project.metadata.get("geometryProfileIds", []),
             "thresholds": self.project.metadata.get("hydroThresholds", {}),
             "runtimeTarget": self.project.metadata.get("hydroRuntimeTarget", "jetson_nano_tensorrt_fp16"),
-            "deploymentMode": self.project.metadata.get("hydroDeploymentMode") or (
-                "operational"
-                if self.project.metadata.get("validationStatus") == "validated_holdout"
-                else "shadow"
-            ),
+            "deploymentMode": self.project.metadata.get("hydroDeploymentMode") or "shadow",
             "cropDisplayName": self.project.metadata.get("cropDisplayName", "cây mục tiêu"),
+            "evaluationPolicy": "verified_holdout" if self.project.metadata.get("hydroExternalEvaluationApproval") else "unvalidated_pilot",
         }
         defaults["thresholds"], defaults["thresholdSources"] = threshold_defaults(self.project)
         config = ask_hydro_bundle_config(self, defaults)
@@ -4539,7 +4545,9 @@ class SmartLabelApp(ctk.CTk):
                 warning = f"\nGói đã lưu nhưng chưa cập nhật được đường dẫn trong dự án: {exc}"
         else:
             warning = "\nDự án hiện tại đã đổi; chỉ lưu gói của dự án nguồn, không cập nhật dự án đang mở."
-        message = f"HOÀN TẤT GÓI HYDRO\nZIP để tải lên Hydro: {result['archive']}{warning}"
+        validation = "Đã có bằng chứng kiểm định đúng checkpoint" if result["validationStatus"] == "validated_holdout" else "Chưa kiểm định độc lập"
+        mode = "Vận hành thật" if config["deploymentMode"] == "operational" else "Chạy thử"
+        message = f"HOÀN TẤT GÓI HYDRO · {mode} · {validation}\nZIP để tải lên Hydro: {result['archive']}{warning}"
         self.deploy_status_label.configure(text="Gói Hydro đã sẵn sàng · xem đường dẫn trong nhật ký", text_color=COLORS["good"])
         self._append_log(self.train_log, message)
         messagebox.showinfo("Gói model Hydro hoàn tất", message, parent=self)
@@ -5238,6 +5246,9 @@ class SmartLabelApp(ctk.CTk):
             self._fail_evaluation(str(exc))
 
     def _evaluate_hydro_model(self):
+        if self.evaluation_split.get() == "TEST độc lập (chọn bộ…)":
+            self._open_external_benchmark()
+            return
         snapshot = deepcopy(self.project)
         key = self.hydro_evaluation_lookup[self.hydro_evaluation_group.get()]
         split, device = self.evaluation_split.get(), self.train_device_menu.get()

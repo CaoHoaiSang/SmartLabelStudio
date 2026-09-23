@@ -9,6 +9,7 @@ from .dataset_manager import DatasetManager
 from .hydro_labels import model_attributes
 from .hydro_holdout import describe_holdout
 from .external_evaluation import release_evidence
+from .operational_policy import export_policy, acceptance, UNVALIDATED_OPERATIONAL
 from .hydroponic import (RUNTIME_TARGETS, describe_hydro_qa_issue, export_jetson_onnx,
                         hydro_dataset_qa, write_hydro_model_bundle, _sha256)
 
@@ -53,6 +54,12 @@ def build_hydro_package(project, store, output, config, progress, cancel):
     runtime, mode = config.get("runtimeTarget"), config.get("deploymentMode")
     if runtime not in RUNTIME_TARGETS or mode not in {"shadow", "operational"}:
         raise ValueError("Runtime hoặc chế độ triển khai không hợp lệ.")
+    if mode == "operational" and any("smoke" in str(project.metadata.get(key, "")) or "fixture" in str(project.metadata.get(key, ""))
+                                     for key in ("validationStatus", "trainingPurpose")):
+        raise ValueError("Model chỉ kiểm thử kỹ thuật không được xuất vận hành.")
+    unvalidated_pilot = export_policy(config)
+    if unvalidated_pilot and "labelSchema" not in project.metadata:
+        raise ValueError("Vận hành chưa kiểm định cần gói Hydro V3 có schema nhãn; cập nhật schema dự án trước.")
     assignment = DatasetManager(store).ensure_split_assignment(project, persist=False)
     report = hydro_dataset_qa(project, store, assignment)
     errors = [issue for issue in report["issues"] if issue["severity"] == "error"]
@@ -60,9 +67,13 @@ def build_hydro_package(project, store, output, config, progress, cancel):
         details = list(dict.fromkeys(describe_hydro_qa_issue(issue) for issue in errors))
         raise ValueError(f"Dataset còn {len(errors)} lỗi QA. Hãy mở Kiểm tra Dataset Hydro để xử lý.\n"
                          + "\n".join(details[:5]))
-    project.metadata["validationStatus"] = report["validationStatus"]
+    # A valid dataset split is not measured checkpoint evidence.
+    project.metadata["validationStatus"] = "pilot_unvalidated"
     evidence = None
-    if mode == "operational":
+    if unvalidated_pilot:
+        project.metadata["validationStatus"] = UNVALIDATED_OPERATIONAL
+        progress("Vận hành thật · Chưa kiểm định độc lập · đã xác nhận cho gói này.")
+    elif mode == "operational":
         try:
             evidence = release_evidence(project, store, thresholds)
         except ValueError as error:
@@ -94,12 +105,15 @@ def build_hydro_package(project, store, output, config, progress, cancel):
                 raise ValueError("Bằng chứng đánh giá thay đổi trong lúc tạo gói.")
             for key in onnx:
                 evidence["models"][key]["onnxSha256"] = _sha256(onnx[key])
+        if any(_sha256(models[key]) != value for key, value in model_hashes.items()):
+            raise ValueError("Checkpoint đã đổi trong lúc tạo gói; hãy xuất lại đúng model.")
         bundle = write_hydro_model_bundle(
             project, staging / "bundle", onnx, config["thresholds"],
             dataset_version=config["datasetVersion"], source_commit=config["sourceCommit"],
             camera_profile_ids=config["cameraProfileIds"], geometry_profile_ids=config["geometryProfileIds"],
             input_size=224, runtime_target=config["runtimeTarget"], deployment_mode=config["deploymentMode"],
             release_evidence=evidence,
+            operational_acceptance=acceptance(model_hashes) if unvalidated_pilot else None,
         )
         checkpoint()
         # Exclusive destinations: never replace a previous package. On failure,

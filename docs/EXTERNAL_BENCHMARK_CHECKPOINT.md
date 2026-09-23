@@ -1,5 +1,10 @@
 # Bộ TEST ngoài gắn checkpoint — 22/09/2026
 
+**Cập nhật 24/09:** kiểm định độc lập không còn bắt buộc với mọi gói vận hành.
+Có luồng xuất chưa kiểm định với xác nhận riêng, không đổi hoặc nới kiểm tra
+bằng chứng trong tài liệu này. Đánh giá model có lựa chọn TEST độc lập mở
+chính luồng này. Xem [chính sách hiện hành](OPERATIONAL_EVALUATION_POLICY.md).
+
 Bổ sung 23/09: **Thu thập TEST · Camera riêng** dùng `HydroHeldoutBenchmarkV1`
 cho lô cây giữ riêng, gồm cả rọ trống; không giả nguồn vụ Hydro. Form gán nhãn
 và đánh giá/checkpoint vẫn là luồng hiện hữu. Phạm vi cùng đợt gieo được ghi

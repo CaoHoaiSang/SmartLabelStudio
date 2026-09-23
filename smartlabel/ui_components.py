@@ -259,17 +259,35 @@ class HydroBundleConfigDialog(StudioToplevel):
         self.deployment_label = tk.StringVar(value=next(
             (label for label, code in HYDRO_DEPLOYMENT_LABELS.items() if code == defaults.get("deploymentMode", "operational")),
             next(iter(HYDRO_DEPLOYMENT_LABELS))))
-        StudioOptionMenu(mode_row, values=list(HYDRO_DEPLOYMENT_LABELS), variable=self.deployment_label).pack(side="left", fill="x", expand=True)
+        StudioOptionMenu(mode_row, values=list(HYDRO_DEPLOYMENT_LABELS), variable=self.deployment_label,
+                         command=lambda _: self._refresh_acceptance_controls()).pack(side="left", fill="x", expand=True)
         ctk.CTkLabel(
             body,
             text=(
-                "Windows và Nano dùng cùng chế độ kết luận/cảnh báo AI. Vận hành thật cần QA và TEST ngoài được duyệt đúng checkpoint/ngưỡng; "
-                "Shadow chỉ ghi kết quả để đối chiếu. Windows chạy ONNX, Nano build TensorRT trên thiết bị."
+                "Vận hành thật cho phép tham gia cảnh báo AI; Chạy thử chỉ đối chiếu kết quả. "
+                "Kiểm định độc lập là thông tin chất lượng riêng, không còn là điều kiện bắt buộc để vận hành."
             ),
             wraplength=660,
             justify="left",
             text_color="#8298aa",
         ).pack(anchor="w", padx=22, pady=(2, 4))
+        policy_row = ctk.CTkFrame(body, fg_color="transparent")
+        policy_row.pack(fill="x", padx=22, pady=4)
+        ctk.CTkLabel(policy_row, text="Hồ sơ kiểm định", width=190, anchor="w", text_color="#8298aa").pack(side="left")
+        self.evaluation_policies = {
+            "Chưa kiểm định độc lập": "unvalidated_pilot",
+            "Đã kiểm định đúng checkpoint": "verified_holdout",
+        }
+        self.evaluation_policy = tk.StringVar(value=next(label for label, code in self.evaluation_policies.items()
+            if code == defaults.get("evaluationPolicy", "unvalidated_pilot")))
+        self.policy_menu = StudioOptionMenu(policy_row, values=list(self.evaluation_policies), variable=self.evaluation_policy,
+                                            command=lambda _: self._refresh_acceptance_controls())
+        self.policy_menu.pack(side="left", fill="x", expand=True)
+        self.pilot_acknowledged = tk.BooleanVar(value=False)
+        self.pilot_checkbox = ctk.CTkCheckBox(body, text="Tôi chấp nhận vận hành/cảnh báo khi chưa có kiểm định độc lập.\nXác nhận chỉ dành cho gói đang tạo, không chứng nhận độ chính xác.",
+            variable=self.pilot_acknowledged, font=("Segoe UI", 13))
+        self.pilot_checkbox.pack(anchor="w", padx=22, pady=(8, 4))
+        self._refresh_acceptance_controls()
         ctk.CTkLabel(body, text="NGƯỠNG TỪNG CLASSIFIER", text_color="#22b9ee", font=("Segoe UI Semibold", 12)).pack(anchor="w", padx=22, pady=(14, 4))
         help_row = ctk.CTkFrame(body, fg_color="transparent")
         help_row.pack(fill="x", padx=22, pady=(0, 8))
@@ -303,6 +321,13 @@ class HydroBundleConfigDialog(StudioToplevel):
                          wraplength=540, justify="left", text_color="#8298aa", font=("Segoe UI", 11)).pack(anchor="w", padx=10, pady=(0, 6))
 
         setup_dialog(self, parent, 780, 820)
+
+    def _refresh_acceptance_controls(self):
+        operational = HYDRO_DEPLOYMENT_LABELS[self.deployment_label.get()] == "operational"
+        pilot = self.evaluation_policies[self.evaluation_policy.get()] == "unvalidated_pilot"
+        self.policy_menu.configure(state="normal" if operational else "disabled")
+        self.pilot_checkbox.configure(state="normal" if operational and pilot else "disabled")
+        self.pilot_acknowledged.set(False)
 
     def _show_training_help(self) -> None:
         from .hydro_holdout import training_strategy_guidance
@@ -341,7 +366,7 @@ class HydroBundleConfigDialog(StudioToplevel):
         except ValueError as exc:
             messagebox.showerror("Ngưỡng không hợp lệ", str(exc), parent=self)
             return
-        self.result = {
+        result = {
             "datasetVersion": self.variables["datasetVersion"].get().strip(),
             "sourceCommit": self.variables["sourceCommit"].get().strip(),
             "cameraProfileIds": [item.strip() for item in self.variables["cameraProfileIds"].get().split(",") if item.strip()],
@@ -349,7 +374,16 @@ class HydroBundleConfigDialog(StudioToplevel):
             "thresholds": thresholds,
             "runtimeTarget": HYDRO_RUNTIME_LABELS[self.runtime_label.get()],
             "deploymentMode": HYDRO_DEPLOYMENT_LABELS[self.deployment_label.get()],
+            "evaluationPolicy": self.evaluation_policies[self.evaluation_policy.get()],
+            "pilotAcknowledged": self.pilot_acknowledged.get(),
         }
+        from .operational_policy import export_policy
+        try:
+            export_policy(result)
+        except ValueError as exc:
+            messagebox.showerror("Cần xác nhận chế độ vận hành", str(exc), parent=self)
+            return
+        self.result = result
         self.destroy()
 
 

@@ -105,6 +105,70 @@ class HydroPackageTests(unittest.TestCase):
         self.assertEqual(self.export.call_count, 3)
         self.assert_preserved()
 
+    def test_explicit_operational_without_holdout_is_truthful_and_binds_the_entire_bundle(self):
+        from smartlabel.operational_policy import contract_hash, validate_acceptance
+        self.config.update(deploymentMode="operational", evaluationPolicy="unvalidated_pilot", pilotAcknowledged=True)
+        result = self.build()
+        manifest = json.loads((result["bundle"] / "bundle.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["deploymentMode"], "operational")
+        self.assertEqual(manifest["validationStatus"], "operational_unvalidated")
+        self.assertNotIn("evaluationEvidence", manifest)
+        proof = manifest["operationalAcceptance"]
+        validate_acceptance(proof, manifest["models"])
+        self.assertEqual(proof["checkpointHashes"], result["modelHashes"])
+        self.assertEqual(proof["bundleContractSha256"], contract_hash(manifest))
+        self.assert_preserved()
+
+    def test_no_implicit_pilot_consent_or_verified_fallback(self):
+        for acknowledged in (None, False, "true", 1):
+            self.config.update(deploymentMode="operational", evaluationPolicy="unvalidated_pilot", pilotAcknowledged=acknowledged)
+            with self.subTest(acknowledged=acknowledged), self.assertRaisesRegex(ValueError, "xác nhận"):
+                self.build()
+        self.config.update(evaluationPolicy="verified_holdout", pilotAcknowledged=True)
+        with self.assertRaisesRegex(ValueError, "Chưa có đánh giá"):
+            self.build()
+        self.export.assert_not_called()
+
+    def test_shadow_cannot_claim_validation_from_dataset_split_only(self):
+        self.qa.return_value["validationStatus"] = "validated_holdout"
+        self.config.update(evaluationPolicy="unvalidated_pilot", pilotAcknowledged=True)
+        result = self.build()
+        manifest = json.loads((result["bundle"] / "bundle.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["deploymentMode"], "shadow")
+        self.assertEqual(manifest["validationStatus"], "pilot_unvalidated")
+        self.assertNotIn("operationalAcceptance", manifest)
+
+    def test_pilot_does_not_bypass_qa_or_smoke_only_models(self):
+        self.config.update(deploymentMode="operational", evaluationPolicy="unvalidated_pilot", pilotAcknowledged=True)
+        self.qa.return_value = {"issues": [{"severity": "error", "code": "missing_image"}]}
+        with self.assertRaisesRegex(ValueError, "Thiếu file ảnh"):
+            self.build()
+        self.project.metadata["validationStatus"] = "pipeline_smoke_only"
+        with self.assertRaisesRegex(ValueError, "kiểm thử kỹ thuật"):
+            self.build()
+        self.export.assert_not_called()
+
+    def test_pilot_rejects_checkpoint_replaced_during_conversion(self):
+        self.config.update(deploymentMode="operational", evaluationPolicy="unvalidated_pilot", pilotAcknowledged=True)
+        def replace_after_export(*args, **kwargs):
+            result = self.export_fixture(*args, **kwargs)
+            Path(self.project.attribute_models["plant_presence"]).write_bytes(b"different checkpoint")
+            return result
+        self.export.side_effect = replace_after_export
+        with self.assertRaisesRegex(ValueError, "Checkpoint đã đổi"):
+            self.build()
+        self.assertFalse(self.output.exists())
+
+    def test_pilot_requires_v3_schema_and_bundle_writer_cannot_omit_acceptance(self):
+        self.config.update(deploymentMode="operational", evaluationPolicy="unvalidated_pilot", pilotAcknowledged=True)
+        self.project.metadata.pop("labelSchema")
+        with self.assertRaisesRegex(ValueError, "V3"):
+            self.build()
+        from smartlabel.operational_policy import validate_acceptance
+        for value in (None, {}, {"schemaVersion": "HydroOperationalAcceptanceV1", "acknowledged": "true"}):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                validate_acceptance(value, ["plant_presence"])
+
     def test_missing_model_blocks_before_conversion(self):
         self.project.attribute_models.pop("wilt")
         with self.assertRaisesRegex(ValueError, "model đã train"):

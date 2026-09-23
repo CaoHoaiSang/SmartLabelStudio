@@ -1234,6 +1234,7 @@ def write_hydro_model_bundle(
     runtime_target: str = "jetson_nano_tensorrt_fp16",
     deployment_mode: str = "shadow",
     release_evidence: dict | None = None,
+    operational_acceptance: dict | None = None,
 ) -> Path:
     from .fleet_boundaries import require_legacy_project
     require_legacy_project(project)
@@ -1260,9 +1261,17 @@ def write_hydro_model_bundle(
     if deployment_mode not in {"shadow", "operational"}:
         raise ValueError("deployment_mode must be shadow or operational")
     validation_status = str(project.metadata.get("validationStatus", "pilot_unvalidated"))
-    if deployment_mode == "operational" and validation_status != "validated_holdout":
+    from .operational_policy import UNVALIDATED_OPERATIONAL, validate_acceptance, contract_hash
+    unvalidated = validation_status == UNVALIDATED_OPERATIONAL
+    if unvalidated:
+        if deployment_mode != "operational" or bundle_version != 3 or release_evidence:
+            raise ValueError("Gói chưa kiểm định phải là Operational V3, không kèm bằng chứng đã kiểm định.")
+        validate_acceptance(operational_acceptance, models)
+    elif operational_acceptance is not None:
+        raise ValueError("Xác nhận vận hành chưa kiểm định không khớp trạng thái gói.")
+    if deployment_mode == "operational" and not unvalidated and validation_status != "validated_holdout":
         raise ValueError("operational deployment requires an independent validated holdout")
-    if deployment_mode == "operational":
+    if deployment_mode == "operational" and not unvalidated:
         from .label_schema import training_identity
         from .benchmark_contract import canonical
         if (not release_evidence or release_evidence.get("schemaVersion") != "HydroReleaseEvidenceV1"
@@ -1347,6 +1356,8 @@ def write_hydro_model_bundle(
             manifest["evaluationEvidence"] = release_evidence
         if runtime_target == "jetson_nano_tensorrt_fp16":
             manifest["minimumTensorRTVersion"] = "8.2"
+        if unvalidated:
+            manifest["operationalAcceptance"] = {**operational_acceptance, "bundleContractSha256": contract_hash(manifest)}
         (temporary / "bundle.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(temporary, output)
         archive = output.with_suffix(".zip")

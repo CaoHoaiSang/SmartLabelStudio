@@ -1,4 +1,17 @@
-# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 23/09/2026
+# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 24/09/2026
+
+## Hiện hành: vận hành không bắt buộc TEST độc lập — 24/09
+
+Chính sách chủ hệ thống mới thay phần bắt buộc holdout trong các mục lịch sử
+bên dưới. Có thể xuất Operational V3 chưa kiểm định bằng xác nhận mỗi gói;
+không giả `validated_holdout`. TEST độc lập vẫn giữ nguyên kiểm chứng
+checkpoint/ngưỡng và nay chọn được ngay trong Đánh giá model. Không tự hạ
+chính sách đã kiểm định khi bằng chứng lỗi. Xem
+[quy trình và contract](OPERATIONAL_EVALUATION_POLICY.md).
+
+Kiểm chứng385/385 toàn bộ,19export,22UI; liên thông ZIP/ORT/Backend trên
+fixture tổng hợp đạt. Chưa restart app/dịch vụ hoặc phát hành model thật.
+[Bằng chứng và giới hạn](OPERATIONAL_EVALUATION_VERIFICATION.md).
 
 ## Hiện hành: sửa nền và quản lý nhãn, trả dropdown định vị — 23/09
 

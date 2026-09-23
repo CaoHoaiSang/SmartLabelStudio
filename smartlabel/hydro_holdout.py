@@ -4,13 +4,14 @@ from collections import Counter, defaultdict
 
 def training_strategy_guidance():
     return (
-        "TEST dùng để đánh giá model trên dữ liệu chưa học. Điều kiện TEST vụ độc lập là chính sách "
-        "kiểm định/phát hành của Hydro hiện tại, không phải giới hạn kỹ thuật của ONNX hay Windows/Nano.\n\n"
+        "Chế độ vận hành và mức kiểm định là hai việc riêng. Có thể xuất Vận hành thật khi chưa có TEST độc lập "
+        "bằng cách chọn hồ sơ Chưa kiểm định và xác nhận cho từng gói. Hydro vẫn kiểm tra chất lượng ảnh, "
+        "tương thích và hai lượt kiểm tra liên tiếp trước cảnh báo. Không coi đây là model đã kiểm định.\n\n"
         "• Final · Train+Val, giữ Test: gộp TRAIN và VAL để học, vẫn giữ TEST. Có thể dùng cho bản vận hành "
-        "nếu TEST độc lập, checkpoint chưa học TEST và các điều kiện QA/đánh giá đạt.\n"
+        "với xác nhận chưa kiểm định, hoặc với bằng chứng TEST độc lập đúng checkpoint/ngưỡng.\n"
         "• Final · Train 100%: học cả TEST cũ, nên TEST cũ không còn là bằng chứng độc lập. Muốn kiểm định "
-        "checkpoint này cần bộ benchmark khác chưa dùng để học hoặc chọn model/ngưỡng. Mở Dataset → "
-        "Bộ TEST ngoài: nhập bộ đã duyệt, cố định ngưỡng, đánh giá đúng checkpoint và duyệt kết quả. "
+        "checkpoint này cần bộ benchmark khác chưa dùng để học hoặc chọn model/ngưỡng. Mở Đánh giá model → "
+        "TEST độc lập (chọn bộ…): chọn cả vụ Hydro mới hoặc nhập bộ đã duyệt, cố định ngưỡng, đánh giá đúng checkpoint và duyệt kết quả. "
         "Đổi checkpoint/ngưỡng/schema thì đánh giá lại; không tự coi phân tập hiện tại là bằng chứng.\n\n"
         "Không chuyển ảnh đã học sang TEST rồi dùng checkpoint cũ. QA phân tập cũng không phải độ chính xác model.\n\n"
         "Nếu chỉ kiểm thử gửi ảnh Gmail: dùng Hydro → Kiểm tra tự động → chọn rọ → Phóng to ảnh rọ → "

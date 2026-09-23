@@ -257,6 +257,22 @@ class HydroReviewUiTests(unittest.TestCase):
                 patch.object(self.app, "_hydro_classifier_paths", return_value={}):
             self.app._export_hydro_bundle()
         self.assertEqual(captured["deploymentMode"], "shadow")
+        self.assertEqual(captured["evaluationPolicy"], "unvalidated_pilot")
+
+    def test_evaluation_can_choose_independent_test_without_touching_training_data(self):
+        before = deepcopy(self.app.project.to_dict())
+        self.app._refresh_evaluation_defaults(force=True)
+        self.assertIn("TEST độc lập (chọn bộ…)", self.app.evaluation_split_menu.cget("values"))
+        self.app.evaluation_split.set("TEST độc lập (chọn bộ…)")
+        with patch.object(self.app, "_open_external_benchmark") as open_benchmark:
+            self.app._evaluate_model()
+        open_benchmark.assert_called_once_with()
+        self.assertEqual(self.app.project.to_dict(), before)
+        self.assertFalse(self.app.evaluation_running)
+        self.app._change_project_context(deepcopy(self.bottle))
+        self.app._refresh_evaluation_defaults(force=True)
+        self.assertEqual(self.app.evaluation_split.get(), "test")
+        self.assertNotIn("TEST độc lập (chọn bộ…)", self.app.evaluation_split_menu.cget("values"))
 
     def test_dialog_defaults_locked_provenance_and_editable_thresholds(self):
         defaults = {"datasetVersion": "v1", "sourceCommit": "abc", "cameraProfileIds": ["cam"],
@@ -271,8 +287,13 @@ class HydroReviewUiTests(unittest.TestCase):
             dialog.variables["geometryProfileIds"].set("geo")
             dialog.variables["plant_presence.highThreshold"].set("0.8")
             dialog._accept()
+            self.assertIsNone(dialog.result, "No implicit acknowledgement on a new export")
+            dialog.pilot_acknowledged.set(True)
+            dialog._accept()
             self.assertEqual(dialog.result["thresholds"]["plant_presence"]["highThreshold"], .8)
             self.assertEqual(dialog.result["deploymentMode"], "operational")
+            self.assertEqual(dialog.result["evaluationPolicy"], "unvalidated_pilot")
+            self.assertTrue(dialog.result["pilotAcknowledged"])
         finally:
             if dialog.winfo_exists():
                 dialog.destroy()
@@ -357,6 +378,7 @@ class HydroReviewUiTests(unittest.TestCase):
                 dialog = HydroBundleConfigDialog(self.app, defaults)
                 dialog.runtime_label.set(runtime)
                 dialog.deployment_label.set(mode)
+                dialog.pilot_acknowledged.set(True)
                 dialog._accept()
                 self.assertEqual(dialog.result['runtimeTarget'], HYDRO_RUNTIME_LABELS[runtime])
                 self.assertEqual(dialog.result['deploymentMode'], HYDRO_DEPLOYMENT_LABELS[mode])
