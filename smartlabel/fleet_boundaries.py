@@ -18,7 +18,7 @@ def reject_benchmark_sources(paths):
     for path in paths:
         resolved = Path(path).resolve()
         for parent in (resolved, *resolved.parents):
-            if parent.is_dir() and (parent / "benchmark.json").exists():
+            if parent.is_dir() and any((parent / name).exists() for name in ("benchmark.json", "heldout_collection.json", "heldout_frame.json")):
                 raise ValueError("Bộ TEST ngoài chỉ dành cho đánh giá, không được nhập vào TRAIN/VAL.")
 
 

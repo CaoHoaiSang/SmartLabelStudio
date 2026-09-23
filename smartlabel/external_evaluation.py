@@ -36,6 +36,8 @@ def training_inventory(project, attr, dataset, *, validation_used=True):
                       for r in project.images]
     by_name = {}
     for row in provenance:
+        if row.get("source", {}).get("kind") == "heldout_capture" or row.get("source", {}).get("lotId"):
+            raise ValueError("Dataset phát triển chứa nguồn lô TEST dành riêng; không thể chứng nhận độc lập.")
         if row["fileName"] in by_name:
             raise ValueError("Nguồn ảnh train có tên trùng; chưa xác minh được vụ.")
         by_name[row["fileName"]] = row
@@ -92,6 +94,10 @@ def reject_overlap(manifest, inventory):
         if row["sha256"] in hashes or row["pixelSha256"] in pixels:
             raise ValueError("Ảnh TEST trùng byte/pixel với TRAIN hoặc VAL của checkpoint.")
         candidate = row["source"]
+        if manifest.get("schemaVersion") == "HydroHeldoutBenchmarkV1":
+            # Same sowing batch is explicitly disclosed, not a fabricated crop cycle.
+            # Physical separation is an operator attestation; hashes cannot prove it.
+            continue
         for learned in inventory["cycles"]:
             known_gateways = candidate.get("fleetDeviceId") and learned.get("fleetDeviceId")
             same = cycle_key(candidate) == cycle_key(learned) if known_gateways else candidate["cropCycleId"] == learned["cropCycleId"]
@@ -176,6 +182,11 @@ def evaluate_external(project, store, benchmark_id, thresholds, *, device="cpu",
     report = {"schemaVersion": "HydroExternalEvaluationV1", "projectId": project.id,
               "benchmarkId": benchmark_id, "benchmarkSha256": fingerprint,
               "independenceAttested": True, "createdAt": datetime.now(timezone.utc).isoformat(), "models": results}
+    if manifest.get("schemaVersion") == "HydroHeldoutBenchmarkV1":
+        report["evaluationScope"] = {"kind": "reserved_cohort", "unit": "image",
+            "sameSowingBatchAsDevelopment": manifest["cohort"]["sameSowingBatchAsDevelopment"],
+            "declaredPlantCount": manifest["cohort"]["declaredPlantCount"],
+            "plantIdentityVerified": False, "independenceBasis": "operator_attested_reserved_cohort"}
     report_id = "evaluation_" + digest(report)
     reports = benchmark_root(store, project) / "evaluations"
     reports.mkdir(exist_ok=True)
@@ -224,6 +235,13 @@ def validate_evidence(project, store, report, thresholds):
         raise ValueError("Bộ TEST thay đổi sau đánh giá.")
     if report.get("independenceAttested") is not True:
         raise ValueError("Chưa xác nhận lịch sử độc lập của bộ TEST.")
+    if manifest.get("schemaVersion") == "HydroHeldoutBenchmarkV1":
+        expected = {"kind": "reserved_cohort", "unit": "image",
+            "sameSowingBatchAsDevelopment": manifest["cohort"]["sameSowingBatchAsDevelopment"],
+            "declaredPlantCount": manifest["cohort"]["declaredPlantCount"],
+            "plantIdentityVerified": False, "independenceBasis": "operator_attested_reserved_cohort"}
+        if report.get("evaluationScope") != expected:
+            raise ValueError("Phạm vi kiểm định theo lô không khớp bằng chứng.")
     for attr in attrs:
         key = attr["id"]; evidence = report["models"][key]
         if file_hash(project.attribute_models[key]) != evidence["checkpointSha256"]:
@@ -245,7 +263,8 @@ def release_evidence(project, store, thresholds):
     validate_evidence(project, store, report, thresholds)
     return {"schemaVersion": "HydroReleaseEvidenceV1", "reportSha256": digest(report),
             "benchmarkSha256": report["benchmarkSha256"], "reviewedAt": approval["reviewedAt"],
-            "independenceBasis": "export_provenance_and_operator_attestation",
+            "independenceBasis": report.get("evaluationScope", {}).get("independenceBasis", "export_provenance_and_operator_attestation"),
+            **({"evaluationScope": report["evaluationScope"]} if "evaluationScope" in report else {}),
             "models": {k: {"checkpointSha256": v["checkpointSha256"], "attributeIdentity": v["attributeIdentity"],
                        "thresholds": v["thresholds"], "metricsAtHalf": v["metricsAtHalf"],
                        "operatingMetrics": v["operatingMetrics"], "trainingInventorySha256": digest(v["trainingInventory"])}

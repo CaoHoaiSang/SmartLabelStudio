@@ -458,7 +458,7 @@ class SmartLabelApp(ctk.CTk):
             text_color=COLORS["accent"],
         )
         self.image_list_title_label.pack(side="left")
-        switch = ctk.CTkSegmentedButton(header, values=["Giàn", "Bổ trợ", "Khách đóng góp"],
+        switch = ctk.CTkSegmentedButton(header, values=["Giàn", "Bổ trợ", "Khách đóng góp", "TEST"],
             variable=self.label_source, command=self._show_label_workspace,
             selected_color="#256481", selected_hover_color="#327b9c",
             font=("Segoe UI", 11), width=124, height=28, dynamic_resizing=False)
@@ -1712,6 +1712,8 @@ class SmartLabelApp(ctk.CTk):
         self.supplement_view = SupplementReviewView(self, COLORS)
         self.supplement_base_view = self.supplement_view
         self.fleet_label_view = None
+        from .heldout_review_view import HeldoutReviewView
+        self.heldout_label_view = HeldoutReviewView(self, COLORS)
 
     def _supplement_active(self):
         return bool(getattr(getattr(self, "supplement_view", None), "active", False))
@@ -3552,6 +3554,9 @@ class SmartLabelApp(ctk.CTk):
         self._button(split_card, "BỘ TEST NGOÀI · ĐÁNH GIÁ CHECKPOINT", self._open_external_benchmark,
                      width=350, color="#48657a",
                      tooltip="Nhập bộ kiểm định đã duyệt riêng, đánh giá đúng checkpoint/ngưỡng và duyệt bằng chứng phát hành.").pack(anchor="w", padx=14, pady=(0, 10))
+        self._button(split_card, "THU THẬP TEST · CAMERA RIÊNG", self._open_heldout_collector,
+                     width=350, color="#48657a",
+                     tooltip="Chụp lô cây riêng, gồm rọ trống; không thêm vào vụ Hydro hoặc TRAIN/VAL.").pack(anchor="w", padx=14, pady=(0, 10))
         info = self._card(dataset_right, "THỐNG KÊ DATASET")
         info.pack(fill="both", expand=True, pady=(6, 0))
         self.dataset_info = ctk.CTkTextbox(info, fg_color="#091119", font=("Consolas", 13), corner_radius=10)
@@ -3597,6 +3602,14 @@ class SmartLabelApp(ctk.CTk):
             return
         from .benchmark_dialog import ExternalBenchmarkDialog
         ExternalBenchmarkDialog(self)
+
+    def _open_heldout_collector(self) -> None:
+        if not self.project or not is_hydroponic_project(self.project) or not self._can_change_project():
+            return
+        if not self.supplement_view.allow_leave():
+            return
+        from .heldout_capture_dialog import HeldoutCaptureDialog
+        HeldoutCaptureDialog(self)
 
     def _split_assignment_changed(self) -> None:
         self._refresh_split_status()
@@ -5396,12 +5409,21 @@ class SmartLabelApp(ctk.CTk):
 
     def _show_label_workspace(self, name, *, force=False):
         if not force and not self.supplement_view.allow_leave():
-            self.label_source.set("Khách đóng góp" if self.supplement_view is self.fleet_label_view else "Bổ trợ")
+            self.label_source.set("TEST" if self.supplement_view is self.heldout_label_view else
+                                  "Khách đóng góp" if self.supplement_view is self.fleet_label_view else "Bổ trợ")
+            return
+        if name == "TEST" and is_hydroponic_project(self.project):
+            if self.supplement_view is not self.heldout_label_view:
+                self.supplement_view.deactivate(render=False)
+                self.supplement_view = self.heldout_label_view
+            self.label_source.set("TEST")
+            self.supplement_view.activate()
             return
         if name == "Khách đóng góp" and is_hydroponic_project(self.project):
             target = self.fleet_label_view
             if target is None or target.session.project_id != self.project.id or not target.session.data:
-                self.label_source.set("Bổ trợ" if self._supplement_active() else "Giàn")
+                self.label_source.set("TEST" if self.supplement_view is self.heldout_label_view else
+                                      "Bổ trợ" if self._supplement_active() else "Giàn")
                 self._open_fleet_intake()
                 return
             if self.supplement_view is not target:
@@ -5410,7 +5432,7 @@ class SmartLabelApp(ctk.CTk):
             self.label_source.set(name)
             target.activate()
             return
-        if self.supplement_view is self.fleet_label_view:
+        if self.supplement_view is self.fleet_label_view or self.supplement_view is self.heldout_label_view:
             self.supplement_view.deactivate(render=not force)
             self.supplement_view = self.supplement_base_view
         supplemental = name in {"Ảnh bổ trợ", "Bổ trợ"} and is_hydroponic_project(self.project)

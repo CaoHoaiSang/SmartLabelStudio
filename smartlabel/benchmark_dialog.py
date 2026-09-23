@@ -30,7 +30,7 @@ class ExternalBenchmarkDialog(ctk.CTkToplevel):
         body = ctk.CTkScrollableFrame(self)
         body.pack(fill="both", expand=True, padx=12, pady=12)
         ctk.CTkLabel(body, text="1. Tạo hoặc nhập bộ TEST độc lập", font=("Arial", 18, "bold")).pack(anchor="w")
-        ctk.CTkLabel(body, text="Ảnh đã duyệt, rõ vụ/giàn/rọ. Bộ TEST lưu riêng; không tự thêm vào TRAIN/VAL hay đổi phân tập.",
+        ctk.CTkLabel(body, text="Ảnh đã duyệt từ vụ Hydro hoặc lô TEST riêng. Bộ TEST cách ly; không tự thêm vào TRAIN/VAL hay đổi phân tập.",
                      anchor="w").pack(fill="x")
         self.cycles = cycle_rows(self.project, only_slots=True)
         self.cycle_list = tk.Listbox(body, height=4, selectmode=tk.EXTENDED, exportselection=False,
@@ -127,7 +127,14 @@ class ExternalBenchmarkDialog(ctk.CTkToplevel):
         def worker():
             try: self.events.put(("done", work()))
             except Exception as error: self.events.put(("error", str(error)))
-        self.thread = Thread(target=worker, daemon=True); self.thread.start()
+        try:
+            self.thread = Thread(target=worker, daemon=True); self.thread.start()
+        except Exception as error:
+            self.busy = self.app.evaluation_running = False
+            for widget in self.controls: widget.configure(state="normal")
+            self.status.configure(text="Không khởi động được tác vụ")
+            messagebox.showerror("Tác vụ nền", str(error), parent=self)
+            return
         def poll():
             try:
                 while True:
@@ -142,7 +149,12 @@ class ExternalBenchmarkDialog(ctk.CTkToplevel):
                         self.status.configure(text="Chưa hoàn tất")
                         messagebox.showerror("Bộ TEST ngoài", value, parent=self)
                     else:
-                        self.status.configure(text="Hoàn tất"); done(value)
+                        self.status.configure(text="Hoàn tất")
+                        try:
+                            done(value)
+                        except Exception as error:
+                            self.status.configure(text="Chưa hoàn tất bước tiếp nhận kết quả")
+                            messagebox.showerror("Tiếp nhận kết quả", str(error), parent=self)
                     return
             except Empty: self.after(100, poll)
         self.after(100, poll)
@@ -188,6 +200,12 @@ class ExternalBenchmarkDialog(ctk.CTkToplevel):
     def show_evaluation(self, value):
         self.report_id, report = value
         lines = [f"TEST {report['benchmarkId'][10:22]} · {report['createdAt']}"]
+        if report.get("evaluationScope", {}).get("kind") == "reserved_cohort":
+            scope = report["evaluationScope"]
+            lines.append("LÔ CÂY RIÊNG · Đánh giá theo ảnh, không xác minh danh tính từng cây.\n"
+                + ("Cùng đợt gieo với dữ liệu phát triển; không phải kiểm định qua vụ khác.\n"
+                   if scope["sameSowingBatchAsDevelopment"] else "Khác đợt gieo theo khai báo người thu thập.\n")
+                + f"{scope['declaredPlantCount']} cây khai báo; các ảnh lặp không phải cây độc lập bổ sung.")
         for key, row in report["models"].items():
             m = row["operatingMetrics"]
             lines.append(f"\n{key} · checkpoint {row['checkpointSha256'][:12]} · ngưỡng {row['thresholds']}\n"

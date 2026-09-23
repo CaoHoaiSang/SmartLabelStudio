@@ -1,4 +1,16 @@
-# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 22/09/2026
+# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 23/09/2026
+
+## Thu ảnh lô TEST riêng — Windows pilot 23/09
+
+DATASET → Thu thập TEST: camera/ROI Hydro chỉ đọc, worker riêng không inference;
+lượt1 10 cây, lượt2 6 cây + 4 rọ trống, giữ đủ20ảnh rọ. Gán nhãn trong form
+GÁN NHÃN → TEST hiện hữu, không nhãn tự động hoặc thêm vào TRAIN/VAL.
+Freeze/import contract riêng rồi đánh giá/duyệt theo checkpoint hiện hữu.
+Lô cùng đợt gieo được khai báo đúng, không giả thành vụ khác; vị trí thay đổi
+được, mã cây tùy chọn, kết quả theo ảnh. Không có tính năng mới trong Hydro.
+Đọc [hướng dẫn, giới hạn, bàn giao camera](HELDOUT_CAPTURE_COLLECTOR.md).
+349/349 test đầy đủ đạt (273,530s), gồm24test mới; fixture gói ONNX/ZIP giữ
+phạm vi lô riêng. Chưa thu cây thật/đánh giá model thật hoặc nghiệm thu Nano.
 
 ## Nhận định classifier và trợ giúp ngưỡng — tối22/09
 

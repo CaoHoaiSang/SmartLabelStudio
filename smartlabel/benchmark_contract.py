@@ -92,6 +92,8 @@ def cycle_key(source):
 
 
 def cycle_title(source):
+    if source.get("kind") == "heldout_capture":
+        return "Lô TEST riêng · " + str(source.get("lotId", ""))
     return f"{source.get('cropCycleId') or 'Chưa rõ vụ'} · {source.get('deviceId') or 'Chưa rõ giàn'} · {source.get('siteId') or 'Chưa rõ khu'}"
 
 
@@ -175,8 +177,22 @@ def validate_benchmark(root, project, *, cancel=None):
     root = Path(root).absolute()
     manifest = read_json(inside(root, "benchmark.json"))
     attrs = model_attributes(project)
-    if manifest.get("schemaVersion") != SCHEMA or manifest.get("cropCode") != project.metadata.get("cropCode"):
+    heldout = manifest.get("schemaVersion") == "HydroHeldoutBenchmarkV1"
+    if (manifest.get("schemaVersion") not in {SCHEMA, "HydroHeldoutBenchmarkV1"}
+            or manifest.get("cropCode") != project.metadata.get("cropCode")):
         raise ValueError("Bộ TEST không đúng hợp đồng hoặc cây trồng của project.")
+    if heldout:
+        cohort = manifest.get("cohort", {})
+        from datetime import date
+        if (not re.fullmatch(r"lot_[a-f0-9]{32}", str(cohort.get("lotId", "")))
+                or cohort.get("reservedForTest") is not True
+                or cohort.get("independenceBasis") != "operator_attested_reserved_cohort"
+                or type(cohort.get("sameSowingBatchAsDevelopment")) is not bool
+                or type(cohort.get("declaredPlantCount")) is not int
+                or not 1 <= cohort["declaredPlantCount"] <= 1000
+                or manifest.get("evaluationUnit") != "image"):
+            raise ValueError("Thiếu hồ sơ lô cây dành riêng cho TEST; không được giả thành vụ khác.")
+        date.fromisoformat(cohort.get("sowingDate", ""))
     if canonical(manifest.get("attributes")) != canonical([training_identity(a) for a in attrs]):
         raise ValueError("Schema/ý nghĩa nhãn của bộ TEST không khớp model.")
     rows = manifest.get("records")
@@ -188,12 +204,16 @@ def validate_benchmark(root, project, *, cancel=None):
         if cancel and cancel.is_set():
             raise ValueError("Đã hủy kiểm tra bộ TEST.")
         source = row.get("source", {})
-        if row.get("reviewed") is not True or not all(isinstance(source.get(k), str) and source[k].strip() for k in ("siteId", "deviceId", "cropCycleId", "captureId", "slotId")):
+        required = ("captureId", "slotId") if heldout else ("siteId", "deviceId", "cropCycleId", "captureId", "slotId")
+        if row.get("reviewed") is not True or not all(isinstance(source.get(k), str) and source[k].strip() for k in required):
             raise ValueError("Ảnh TEST cần nhãn đã duyệt và nguồn vụ/giàn/rọ.")
+        if heldout and (source.get("kind") != "heldout_capture" or source.get("lotId") != cohort["lotId"]
+                        or any(source.get(k) for k in ("cropCycleId", "siteId", "deviceId"))):
+            raise ValueError("Ảnh lô TEST phải giữ nguồn thu thập riêng, không giả metadata Hydro.")
         identity = image_identity(inside(root, row.get("path")))
         if any(row.get(k) != v for k, v in identity.items()):
             raise ValueError("Checksum/pixel/dung lượng ảnh TEST không khớp bản kê.")
-        unique = canonical([cycle_key(source), source["captureId"], source["slotId"]])
+        unique = canonical([source["lotId"] if heldout else cycle_key(source), source["captureId"], source["slotId"]])
         if identity["sha256"] in hashes or identity["pixelSha256"] in pixels or unique in identities:
             raise ValueError("Ảnh hoặc nguồn rọ bị trùng trong bộ TEST.")
         hashes.add(identity["sha256"]); pixels.add(identity["pixelSha256"]); identities.add(unique)

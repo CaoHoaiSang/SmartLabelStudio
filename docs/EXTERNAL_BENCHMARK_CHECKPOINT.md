@@ -1,5 +1,12 @@
 # Bộ TEST ngoài gắn checkpoint — 22/09/2026
 
+Bổ sung 23/09: **Thu thập TEST · Camera riêng** dùng `HydroHeldoutBenchmarkV1`
+cho lô cây giữ riêng, gồm cả rọ trống; không giả nguồn vụ Hydro. Form gán nhãn
+và đánh giá/checkpoint vẫn là luồng hiện hữu. Phạm vi cùng đợt gieo được ghi
+trong báo cáo và gói, không thay bằng kết luận kiểm định qua vụ khác. Xem
+[quy trình thu ảnh TEST](HELDOUT_CAPTURE_COLLECTOR.md). Contract `HydroBenchmarkV1`
+bên dưới vẫn giữ yêu cầu nguồn giàn/vụ/rọ như cũ.
+
 ## Cách dùng
 
 Trong Dataset chọn **Bộ TEST ngoài · Đánh giá checkpoint**. Đây là một luồng
