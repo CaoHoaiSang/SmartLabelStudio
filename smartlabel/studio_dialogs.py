@@ -5,12 +5,13 @@ accept on Escape/window close; long help and errors scroll inside a bounded dial
 """
 import tkinter as tk
 import customtkinter as ctk
+from .ui_layout import StudioToplevel
 
 from .ui_layout import (setup_dialog, dialog_header, dialog_footer, wrapped_label,
                         SURFACE, MUTED)
 
 
-class MessageDialog(ctk.CTkToplevel):
+class MessageDialog(StudioToplevel):
     def __init__(self, parent, title, message, *, kind="info", choices=None, cancel="ok", detail=""):
         super().__init__(parent, fg_color=SURFACE)
         self.result = cancel
@@ -88,7 +89,7 @@ def askquestion(title=None, message=None, **options):
     return "yes" if askyesno(title, message, **options) else "no"
 
 
-class InputDialog(ctk.CTkToplevel):
+class InputDialog(StudioToplevel):
     def __init__(self, parent, title, prompt, *, number=False, initialvalue=None,
                  minvalue=None, maxvalue=None, show=None):
         super().__init__(parent, fg_color=SURFACE)

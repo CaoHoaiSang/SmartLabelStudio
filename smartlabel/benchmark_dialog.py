@@ -7,6 +7,8 @@ import tkinter as tk
 from tkinter import filedialog
 from . import studio_dialogs as messagebox
 import customtkinter as ctk
+from .dropdown import StudioOptionMenu
+from .ui_layout import StudioToplevel
 
 from .benchmark_contract import (cycle_rows, export_benchmark, import_benchmark, list_benchmarks,
                                  benchmark_root, validate_benchmark, cycle_title, read_json, inside)
@@ -16,7 +18,7 @@ from .hydro_model_tools import threshold_defaults, file_hash
 from .ui_layout import setup_dialog, dialog_header, dialog_section, dialog_footer, wrapped_label, MUTED
 
 
-class ExternalBenchmarkDialog(ctk.CTkToplevel):
+class ExternalBenchmarkDialog(StudioToplevel):
     def __init__(self, app):
         super().__init__(app)
         self.app, self.project, self.store = app, app.project, app.store
@@ -44,7 +46,7 @@ class ExternalBenchmarkDialog(ctk.CTkToplevel):
         actions = ctk.CTkFrame(source, fg_color="transparent"); actions.pack(fill="x", pady=6)
         self.button(actions, "Tạo bộ TEST từ vụ đã chọn…", self.export).pack(side="left", padx=(0, 8))
         self.button(actions, "Nhập bộ TEST ngoài…", self.select_import).pack(side="left")
-        self.benchmark_menu = ctk.CTkOptionMenu(source, values=["Chưa nhập bộ TEST"], command=lambda _: self.clear_report(), height=36)
+        self.benchmark_menu = StudioOptionMenu(source, values=["Chưa nhập bộ TEST"], command=lambda _: self.clear_report(), height=36)
         self.benchmark_menu.pack(fill="x", pady=10); self.controls.append(self.benchmark_menu)
         model = dialog_section(body, "02  ·  Checkpoint và ngưỡng cố định",
             "Low: kết luận Không · High: kết luận Có · Khoảng giữa: Chưa chắc chắn")
@@ -70,7 +72,7 @@ class ExternalBenchmarkDialog(ctk.CTkToplevel):
         wrapped_label(model, "Kiểm tra ảnh trùng và vụ không chứng minh toàn bộ lịch sử train. Không dùng kết quả TEST để dò ngưỡng.", color="#dca75f").pack(fill="x")
         self.button(model, "Đánh giá checkpoint trên bộ TEST", self.evaluate).pack(anchor="w", pady=(12, 0))
         evidence = dialog_section(body, "03  ·  Xem và duyệt bằng chứng")
-        self.report_menu = ctk.CTkOptionMenu(evidence, values=["Chưa có báo cáo"], command=self.select_report, height=36)
+        self.report_menu = StudioOptionMenu(evidence, values=["Chưa có báo cáo"], command=self.select_report, height=36)
         self.report_menu.pack(fill="x", pady=6); self.controls.append(self.report_menu)
         self.result = ctk.CTkTextbox(evidence, height=175, font=("Consolas", 13), fg_color="#0b151f", corner_radius=8); self.result.pack(fill="x")
         self.button(evidence, "Duyệt kết quả cho checkpoint và ngưỡng này", self.approve).pack(anchor="w", pady=10)

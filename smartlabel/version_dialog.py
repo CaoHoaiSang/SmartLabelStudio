@@ -3,10 +3,11 @@ from __future__ import annotations
 import tkinter as tk
 
 import customtkinter as ctk
+from .ui_layout import StudioToplevel
 from .ui_layout import setup_dialog, dialog_footer, wrapped_label, MUTED
 
 
-class DatasetVersionDialog(ctk.CTkToplevel):
+class DatasetVersionDialog(StudioToplevel):
     """Modal dialog that distinguishes an empty name from cancellation."""
 
     def __init__(self, parent) -> None:

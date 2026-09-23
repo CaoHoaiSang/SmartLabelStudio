@@ -2,12 +2,13 @@
 import webbrowser
 
 import customtkinter as ctk
+from .ui_layout import StudioToplevel
 
 from .fleet_intake import fleet_inbox_url, list_staged
 from .ui_layout import setup_dialog, dialog_header, dialog_section, dialog_footer, wrapped_label, MUTED
 
 
-class FleetIntakeView(ctk.CTkToplevel):
+class FleetIntakeView(StudioToplevel):
     def __init__(self, app, project, root):
         super().__init__(app)
         self.app, self.project, self.root = app, project, root

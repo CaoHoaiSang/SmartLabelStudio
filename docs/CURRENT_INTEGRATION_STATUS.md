@@ -1,5 +1,20 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 23/09/2026
 
+## Sửa mật độ popup/dropdown sau phản hồi — 23/09
+
+Nhánh `fix/smartlabel-popup-density-dropdowns`: sửa vòng tự co wraplength khiến
+mô tả còn100px dù khung rộng; title cyan#22b9ee, inset12–16px, gom các hàng ngắn.
+Dropdown dùng một component owned hỗ trợ keyboard/cuộn/đóng ngoài/Esc và trả
+grab; không xóa callback resize của CTk. Thùng rác dự án có layout riêng, tất cả
+popup dựng khi ẩn rồi hiện với owner để tránh chu kỳ withdraw của CTk titlebar.
+Dataset Phân tập / Kiểm định hai cột responsive; thống kê Giàn có nền riêng.
+Không đổi dữ liệu, split, nhãn hoặc điều kiện phát hành. Xem
+[quy tắc chi tiết](DIALOG_DESIGN_SYSTEM.md). Bản cuối372/372test đạt392,383s;
+compileall và diff check đạt. Lượt đầu tìm ra hồi quy wrap ô số liệu tổng quan,
+đã sửa và chạy lại đầy đủ, không tăng timeout/đổi test xuất model để che lỗi.
+Capture Windows vẫn lỗi0x80004002: cần lưu việc/mở lại và đối chiếu trực quan;
+không coi kiểm thử widget là audit hình ảnh toàn ứng dụng.
+
 ## Popup và phân nhóm nguồn ảnh — 23/09
 
 Chuẩn hóa vị trí/DPI/cửa sổ con, chữ và hành động popup. Fleet non-modal có

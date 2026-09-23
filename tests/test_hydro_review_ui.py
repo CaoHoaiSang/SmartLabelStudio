@@ -82,8 +82,10 @@ class HydroReviewUiTests(unittest.TestCase):
         self.app._change_project_context(deepcopy(self.bottle))
         self.assertFalse(tools.winfo_manager())
         self.app._change_project_context(deepcopy(self.hydro))
-        self.assertEqual(tools.master.pack_slaves().index(tools) + 1,
-                         tools.master.pack_slaves().index(self.app.dataset_statistics_card))
+        self.assertIs(tools.master, self.app.dataset_tools_row)
+        self.assertTrue(self.app.dataset_tools_row.secondary_visible)
+        self.assertEqual(tools.master.master.pack_slaves().index(tools.master) + 1,
+                         tools.master.master.pack_slaves().index(self.app.dataset_statistics_card))
 
     def test_overview_counts_hydro_attributes_and_keeps_bottle_geometry(self):
         self.app.project.images[0].review_status = "reviewed"

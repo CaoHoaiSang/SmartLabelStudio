@@ -93,9 +93,12 @@ class ProjectOverview(ctk.CTkScrollableFrame):
         self.label(self, project.name, size=20, bold=True)
         self.label(self, "Phân loại từng rọ · Nhãn trực tiếp trên ảnh" if hydro
                    else "Nhãn vật thể · RECT / SEG / OBB / ORI", color=muted)
+        rack = self
         if hydro:
-            self.label(self, "ẢNH TỪ GIÀN", size=13, color=self.colors["accent"], bold=True)
-        totals = ctk.CTkFrame(self, fg_color="transparent")
+            rack = ctk.CTkFrame(self, fg_color="#142a3c", corner_radius=10)
+            rack.pack(fill="x", padx=6, pady=(10, 0))
+            self.label(rack, "ẢNH TỪ GIÀN", size=13, color=self.colors["accent"], bold=True)
+        totals = ctk.CTkFrame(rack, fg_color="transparent")
         totals.pack(fill="x", padx=6, pady=(8, 12))
         totals.grid_columnconfigure((0, 1, 2), weight=1, uniform="counts")
         statuses = summary["statuses"]
@@ -108,17 +111,17 @@ class ProjectOverview(ctk.CTkScrollableFrame):
             self.label(card, f"{count:,}", size=23, color=color, bold=True)
             self.label(card, title, color=muted)
         if statuses.get("rejected"):
-            self.label(self, f"Ảnh bị từ chối: {statuses['rejected']}", color=muted)
+            self.label(rack, f"Ảnh bị từ chối: {statuses['rejected']}", color=muted)
         if not hydro:
             self.render_geometry(project, summary)
             return
-        self.label(self, "THUỘC TÍNH TRÊN ẢNH RỌ", size=13, color=self.colors["accent"], bold=True)
-        self.label(self, "Có / Không: số ảnh rọ đã duyệt theo từng thuộc tính.", color=muted)
+        self.label(rack, "THUỘC TÍNH TRÊN ẢNH RỌ", size=13, color=self.colors["accent"], bold=True)
+        self.label(rack, "Có / Không: số ảnh rọ đã duyệt theo từng thuộc tính.", color=muted)
         rows = summary["image_attributes"]
         for row in rows:
             counts = row["reviewed"]
             pending = sum(row["pending"].values())
-            card = self.attribute_card(self, row["title"], counts,
+            card = self.attribute_card(rack, row["title"], counts,
                 f"Chưa duyệt / bị loại {pending}" if pending else "")
             splits = ctk.CTkFrame(card, fg_color="#10202d", corner_radius=8)
             splits.grid_columnconfigure((0, 1, 2, 3), weight=1)
@@ -130,13 +133,13 @@ class ProjectOverview(ctk.CTkScrollableFrame):
             self.split_frames.append(splits)
             if self.details_visible:
                 splits.pack(fill="x", padx=10, pady=(4, 10))
-        self.toggle = ctk.CTkButton(self, text="", command=self.toggle_details, fg_color="#243d51", hover_color="#31526c")
+        self.toggle = ctk.CTkButton(rack, text="", command=self.toggle_details, fg_color="#243d51", hover_color="#31526c")
         self.toggle.pack(anchor="w", padx=8, pady=8)
         self.update_toggle()
-        self.label(self, "Train / Val / Test chỉ tính ảnh đã duyệt, nhãn Có hoặc Không hợp lệ; tình trạng lá cần xác nhận có cây.", color=muted, size=11)
+        self.label(rack, "Train / Val / Test chỉ tính ảnh đã duyệt, nhãn Có hoặc Không hợp lệ; tình trạng lá cần xác nhận có cây.", color=muted, size=11)
         missing = [r["title"] for r in rows if any(r["splits"]["test"].get(k, 0) == 0 for k in ("positive", "negative"))]
         if missing:
-            self.label(self, "TEST còn thiếu một trong hai nhóm Có / Không: " + ", ".join(missing)
+            self.label(rack, "TEST còn thiếu một trong hai nhóm Có / Không: " + ", ".join(missing)
                        + ". Chưa đủ dữ liệu để đánh giá hai nhóm.", color=self.colors["warn"], size=11)
         self.render_supplements(store, project, muted)
         self.render_heldout(store, project, muted)

@@ -9,16 +9,18 @@ from . import studio_dialogs as messagebox
 import tkinter as tk
 
 import customtkinter as ctk
+from .dropdown import StudioOptionMenu
+from .ui_layout import StudioToplevel
 from PIL import Image, ImageTk
 
 from .benchmark_dialog import ExternalBenchmarkDialog
 from .benchmark_contract import import_benchmark, read_json, canonical
 from . import heldout_collection as storage
 from .heldout_camera import prepare_profiles, run_worker
-from .ui_layout import setup_dialog, dialog_header, dialog_footer, wrapped_label, PANEL, BORDER, MUTED
+from .ui_layout import setup_dialog, dialog_header, dialog_footer, wrapped_label, PANEL, BORDER, MUTED, TITLE
 
 
-class HeldoutCaptureDialog(ctk.CTkToplevel):
+class HeldoutCaptureDialog(StudioToplevel):
     # Same project ownership/cancellation machinery as evaluation jobs.
     run = ExternalBenchmarkDialog.run
     button = ExternalBenchmarkDialog.button
@@ -57,25 +59,35 @@ class HeldoutCaptureDialog(ctk.CTkToplevel):
             right.grid_configure(row=1 if compact else 0, column=0 if compact else 1, pady=(12 if compact else 0, 0))
         body.bind("<Configure>", reflow, add="+")
         self.label(left, "1. Lô cây dành riêng cho TEST", bold=True)
-        self.lot_menu = ctk.CTkOptionMenu(left, values=["Chưa có lô"], command=self.lot_changed)
-        self.lot_menu.pack(fill="x", pady=6); self.controls.append(self.lot_menu)
+        self.lot_menu = StudioOptionMenu(left, values=["Chưa có lô"], command=self.lot_changed)
+        self.lot_menu.pack(fill="x", padx=12, pady=6); self.controls.append(self.lot_menu)
         self.lot_info = self.label(left, "")
         self.name_entry = self.entry(left, "Tên lô", "16 cây thùng xốp")
-        self.date_entry = self.entry(left, "Ngày gieo thật (YYYY-MM-DD)", "")
-        self.count_entry = self.entry(left, "Số cây trong lô", "16")
+        details = ctk.CTkFrame(left, fg_color="transparent")
+        details.pack(fill="x", padx=12, pady=2)
+        details.grid_columnconfigure(0, weight=2)
+        details.grid_columnconfigure(1, weight=1)
+        wrapped_label(details, "Ngày gieo · YYYY-MM-DD", color=MUTED).grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        wrapped_label(details, "Số cây", color=MUTED).grid(row=0, column=1, sticky="ew")
+        self.date_entry = ctk.CTkEntry(details, width=1)
+        self.date_entry.grid(row=1, column=0, sticky="ew", padx=(0, 8), pady=(2, 4))
+        self.count_entry = ctk.CTkEntry(details, width=1)
+        self.count_entry.insert(0, "16")
+        self.count_entry.grid(row=1, column=1, sticky="ew", pady=(2, 4))
+        self.controls.extend((self.date_entry, self.count_entry))
         self.same_batch = self.check(left, "Cùng đợt gieo với cây phát triển model")
         self.same_batch.select()
         self.reserved = self.check(left, "Toàn bộ cây chưa dùng phát triển model;\nchỉ dành lô này cho TEST")
-        self.button(left, "Tạo lô TEST", self.create_lot).pack(fill="x", pady=8)
+        self.button(left, "Tạo lô TEST", self.create_lot).pack(fill="x", padx=12, pady=8)
         self.label(left, "Không tạo mùa vụ giả. Vị trí thay đổi được; mã từng cây là tùy chọn.")
         self.label(left, "2. Cấu hình chụp", bold=True)
-        self.button(left, "Nạp camera + ROI từ Hydro…", self.select_profiles).pack(fill="x", pady=6)
+        self.button(left, "Nạp camera + ROI từ Hydro…", self.select_profiles).pack(fill="x", padx=12, pady=6)
         self.profile_info = self.label(left, "Chỉ đọc bản sao cấu hình. Không ghi vào Hydro.")
         self.handoff = self.check(left, "Đã dừng riêng dịch vụ Camera và tắt cơ chế\ntự khởi động lại; đã bố trí cây TEST")
         self.label(left, "Không dừng backend/bơm. Chỉ bật Camera lại sau khi trả đúng cây vận hành.")
         self.session_entry = self.entry(left, "Tên lượt chụp (tùy chọn)", "Lượt 1 · 10 cây")
-        self.button(left, "Chụp để xem trước", self.capture).pack(fill="x", pady=8)
-        self.button(left, "Lưu đủ 10 ROI đã xem", self.save).pack(fill="x", pady=4)
+        self.button(left, "Chụp để xem trước", self.capture).pack(fill="x", padx=12, pady=8)
+        self.button(left, "Lưu đủ 10 ROI đã xem", self.save).pack(fill="x", padx=12, pady=4)
         self.label(left, "Ảnh rọ trống vẫn được lưu. Khai báo bố trí không tự trở thành nhãn đã duyệt.")
         self.label(right, "Xem trước toàn giàn và vị trí ROI", bold=True)
         self.canvas = tk.Canvas(right, width=1, height=360, bg="#0b1820", highlightthickness=0)
@@ -107,7 +119,7 @@ class HeldoutCaptureDialog(ctk.CTkToplevel):
 
     def label(self, parent, text, bold=False):
         widget = wrapped_label(parent, text, size=15 if bold else 13, bold=bold,
-                               color="#68d7c0" if bold else MUTED)
+                               color=TITLE if bold else MUTED)
         widget.pack(fill="x", padx=12, pady=(14 if bold else 4, 4)); return widget
 
     def reflow_slots(self, event=None):

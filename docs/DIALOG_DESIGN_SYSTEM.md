@@ -5,20 +5,46 @@
 - Giữ CustomTkinter5.2.2/Python3.10.11 hiện có trên Windows; không đổi framework,
   không cài dependency mới. Kiểm thử DPI bằng tính toán/widget, chưa nghiệm thu
   trên nhiều màn hình vật lý hoặc Linux/Nano.
-- Nền navy `#0b151f`, thẻ `#142333`, viền `#294153`; điểm nhấn xanh ngọc.
+- Nền navy `#0b151f`, thẻ `#142333`, viền `#294153`; **mọi tiêu đề popup/nhóm
+  popup dùng cyan `#22b9ee`** như Quản lý nhãn dự án. Màu trạng thái giữ riêng.
 - Segoe UI: nội dung tối thiểu 13 px logic, tiêu đề nhóm 15 px, tiêu đề popup 20 px.
   Nút/ô nhập tối thiểu 34 px, bo 8 px; thẻ bo 12 px. Màu cảnh báo và lỗi tách riêng.
 - Popup nằm giữa cửa sổ sở hữu, giới hạn trong work area của **màn hình đang chứa
   SmartLabel**, có tính DPI và taskbar; không ép tất cả về màn hình chính.
 - Tiêu đề, nội dung, hành động phân vùng rõ. Nội dung dài cuộn; footer được dành
   chỗ trước nội dung để nút đóng/xác nhận không bị đẩy ra ngoài màn hình.
-- Fleet là cửa sổ con **không modal**: luôn thuộc SmartLabel, nâng một lần sau
-  callback titlebar của CTk, không đặt always-on-top toàn hệ điều hành. Đóng
+- `StudioToplevel` xác lập owner khi còn ẩn, dựng nội dung rồi mới hiện. Giữ
+  titlebar chuẩn hệ điều hành; tắt riêng chu kỳ withdraw/update/revert màu
+  titlebar của CTk5.2 trên lớp popup này để tránh hiện lại phía sau cửa sổ chính.
+  Không gọi lại transient lúc cửa sổ đang hiện (Tk/Windows có thể làm nó ẩn).
+- Fleet là cửa sổ con **không modal**: luôn thuộc SmartLabel, không đặt
+  always-on-top toàn hệ điều hành. Đóng
   cửa sổ không hủy job nhận ảnh do app sở hữu.
 - Popup modal: Esc/X chạy đúng hàm đóng hiện có. Đang xử lý vẫn phải dừng/chờ
   worker; không bypass busy guard. Popup con đóng thì trả grab cho popup cha.
 - Thông báo/trợ giúp/xác nhận/nhập chữ hoặc số dùng giao diện chung. X/Esc không
   đồng nghĩa xác nhận. Hộp chọn tệp/thư mục/màu vẫn là hộp chuẩn Windows.
+
+### Bổ sung sau phản hồi về mật độ bố cục — 23/09
+
+- Đoạn mô tả xếp dọc phải `fill=x`; bỏ việc tự thu hẹp theo kích thước chữ.
+  Bỏ qua Configure1px tạm thời và nhãn ẩn; fit khi Map. Không áp callback wrap
+  mới cho các ô số liệu tổng quan: giữ cơ chế resize hiện có để tránh hàng
+  nghìn lượt vẽ lại lúc app khởi tạo.
+- Style chỉ configure font/kích thước nếu khác chuẩn, không vẽ lại toàn bộ
+  widget không cần thiết. Đếm Class một lượt thay vì quét lại ảnh cho mỗi Class.
+- Không thêm nhiều tầng thông báo hoặc bỏ các cảnh báo an toàn để giảm chiều cao.
+  Gom hai nút trợ giúp ngưỡng trên một hàng; ngày gieo/số cây cạnh nhau; bộ lọc
+  phân tập/vụ/chọn nhóm cùng hàng. Thẻ và control có khoảng đệm12–16px.
+- Dropdown dùng `StudioOptionMenu` toàn ứng dụng, giữ nguyên API CTkOptionMenu:
+  nền navy, mũi tên riêng, menu tối cùng chiều rộng tối thiểu với ô chọn, inset8px,
+  dấu chọn hiện tại, cuộn danh sách/tên dài; phím mũi tên/Enter/Esc/Tab.
+  Nhấn ngoài/hết focus/ẩn owner/đổi values hoặc variable/hủy widget đều đóng
+  mà không chọn nhầm. Grab chỉ cục bộ và trả về modal cha; không bind_all.
+  Python3.10 unbind(funcid) xóa tất cả callback cùng sự kiện, nên chỉ gỡ dòng
+  Tcl của callback popup; giữ nguyên callback resize/focus của CTk.
+- Dự án đã xóa dùng cửa sổ riêng chung chuẩn: tên, số ảnh, nút khôi phục và
+  trạng thái thùng rác trống. Không thêm xóa vĩnh viễn hoặc đổi cơ chế khôi phục.
 
 ## Danh sách ảnh và Dataset
 
@@ -34,11 +60,15 @@ Hai tác vụ giữ trong **Dataset → Bộ kiểm định độc lập**, cùn
 
 Không đặt các tác vụ này ở Dự án: Dự án giữ tổng quan, Dataset phụ trách dữ
 liệu phát triển/kiểm định. Nhóm tác vụ TEST ẩn với project không phải Hydro.
+**Phân tập cố định** và **Bộ kiểm định độc lập** nằm trong hai cột cùng hàng,
+cùng chiều cao khi vùng nội dung đủ840px logic; hẹp hơn tự xếp dọc. Khi đổi
+project không phải Hydro, nhóm phân tập chiếm toàn chiều rộng.
 
 ## Ngữ nghĩa thống kê — không chỉ đổi màu
 
 Thẻ thuộc tính dùng chung bố cục: tiêu đề trái, chip Có/Không phải, lý do chưa
 tính bên dưới. Không gộp ba nguồn thành một bộ train:
+Mỗi nguồn có nền nhóm riêng: Giàn `#142a3c`, Bổ trợ `#132b31`, TEST `#1c243b`.
 
 | Nguồn | Chip Có/Không tính gì? | Không tự làm |
 |---|---|---|
@@ -59,8 +89,17 @@ topmost, popup lồng nhau, trợ giúp dài/cuộn, input sai/hủy, footer khi
 thống kê TEST dựa vào nhãn chứ không bố trí. Các cửa sổ Tk được chạy trên
 project tạm; không dùng dự án người dùng để thử ghi.
 Thêm test trong `test_hydro_review_ui.py` cho nhóm tác vụ TEST theo project.
-Bản cuối362/362test đạt463,296s (13test mới); compileall và diff check đạt.
-Suite cũ còn cảnh báo timer Tk khi hủy root; không có test thất bại.
+Mốc trước phản hồi:362/362test đạt463,296s. Đợt sửa mật độ/dropdown thêm10test
+về chiều rộng mô tả, style idempotent, inset, thùng rác/z-order, hai cột,
+dropdown/grab/keyboard/cleanup và bảo toàn nút xóa thuộc tính khi thu nhỏ.
+22/22test giao diện dùng chung và20/20test Hydro review đạt trước lượt toàn bộ.
+Bản cuối **372/372test đạt392,383s**, compileall/diff check đạt. Lượt đầu371/372
+phát hiện hồi quy redraw tổng quan, đã loại bỏ và chạy lại; không tăng timeout
+hay sửa điều kiện bài kiểm tra xuất model. Suite vẫn có cảnh báo teardown Tk
+đã có ở baseline (after/ThemeChanged), không có assertion thất bại ở bản cuối.
+`tools/profile_dialog_layout.py` chạy project tạm: thời gian constructor quản lý
+nhãn1964ms→590ms, mô tả96×119px→940×28px. Đây là một phép đo fixture có profiler,
+không phải cam kết thời gian trên project thật hoặc toàn bộ độ trễ đến lúc vẽ xong.
 
 Công cụ chụp cửa sổ Windows trả `SetIsBorderRequired / 0x80004002`; đã thử
 phục hồi một lần nhưng vẫn lỗi. Đây là rà soát source + ảnh người dùng cung
@@ -71,4 +110,7 @@ source mới. Không tự đóng app vì có thể còn nhãn chưa lưu.
 Tham chiếu chính thức tra ngày 23/09/2026:
 [TkDocs — Toplevel/ownership/grab](https://tkdocs.com/tutorial/windows.html),
 [CustomTkinter — CTkToplevel](https://customtkinter.tomschimansky.com/documentation/windows/toplevel/).
+[Tk — wm/transient](https://www.tcl-lang.org/man/tcl9.0/TkCmd/wm.html) dùng để
+đối chiếu khái niệm ownership; hành vi thực tế kiểm ở Tcl/Tk của Python3.10
+đang cài, không suy ra tương thích Tk9.
 Chỉ áp dụng vào CTk hiện cài; không nâng cấp framework để sửa bố cục.

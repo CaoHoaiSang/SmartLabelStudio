@@ -8,9 +8,11 @@ import re
 import copy
 import unicodedata
 import os
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 
 import customtkinter as ctk
+from .dropdown import StudioOptionMenu
+from .ui_layout import StudioToplevel
 from PIL import Image
 
 from .models import LabelClass, Project
@@ -71,7 +73,7 @@ IMAGE_REVIEW_STATUS_STYLE = {
 }
 
 
-class NewProjectDialog(ctk.CTkToplevel):
+class NewProjectDialog(StudioToplevel):
     def __init__(self, parent, default_template: str = "deltax_bottle"):
         super().__init__(parent)
         self.result: tuple[str, str, dict[str, str]] | None = None
@@ -106,7 +108,7 @@ class NewProjectDialog(ctk.CTkToplevel):
         selected = next((label for label, code in PROJECT_TEMPLATE_LABELS.items() if code == default_template), labels[0])
         self.template = tk.StringVar(value=selected)
         ctk.CTkLabel(body, text="Mẫu cấu hình ban đầu", text_color="#8298aa").pack(anchor="w", padx=24)
-        ctk.CTkOptionMenu(
+        StudioOptionMenu(
             body,
             values=labels,
             variable=self.template,
@@ -196,7 +198,7 @@ def ask_new_project(parent, default_template: str = "deltax_bottle") -> tuple[st
     return dialog.result
 
 
-class HydroBundleConfigDialog(ctk.CTkToplevel):
+class HydroBundleConfigDialog(StudioToplevel):
     def __init__(self, parent, defaults: dict):
         super().__init__(parent)
         self.result: dict | None = None
@@ -245,7 +247,7 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
             next(iter(HYDRO_RUNTIME_LABELS)),
         )
         self.runtime_label = tk.StringVar(value=selected_runtime)
-        ctk.CTkOptionMenu(
+        StudioOptionMenu(
             runtime_row,
             values=list(HYDRO_RUNTIME_LABELS),
             variable=self.runtime_label,
@@ -256,7 +258,7 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
         self.deployment_label = tk.StringVar(value=next(
             (label for label, code in HYDRO_DEPLOYMENT_LABELS.items() if code == defaults.get("deploymentMode", "operational")),
             next(iter(HYDRO_DEPLOYMENT_LABELS))))
-        ctk.CTkOptionMenu(mode_row, values=list(HYDRO_DEPLOYMENT_LABELS), variable=self.deployment_label).pack(side="left", fill="x", expand=True)
+        StudioOptionMenu(mode_row, values=list(HYDRO_DEPLOYMENT_LABELS), variable=self.deployment_label).pack(side="left", fill="x", expand=True)
         ctk.CTkLabel(
             body,
             text=(
@@ -268,14 +270,17 @@ class HydroBundleConfigDialog(ctk.CTkToplevel):
             text_color="#8298aa",
         ).pack(anchor="w", padx=22, pady=(2, 4))
         ctk.CTkLabel(body, text="NGƯỠNG TỪNG CLASSIFIER", text_color="#22b9ee", font=("Segoe UI Semibold", 12)).pack(anchor="w", padx=22, pady=(14, 4))
+        help_row = ctk.CTkFrame(body, fg_color="transparent")
+        help_row.pack(fill="x", padx=22, pady=(0, 8))
+        help_row.grid_columnconfigure((0, 1), weight=1, uniform="help")
         self.training_help_button = ctk.CTkButton(
-            body, text="TEST, Final Train và thử Email", fg_color="#243c50", height=28,
+            help_row, text="TEST, Final Train và Email", fg_color="#243c50", height=34, width=1,
             command=self._show_training_help,
         )
-        self.training_help_button.pack(anchor="w", padx=22, pady=(0, 4))
-        self.threshold_help_button = ctk.CTkButton(body, text="Low / High và checkpoint là gì?", fg_color="#243c50", height=28,
+        self.training_help_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        self.threshold_help_button = ctk.CTkButton(help_row, text="Low / High và checkpoint", fg_color="#243c50", height=34, width=1,
                                                  command=self._show_threshold_help)
-        self.threshold_help_button.pack(anchor="w", padx=22, pady=(0, 4))
+        self.threshold_help_button.grid(row=0, column=1, sticky="ew", padx=(4, 0))
         thresholds = defaults.get("thresholds", {})
         crop_display_name = str(defaults.get("cropDisplayName") or "cây mục tiêu").strip()
         self.model_titles = defaults.get("modelTitles") or {
@@ -731,7 +736,7 @@ class ToolTip:
         self.text = text
 
 
-class ProjectSettingsDialog(ctk.CTkToplevel):
+class ProjectSettingsDialog(StudioToplevel):
     PALETTE = ["#21c7ff", "#74e35c", "#ffb547", "#f55d76", "#ad8cff", "#42d9c8"]
     ATTRIBUTE_TITLES = {
         "condition": "Tình trạng",
@@ -756,6 +761,7 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         self.title("Quản lý Class và thuộc tính")
         self.configure(fg_color="#0b151f")
         self.class_rows: list[dict] = []
+        self._class_counts = Counter(ann.class_id for image in project.images for ann in image.annotations)
         self.attribute_groups: dict[str, dict] = {}
         self.hydro_attributes = ({a["id"]: a for a in model_attributes(project)}
                                  if project.metadata.get("template") == "Hydroponic Slot Condition" else {})
@@ -817,7 +823,7 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         row.grid_columnconfigure(2, weight=1)
         name_var = tk.StringVar(value=name)
         color_var = tk.StringVar(value=color)
-        count = sum(1 for image in self.project.images for ann in image.annotations if ann.class_id == class_id)
+        count = self._class_counts.get(class_id, 0)
         ctk.CTkLabel(row, text=str(class_id), width=44, anchor="w").grid(row=0, column=0, padx=4, pady=6)
         color_button = ctk.CTkButton(row, text="", width=60, height=34, fg_color=color, hover_color=color)
         color_button.grid(row=0, column=1, padx=4)
@@ -964,13 +970,13 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         role_code = str(config.get("role", "metadata"))
         role_var = tk.StringVar(value=self.ROLE_LABELS.get(role_code, self.ROLE_LABELS["metadata"]))
         ctk.CTkLabel(controls, text="Mặc định", text_color="#8298aa").grid(row=0, column=0, sticky="w", padx=(0, 12), pady=4)
-        default_menu = ctk.CTkOptionMenu(controls, width=140, values=[self.NO_DEFAULT], variable=default_var)
+        default_menu = StudioOptionMenu(controls, width=140, values=[self.NO_DEFAULT], variable=default_var)
         default_menu.grid(row=0, column=1, sticky="ew", pady=4)
         required = ctk.CTkCheckBox(controls, text="Bắt buộc", variable=required_var, checkbox_width=19, checkbox_height=19)
         required.grid(row=0, column=2, padx=(12, 0))
         ToolTip(required, "Nếu bật, mọi nhãn phải có giá trị của nhóm này trước khi ảnh được Duyệt.")
         ctk.CTkLabel(controls, text="Mục đích", text_color="#8298aa").grid(row=1, column=0, sticky="w", pady=4)
-        role_menu = ctk.CTkOptionMenu(controls, width=140, values=list(self.ROLE_LABELS.values()), variable=role_var)
+        role_menu = StudioOptionMenu(controls, width=140, values=list(self.ROLE_LABELS.values()), variable=role_var)
         role_menu.grid(row=1, column=1, columnspan=2, sticky="ew", pady=4)
         ToolTip(role_menu, "Nhóm này có thể export crop và train thành classifier riêng sau model Detection/SEG.")
 
@@ -979,7 +985,7 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         scope_code = str(config.get("scope", "annotation_crop"))
         scope_var = tk.StringVar(value=self.SCOPE_LABELS.get(scope_code, self.SCOPE_LABELS["annotation_crop"]))
         ctk.CTkLabel(scope_row, text="Phạm vi nhãn", text_color="#8298aa").pack(side="left")
-        scope_menu = ctk.CTkOptionMenu(scope_row, width=230, values=list(self.SCOPE_LABELS.values()), variable=scope_var)
+        scope_menu = StudioOptionMenu(scope_row, width=230, values=list(self.SCOPE_LABELS.values()), variable=scope_var)
         scope_menu.pack(side="left", padx=8)
         ToolTip(scope_menu, "Crop theo nhãn dùng sau Detection/SEG; toàn ảnh dùng trực tiếp ảnh Classification như slot Hydro.")
 
@@ -1031,7 +1037,7 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
         defaults.pack(fill="x", padx=12, pady=4)
         ctk.CTkLabel(defaults, text="Mặc định").pack(side="left", padx=(0, 8))
         default_label = tk.StringVar()
-        default_menu = ctk.CTkOptionMenu(defaults, variable=default_label, width=250,
+        default_menu = StudioOptionMenu(defaults, variable=default_label, width=250,
             values=[self.NO_DEFAULT], dynamic_resizing=False,
             command=lambda label: self.attribute_groups[key]["default"].set(
                 self.attribute_groups[key]["default_by_label"].get(label, "")))
@@ -1149,10 +1155,9 @@ class ProjectSettingsDialog(ctk.CTkToplevel):
                 "display": display_var, "entry": entry, "meaning": meaning_var, "meaning_label": meaning_label})
             display_var.trace_add("write", lambda *_args, attr_key=key: self._refresh_default_menu(attr_key))
             return
-        else:
-            ctk.CTkEntry(row, textvariable=variable, width=520).pack(side="left", padx=8, pady=5)
         delete = ctk.CTkButton(row, text="Xóa", width=70, fg_color="#a94747")
         delete.pack(side="right", padx=8, pady=5)
+        ctk.CTkEntry(row, textvariable=variable, width=1).pack(side="left", fill="x", expand=True, padx=8, pady=5)
         data = {"value": variable, "frame": row}
         delete.configure(command=lambda: self._delete_attribute_row(key, data))
         ToolTip(delete, "Xóa lựa chọn này nếu chưa có nhãn nào đang sử dụng.")

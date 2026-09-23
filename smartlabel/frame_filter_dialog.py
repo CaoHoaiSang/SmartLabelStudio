@@ -10,6 +10,8 @@ from tkinter import ttk
 from . import studio_dialogs as messagebox
 
 import customtkinter as ctk
+from .dropdown import StudioOptionMenu
+from .ui_layout import StudioToplevel
 from PIL import Image, ImageOps, ImageTk
 
 from .frame_filter import (
@@ -51,7 +53,7 @@ def build_contained_preview(source: Image.Image) -> tuple[Image.Image, tuple[int
     return preview, (left, top, fitted.width, fitted.height)
 
 
-class SmartFrameFilterDialog(ctk.CTkToplevel):
+class SmartFrameFilterDialog(StudioToplevel):
     SOURCE_LABELS = {
         "Tất cả ảnh": SOURCE_ALL,
         "Frame video": SOURCE_VIDEO,
@@ -106,7 +108,7 @@ class SmartFrameFilterDialog(ctk.CTkToplevel):
         self.source_var = tk.StringVar(value="Tất cả ảnh")
         self.include_existing_var = tk.BooleanVar(value=False)
         ctk.CTkLabel(settings_top, text="Nguồn", text_color="#a9bdcc").pack(side="left", padx=(12, 4), pady=6)
-        self.source_menu = ctk.CTkOptionMenu(
+        self.source_menu = StudioOptionMenu(
             settings_top,
             values=list(self.SOURCE_LABELS),
             variable=self.source_var,

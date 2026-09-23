@@ -15,6 +15,22 @@ BORDER = "#294153"
 TEXT = "#e1edf5"
 MUTED = "#9bb0c0"
 ACCENT = "#68d7c0"
+TITLE = "#22b9ee"
+
+
+class StudioToplevel(ctk.CTkToplevel):
+    """Build an owned window while hidden, then map it once in setup_dialog.
+
+    CTk 5.2's Windows titlebar recoloring withdraws the window and calls update()
+    during construction, which can restore focus to the main window afterwards.
+    Keep the OS titlebar here; theme the content without that reentrant map cycle.
+    """
+    _deactivate_windows_window_header_manipulation = True
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.withdraw()
+        self.transient(parent.winfo_toplevel())
 
 
 def dialog_bounds(work_area, owner, width, height, scale=1.0):
@@ -52,7 +68,6 @@ def _work_area(dialog, parent):
 
 def center_dialog(dialog, parent, width=1100, height=760):
     """Fit CTk logical dimensions in the *owner's monitor* work area, not primary."""
-    parent.update_idletasks()
     owner = (parent.winfo_rootx(), parent.winfo_rooty(), parent.winfo_width(), parent.winfo_height())
     if owner[2] <= 1 or owner[3] <= 1:
         area = _work_area(dialog, parent)
@@ -71,6 +86,7 @@ def setup_dialog(dialog, parent, width, height, *, close=None, modal=True):
     """
     close = close or dialog.destroy
     dialog.configure(fg_color=SURFACE)
+    # Do not repeatedly redraw a visible hierarchy while applying its theme.
     style_dialog_content(dialog)
     dialog.transient(parent.winfo_toplevel())
     dialog.protocol("WM_DELETE_WINDOW", close)
@@ -78,6 +94,8 @@ def setup_dialog(dialog, parent, width, height, *, close=None, modal=True):
     previous_grab = dialog.grab_current()
     timers = []
     center_dialog(dialog, parent, width, height)
+    if isinstance(dialog, StudioToplevel):
+        dialog.deiconify()
 
     def show():
         if not dialog.winfo_exists() or dialog.state() == "withdrawn":
@@ -85,7 +103,6 @@ def setup_dialog(dialog, parent, width, height, *, close=None, modal=True):
         current = dialog.grab_current()
         if current is not None and current not in (dialog, parent, previous_grab):
             return  # A newer nested dialog owns focus; do not cover it.
-        center_dialog(dialog, parent, width, height)
         dialog.lift()
         if modal:
             current = dialog.grab_current()
@@ -130,10 +147,17 @@ def style_dialog_content(parent):
             else:
                 family, size = font[:2]
                 weight = font[2] if len(font) > 2 else "normal"
-            if family != "Consolas":
-                widget.configure(font=("Segoe UI Semibold" if "Semibold" in family else "Segoe UI", max(13, size), weight))
+            options = {}
+            desired_family = "Segoe UI Semibold" if "Semibold" in family else "Segoe UI"
+            if family != "Consolas" and (family != desired_family or size < 13):
+                options["font"] = (desired_family, max(13, size), weight)
             if isinstance(widget, (ctk.CTkButton, ctk.CTkEntry, ctk.CTkOptionMenu)):
-                widget.configure(height=max(34, widget.cget("height")), corner_radius=8)
+                if widget.cget("height") < 34:
+                    options["height"] = 34
+                if widget.cget("corner_radius") != 8:
+                    options["corner_radius"] = 8
+            if options:
+                widget.configure(**options)
             if isinstance(widget, ctk.CTkLabel) and widget.cget("wraplength"):
                 _fit_label(widget)
         if isinstance(widget, ctk.CTkFrame) and widget.cget("fg_color") in (ctk.ThemeManager.theme["CTkFrame"]["fg_color"], ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"]):
@@ -144,7 +168,7 @@ def style_dialog_content(parent):
 def dialog_header(parent, title, subtitle=""):
     frame = ctk.CTkFrame(parent, fg_color="transparent")
     frame.pack(fill="x", padx=20, pady=(18, 10))
-    wrapped_label(frame, title, size=20, bold=True, color=TEXT).pack(fill="x")
+    wrapped_label(frame, title, size=20, bold=True, color=TITLE).pack(fill="x")
     if subtitle:
         wrapped_label(frame, subtitle, color=MUTED).pack(fill="x", pady=(4, 0))
     return frame
@@ -163,18 +187,36 @@ def _fit_label(label):
         return
     label._studio_wrap = True
     def fit(event):
-        width = max(100, int(event.width / label._get_widget_scaling()) - 4)
+        # Hidden tabs have no final allocation. Wrapping their provisional sizes
+        # can cause thousands of layout passes during the first app.update().
+        # Refit on Map when the user actually opens that tab/dialog instead.
+        if not label.winfo_ismapped():
+            return
+        # A vertically packed text label MUST consume the available row width.
+        # Otherwise wrapping to its own requested width feeds back into pack,
+        # repeatedly shrinking a paragraph down to a 100px column.
+        if label.winfo_manager() == "pack":
+            layout = label.pack_info()
+            if layout["side"] in ("top", "bottom") and layout["fill"] not in ("x", "both"):
+                label.pack_configure(fill="x")
+                label.configure(anchor="w")
+                return
+        allocated = label.winfo_width()
+        if allocated <= 1:
+            return  # Not allocated yet; never derive wrapping from transient 1px.
+        width = max(40, int(allocated / label._get_widget_scaling()) - 4)
         if label.cget("wraplength") != width:
             label.configure(wraplength=width)
     # CTkLabel.bind targets its inner text/canvas; using their width would create
     # a self-shrinking layout loop. Observe the outer Tk frame instead.
     tk.Misc.bind(label, "<Configure>", fit, add="+")
+    tk.Misc.bind(label, "<Map>", fit, add="+")
 
 
 def dialog_section(parent, title, subtitle=""):
     card = ctk.CTkFrame(parent, fg_color=PANEL, corner_radius=12, border_width=1, border_color=BORDER)
     card.pack(fill="x", pady=(0, 12))
-    wrapped_label(card, title, size=15, bold=True, color=ACCENT).pack(fill="x", padx=16, pady=(12, 4))
+    wrapped_label(card, title, size=15, bold=True, color=TITLE).pack(fill="x", padx=16, pady=(10, 4))
     if subtitle:
         wrapped_label(card, subtitle, color=MUTED).pack(fill="x", padx=16, pady=(0, 8))
     content = ctk.CTkFrame(card, fg_color="transparent")
@@ -216,6 +258,40 @@ class SourceTabs(ctk.CTkFrame):
     def destroy(self):
         self.variable.trace_remove("write", self._trace)
         super().destroy()
+
+
+class TwoColumnCards(ctk.CTkFrame):
+    """Equal-height sibling cards; stack only when there is not enough width."""
+    def __init__(self, parent, *, breakpoint=840):
+        super().__init__(parent, fg_color="transparent", width=1)
+        self.breakpoint = breakpoint
+        self.cards = ()
+        self.secondary_visible = True
+        self.compact = None
+        tk.Misc.bind(self, "<Configure>", lambda event: self.reflow(event.width), add="+")
+
+    def set_cards(self, first, second):
+        self.cards = (first, second)
+        self.reflow()
+
+    def set_secondary_visible(self, visible):
+        self.secondary_visible = visible
+        self.reflow()
+
+    def reflow(self, width=None):
+        if not self.cards:
+            return
+        compact = (width or self.winfo_width()) / self._get_widget_scaling() < self.breakpoint
+        self.compact = compact
+        paired = self.secondary_visible and not compact
+        self.grid_columnconfigure(0, weight=1, uniform="dataset_tools")
+        self.grid_columnconfigure(1, weight=1 if paired else 0, uniform="dataset_tools" if paired else "")
+        self.cards[0].grid(row=0, column=0, sticky="nsew", padx=(0, 6 if paired else 0))
+        if self.secondary_visible:
+            self.cards[1].grid(row=1 if compact else 0, column=0 if compact else 1,
+                               sticky="nsew", padx=(6 if paired else 0, 0), pady=(8 if compact else 0, 0))
+        else:
+            self.cards[1].grid_remove()
 
 
 def pack_before(widget, anchor=None, **options):

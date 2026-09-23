@@ -185,6 +185,205 @@ class StudioDialogTests(unittest.TestCase):
         self.assertGreater(entry.winfo_width(), 100)
         dialog.destroy()
 
+    def test_paragraphs_use_available_width_not_a_self_shrinking_column(self):
+        from smartlabel.ui_components import ProjectSettingsDialog, HydroBundleConfigDialog
+        for dialog, prefix in ((ProjectSettingsDialog(self.root, self.root.project, lambda: None), "Mỗi tình trạng"),
+                               (HydroBundleConfigDialog(self.root, {}), "Thông tin đã có")):
+            self.settle()
+            label = next(w for w in self.descendants(dialog) if isinstance(w, ctk.CTkLabel)
+                         and str(w.cget("text")).startswith(prefix))
+            for width in (980, 650, 1100):
+                dialog.geometry(f"{width}x600")
+                self.settle()
+                self.assertGreater(label.winfo_width(), label.master.winfo_width() - 65)
+                self.assertLessEqual(label.winfo_height(), 60)
+                old = label.cget("wraplength")
+                self.settle()
+                self.assertEqual(label.cget("wraplength"), old)
+            dialog.destroy()
+
+    def test_shared_style_is_idempotent_for_already_styled_controls(self):
+        from smartlabel.ui_layout import style_dialog_content
+        frame = ctk.CTkFrame(self.root, fg_color="transparent")
+        button = ctk.CTkButton(frame, height=34, corner_radius=8, font=("Segoe UI", 13))
+        label = ctk.CTkLabel(frame, font=("Segoe UI", 13))
+        with patch.object(button, "configure", wraps=button.configure) as b, patch.object(label, "configure", wraps=label.configure) as l:
+            style_dialog_content(frame)
+            b.assert_not_called()
+            l.assert_not_called()
+        frame.destroy()
+
+    def test_titles_share_cyan_and_capture_controls_have_card_insets(self):
+        from smartlabel.heldout_capture_dialog import HeldoutCaptureDialog
+        from smartlabel.ui_layout import TITLE
+        dialog = HeldoutCaptureDialog(self.root)
+        self.settle()
+        title = next(w for w in self.descendants(dialog) if isinstance(w, ctk.CTkLabel)
+                     and w.cget("text") == "Thu thập ảnh TEST")
+        self.assertEqual(title.cget("text_color"), TITLE)
+        pane = dialog.lot_menu.master
+        for widget in pane.winfo_children():
+            if isinstance(widget, (ctk.CTkButton, ctk.CTkOptionMenu, ctk.CTkEntry)):
+                padding = widget.pack_info()["padx"]
+                self.assertGreaterEqual(int(padding if isinstance(padding, int) else padding[0]), 12)
+        section = next(w for w in pane.winfo_children() if isinstance(w, ctk.CTkLabel)
+                       and w.cget("text") == "2. Cấu hình chụp")
+        self.assertEqual(section.cget("text_color"), TITLE)
+        dialog.close()
+
+    def test_project_trash_is_owned_above_parent_without_forcing_other_apps(self):
+        from smartlabel.trash_dialog import ProjectTrashDialog
+        calls = []
+        dialog = ProjectTrashDialog(self.root, [self.root.project], calls.append)
+        self.settle()
+        self.root.lift()
+        self.settle()
+        self.assertEqual(str(dialog.transient()), str(self.root))
+        stack = tuple(map(str, self.root.tk.call("wm", "stackorder", self.root)))
+        self.assertGreater(stack.index(str(dialog)), stack.index(str(self.root)))
+        self.assertIs(self.root.grab_current(), dialog)
+        self.assertFalse(bool(dialog.attributes("-topmost")))
+        dialog.geometry("620x420"); self.settle()
+        self.assert_inside(dialog.restore_buttons[0], dialog)
+        self.assertEqual(calls, [])
+        dialog.restore_buttons[0].invoke()
+        self.assertEqual(calls, [self.root.project])
+        dialog.destroy()
+        self.assertIsNone(self.root.grab_current())
+        empty = ProjectTrashDialog(self.root, [], calls.append)
+        self.settle()
+        self.assertEqual(empty.restore_buttons, [])
+        empty.destroy()
+
+    def test_dataset_cards_pair_stack_and_recover_after_project_change(self):
+        from smartlabel.ui_layout import TwoColumnCards, wrapped_label
+        row = TwoColumnCards(self.root)
+        row.pack(fill="x")
+        first = ctk.CTkFrame(row, width=1)
+        second = ctk.CTkFrame(row, width=1)
+        wrapped_label(first, "Phân tập cố định theo Capture Group").pack(fill="x", padx=14)
+        wrapped_label(second, "Bộ kiểm định độc lập").pack(fill="x", padx=14)
+        row.set_cards(first, second)
+        self.settle()
+        self.assertEqual(first.grid_info()["row"], second.grid_info()["row"])
+        self.assertEqual(second.grid_info()["column"], 1)
+        self.assertEqual(first.winfo_height(), second.winfo_height())
+        self.root.geometry("700x600"); self.settle()
+        self.assertEqual(second.grid_info()["row"], 1)
+        row.set_secondary_visible(False); self.settle()
+        self.assertFalse(second.winfo_manager())
+        self.root.geometry("1100x740"); row.set_secondary_visible(True); self.settle()
+        self.assertEqual(second.grid_info()["column"], 1)
+
+    def test_dropdown_is_padded_and_commits_one_callback_restoring_modal_grab(self):
+        from smartlabel.dropdown import StudioOptionMenu
+        from smartlabel.ui_layout import StudioToplevel
+        parent = StudioToplevel(self.root)
+        variable = tk.StringVar(value="Hai")
+        calls = []
+        menu = StudioOptionMenu(parent, values=["Một", "Hai", "Ba"], variable=variable, command=calls.append)
+        menu.pack(fill="x", padx=20, pady=20)
+        setup_dialog(parent, self.root, 700, 450); self.settle()
+        menu._open_dropdown_menu(); self.settle()
+        popup = menu.popup
+        self.assertIsNotNone(popup)
+        self.assertEqual(str(popup.transient()), str(parent))
+        self.assertIs(self.root.grab_current(), popup)
+        self.assertGreaterEqual(popup.winfo_width(), menu.winfo_width())
+        self.assertGreaterEqual(popup.listbox.winfo_rootx() - popup.winfo_rootx(), 8)
+        self.assertEqual(popup.listbox.curselection(), (1,))
+        popup.select(2); popup.commit()
+        self.assertEqual(variable.get(), "Ba")
+        self.assertEqual(calls, ["Ba"])
+        self.assertIs(self.root.grab_current(), parent)
+        parent.destroy()
+        self.assertIsNone(self.root.grab_current())
+
+    def test_dropdown_escape_outside_reload_disable_and_destroy_do_not_commit(self):
+        from types import SimpleNamespace
+        from smartlabel.dropdown import StudioOptionMenu
+        calls = []
+        menu = StudioOptionMenu(self.root, values=[str(i) for i in range(100)], command=calls.append)
+        menu.pack(padx=20, pady=20)
+        self.settle()
+        for close in (lambda p: p.event_generate("<Escape>"),
+                      lambda p: p.outside(SimpleNamespace(x_root=p.winfo_rootx()-10, y_root=p.winfo_rooty())),
+                      lambda p: menu.configure(values=["Mới"]),
+                      lambda p: menu.configure(state="disabled")):
+            menu.configure(state="normal")
+            menu._open_dropdown_menu(); self.settle()
+            self.assertIsNotNone(menu.popup)
+            popup = menu.popup
+            self.assertLessEqual(popup.winfo_rooty() + popup.winfo_height(), popup.winfo_screenheight())
+            close(popup); self.settle()
+            self.assertIsNone(menu.popup)
+            self.assertIsNone(self.root.grab_current())
+            self.assertEqual(calls, [])
+        menu.configure(state="normal")
+        menu._open_dropdown_menu(); self.settle()
+        menu.destroy(); self.settle()
+        self.assertIsNone(self.root.grab_current())
+
+    def test_rack_statistics_have_their_own_source_background(self):
+        from smartlabel.app import COLORS
+        from smartlabel.dataset_manager import DatasetManager
+        view = ProjectOverview(self.root, COLORS)
+        view.pack(fill="both", expand=True)
+        view.render(self.root.store, self.root.project, DatasetManager(self.root.store).summary(self.root.project))
+        self.settle()
+        labels = {w.cget("text"): w for w in self.descendants(view) if isinstance(w, ctk.CTkLabel)}
+        rack = labels["ẢNH TỪ GIÀN"].master
+        self.assertEqual(rack.cget("fg_color"), "#142a3c")
+        self.assertIs(labels["THUỘC TÍNH TRÊN ẢNH RỌ"].master, rack)
+        self.assertIsNot(labels["ẢNH BỔ TRỢ · CHỈ TRAIN"].master, rack)
+
+    def test_dropdown_keyboard_long_names_and_no_lingering_owner_bindings(self):
+        from smartlabel.dropdown import StudioOptionMenu
+        calls = []
+        value = tk.StringVar(value="Một")
+        menu = StudioOptionMenu(self.root, values=["Một", "Hai", "Tên dự án dài " * 30],
+                                variable=value, command=calls.append)
+        menu.pack(fill="x", padx=20, pady=10)
+        self.settle()
+        previous = self.root.bind("<Configure>")
+        menu._canvas.focus_force()
+        menu._canvas.event_generate("<Down>"); self.settle()
+        popup = menu.popup
+        self.assertIsNotNone(popup)
+        self.assertIn("✓", popup.listbox.get(0))
+        self.assertLess(popup.listbox.xview()[1], 1)
+        popup.listbox.event_generate("<Down>")
+        popup.listbox.event_generate("<Return>"); self.settle()
+        self.assertEqual(calls, ["Hai"])
+        self.assertEqual(value.get(), "Hai")
+        self.assertEqual(self.root.bind("<Configure>"), previous)
+        for _ in range(3):
+            menu._open_dropdown_menu(); self.settle()
+            value.set("Một")
+            self.assertIsNone(menu.popup)
+        self.assertEqual(calls, ["Hai"])
+        self.assertEqual(self.root.bind("<Configure>"), previous)
+        menu._open_dropdown_menu(); self.settle()
+        menu.master.event_generate("<Unmap>"); self.settle()
+        self.assertIsNone(menu.popup)
+        self.assertIsNone(self.root.grab_current())
+
+    def test_generic_attribute_entries_leave_delete_action_visible(self):
+        from smartlabel.ui_components import ProjectSettingsDialog
+        generic = self.root.store.create_project("Generic")
+        dialog = ProjectSettingsDialog(self.root, generic, lambda: None)
+        self.settle()
+        tabs = next(w for w in dialog.winfo_children() if isinstance(w, ctk.CTkTabview))
+        tabs.set("THUỘC TÍNH")
+        dialog.geometry("650x600"); self.settle()
+        row = next(iter(dialog.attribute_groups.values()))["rows"][0]["frame"]
+        delete = next(w for w in row.winfo_children() if isinstance(w, ctk.CTkButton))
+        entry = next(w for w in row.winfo_children() if isinstance(w, ctk.CTkEntry))
+        self.assertGreater(entry.winfo_width(), 100)
+        self.assertLessEqual(entry.winfo_rootx() + entry.winfo_width(), delete.winfo_rootx())
+        self.assertLessEqual(delete.winfo_rootx() + delete.winfo_width(), row.winfo_rootx() + row.winfo_width() - 8)
+        dialog.destroy()
+
     def test_shared_attribute_cards_keep_source_counts_separate(self):
         from smartlabel.app import COLORS
         from smartlabel.dataset_manager import DatasetManager
