@@ -1,4 +1,19 @@
-# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 24/09/2026
+# Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 26/09/2026
+
+## Hiện hành: chặn xung đột phân tập / ảnh bổ trợ — 26/09
+
+Phân lại70/15/15 giữ nhóm nguồn của biến thể đang dùng ởTRAIN, có xem trước
+độ phủ nhãn; chuyển thủ công bị chặn nếu gây rò dữ liệu. Xem/chuyển nhóm có
+lọc xung đột, nút sửa đúng nhóm và dự báo số Có/Không trước khi xác nhận.
+Train báo một lần, trước nạp model/export; kiểm đủ lớp riêng trongTRAIN.
+Ghi nguyên tử, dự phòng lần trước, chặn xác nhận cũ và công việc đang chạy.
+Không tự đổi dataset thật, tắt biến thể hoặc sửa chính sách Operational.
+[Cách xử lý và giới hạn](SPLIT_RECOVERY.md). Cần mở lại Studio sau khi lưu việc.
+Toàn bộ bản cuối413/413test đạt552,981giây, gồm28test mới; compileall/diff
+check đạt. Dữ liệu thật đọc thử giữ nguyênhash, chưa áp dụng phân tập hoặc
+train. Capture app thật lỗiFrameArrivedtimeout sau1retry; chưa nghiệm thu
+trực quan. Còn rủi ro alias10nhóm ảnhlegacy giữa hai đời binding, cần đối chiếu
+nguồn trước khi tuyên bốTESTđộc lập; không tự đổi mã nguồn/nhãn.
 
 ## Hiện hành: vận hành không bắt buộc TEST độc lập — 24/09
 

@@ -3563,33 +3563,46 @@ class SmartLabelApp(ctk.CTk):
     def _refresh_split_status(self) -> None:
         if not self.project or not hasattr(self, "dataset_split_status_label"):
             return
-        summary = self.datasets.split_summary(self.project)
+        try:
+            summary = self.datasets.split_summary(self.project)
+            health = self.datasets.split_health(self.project)
+        except (ValueError, OSError) as exc:
+            self.dataset_split_status_label.configure(text=f"CẦN KIỂM TRA · {exc}", text_color=COLORS["warn"])
+            return
         counts = summary["counts"]
         group_counts = summary["group_counts"]
         text = (
             f"ĐÃ KHÓA · Train {counts['train']} ảnh/{group_counts['train']} nhóm · "
             f"Val {counts['val']} ảnh/{group_counts['val']} nhóm · "
             f"Test {counts['test']} ảnh/{group_counts['test']} nhóm\n"
-            "Ảnh/capture group mới → Train · ảnh cũ không tự đổi tập"
+            "Nhóm mới → Train · ảnh thêm vào nhóm cũ giữ tập của nhóm"
         )
-        self.dataset_split_status_label.configure(text=text, text_color=COLORS["good"])
+        if health["conflicts"]:
+            text += (f"\nCẦN XỬ LÝ · {len(health['conflicts'])} nhóm xung đột ảnh bổ trợ. "
+                     "Mở Xem / chuyển nhóm → Chỉ nhóm xung đột.")
+        self.dataset_split_status_label.configure(text=text, text_color=COLORS["warn"] if health["conflicts"] else COLORS["good"])
 
     def _lock_split_assignment(self) -> None:
-        if not self.project:
+        if not self.project or not self._can_change_project():
             return
-        self.datasets.ensure_split_assignment(self.project)
+        try:
+            self.datasets.ensure_split_assignment(self.project)
+        except (ValueError, OSError) as exc:
+            messagebox.showerror("Chưa khóa phân tập", str(exc), parent=self)
+            return
         self._split_assignment_changed()
         messagebox.showinfo(
             "Đã khóa phân tập",
             "Train/Validation/Test của các capture group hiện tại đã được giữ cố định.\n\n"
-            "Ảnh mới sẽ vào Train; ảnh cũ không tự chuyển tập khi export hoặc train lại.",
+            "Nhóm mới vào TRAIN; ảnh thêm vào nhóm cũ giữ tập của nhóm. "
+            "Muốn bổ sung VAL/TEST, mở Xem / chuyển nhóm và chọn nhóm theo vụ.",
             parent=self,
         )
 
-    def _open_split_manager(self) -> None:
+    def _open_split_manager(self, *, problems_only=False) -> None:
         if not self.project or not self._can_change_project():
             return
-        SplitManagerDialog(self, self.datasets, self.project, self._split_assignment_changed)
+        SplitManagerDialog(self, self.datasets, self.project, self._split_assignment_changed, problems_only=problems_only)
 
     def _open_external_benchmark(self) -> None:
         if not self.project or not self._can_change_project():
@@ -3613,18 +3626,35 @@ class SmartLabelApp(ctk.CTk):
         self._refresh_project_statistics()
 
     def _rebalance_split_assignment(self) -> None:
-        if not self.project:
+        if not self.project or not self._can_change_project():
             return
+        project = self.project
+        try:
+            preview = self.datasets.preview_rebalance(project)
+        except (ValueError, OSError) as exc:
+            messagebox.showerror("Chưa thể phân lại", str(exc), parent=self)
+            return
+        counts = preview["counts"]
         confirmed = messagebox.askyesno(
-            "Tạo Benchmark mới?",
-            "Thao tác này sẽ phân lại TOÀN BỘ capture group theo gần 70/15/15.\n\n"
+            "Xem trước phân lại 70/15/15",
+            f"Dự kiến TRAIN {counts['train']} · VAL {counts['val']} · TEST {counts['test']} ảnh.\n"
+            f"{preview['moved']} nhóm đổi tập; {preview['protected']} nhóm nguồn của ảnh bổ trợ được giữ ở TRAIN.\n"
+            "70/15/15 chỉ là mục tiêu; giữ nguyên nhóm và tránh rò dữ liệu được ưu tiên hơn đúng tỷ lệ.\n\n"
+            + "\n".join(preview["coverage"]) + "\n\n"
             "Model cũ có thể đã học những ảnh chuyển sang Test mới, vì vậy không được dùng Test mới để tuyên bố "
-            "kết quả khách quan cho model cũ. Chỉ tiếp tục nếu bạn muốn tạo chu kỳ Benchmark mới.",
+            "kết quả khách quan cho model cũ. Chỉ tiếp tục nếu bạn muốn tạo chu kỳ Benchmark mới.\n"
+            "Bản phân tập trước được lưu dự phòng; không xóa ảnh hoặc nhãn. Áp dụng phương án này?",
             parent=self,
         )
         if not confirmed:
             return
-        self.datasets.ensure_split_assignment(self.project, force_rebalance=True)
+        if self.project is not project or not self._can_change_project():
+            return
+        try:
+            self.datasets.apply_rebalance(project, preview)
+        except (ValueError, OSError) as exc:
+            messagebox.showerror("Chưa phân lại", str(exc), parent=self)
+            return
         self._split_assignment_changed()
         messagebox.showinfo("Đã tạo phân tập mới", "Phân tập mới đã được khóa. Hãy train model mới từ đầu chu kỳ này.", parent=self)
 
@@ -4857,6 +4887,19 @@ class SmartLabelApp(ctk.CTk):
         if not keys:
             self._training_error("Chưa chọn nhóm", "Hãy tick ít nhất một nhóm thuộc tính trong phần Train hàng loạt.")
             return
+        from .split_health import SplitConflictError
+        try:
+            health = self.datasets.split_health(self.project)
+            if health["conflicts"]:
+                raise SplitConflictError(health["conflicts"])
+        except SplitConflictError as exc:
+            self._append_log(self.train_log, f"CHƯA BẮT ĐẦU TRAIN · Xung đột phân tập\n{exc}")
+            if messagebox.askyesno("Cần xử lý ảnh gốc / ảnh bổ trợ", f"{exc}\n\nMở đúng các nhóm cần xử lý ngay?", parent=self):
+                self._open_split_manager(problems_only=True)
+            return
+        except (ValueError, OSError) as exc:
+            self._training_error("Chưa kiểm tra được phân tập", str(exc))
+            return
         model_path = self.train_model_entry.get().strip()
         auto_model_selected = False
         try:
@@ -4905,6 +4948,10 @@ class SmartLabelApp(ctk.CTk):
                     split_strategy=split_strategy,
                 )
                 metadata = json.loads((data_path / "export.json").read_text(encoding="utf-8"))
+                from .split_health import classification_training_problem
+                problem = classification_training_problem(metadata)
+                if problem:
+                    raise ValueError(problem)
                 populated = [name for name, count in metadata.get("counts", {}).items() if count]
                 if len(populated) < 2:
                     raise ValueError("cần ít nhất hai giá trị thuộc tính có crop")
@@ -5066,6 +5113,11 @@ class SmartLabelApp(ctk.CTk):
                     )
                     return
                 if expected_task == "classify":
+                    from .split_health import classification_training_problem
+                    problem = classification_training_problem(export_metadata)
+                    if problem:
+                        self._training_error("Phân tập chưa đủ dữ liệu train", problem)
+                        return
                     populated = [name for name, count in export_metadata.get("counts", {}).items() if count]
                     if len(populated) < 2:
                         self._training_error(

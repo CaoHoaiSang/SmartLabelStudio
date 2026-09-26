@@ -18,7 +18,9 @@ def attribute_summary(project, assignments):
             meaning = meaning_for(attr, record.attributes.get(attr["id"])) or "missing"
             counter = reviewed if record.review_status == "reviewed" else pending
             counter[meaning] += 1
+            excluded = project.attribute_settings.get(attr["id"], {}).get("train_exclude", [])
             eligible = (record.review_status == "reviewed" and meaning in {"positive", "negative"}
+                        and record.attributes.get(attr["id"]) not in excluded
                         and (attr["role"] == "presence" or
                              meaning_for(presence, record.attributes.get(presence["id"])) == "positive"))
             if eligible:

@@ -51,6 +51,77 @@ class DatasetManager:
     def split_assignment_path(self, project: Project) -> Path:
         return self.store.project_dir(project) / "split_assignment.json"
 
+    def supplement_parent_groups(self, project: Project) -> dict:
+        if project.metadata.get("template") != "Hydroponic Slot Condition":
+            return {}
+        from .training_supplements import read_manifest
+        from .split_health import supplement_parent_groups
+        return supplement_parent_groups(project, read_manifest(self.store, project))
+
+    def split_health(self, project: Project) -> dict:
+        from .split_health import split_conflicts, coverage_lines
+        assignment = self.ensure_split_assignment(project, persist=False)
+        parents = self.supplement_parent_groups(project)
+        return {"parents": parents, "conflicts": split_conflicts(parents, assignment["groups"]),
+                "coverage": coverage_lines(project, assignment["groups"])}
+
+    def split_revision(self, project: Project) -> str:
+        """Invalidate a confirmation if labels, groups or sidecar changed meanwhile."""
+        from .training_supplements import manifest_path
+        digest = hashlib.sha256(json.dumps(project.to_dict(), sort_keys=True).encode())
+        for path in (self.split_assignment_path(project), manifest_path(self.store, project)):
+            digest.update(path.read_bytes() if path.exists() else b"missing")
+        return digest.hexdigest()
+
+    def preview_rebalance(self, project: Project) -> dict:
+        from .split_health import coverage_lines
+        revision = self.split_revision(project)
+        current = self.ensure_split_assignment(project, persist=False)["groups"]
+        candidate = self.ensure_split_assignment(project, force_rebalance=True, persist=False)
+        groups = self._record_groups(project.images)
+        counts = {s: sum(len(groups[k]) for k, v in candidate["groups"].items() if v == s)
+                  for s in ("train", "val", "test")}
+        return {"revision": revision, "assignment": candidate, "counts": counts,
+                "protected": len(self.supplement_parent_groups(project)),
+                "moved": sum(current.get(k) != v for k, v in candidate["groups"].items()),
+                "coverage": coverage_lines(project, candidate["groups"])}
+
+    def apply_rebalance(self, project: Project, preview: dict) -> None:
+        if self.split_revision(project) != preview["revision"]:
+            raise ValueError("Dữ liệu đã thay đổi sau bản xem trước. Chưa phân lại; hãy mở xem trước mới.")
+        # Recompute rather than trusting an altered candidate supplied by a caller.
+        candidate = self.ensure_split_assignment(project, force_rebalance=True, persist=False)
+        if candidate["groups"] != preview["assignment"]["groups"]:
+            raise ValueError("Phương án phân tập đã thay đổi; hãy xem trước lại.")
+        self._write_split_assignment(project, candidate)
+
+    def _write_split_assignment(self, project: Project, assignment: dict) -> None:
+        import os
+        from tempfile import NamedTemporaryFile
+        target = self.split_assignment_path(project)
+        previous = target.read_bytes() if target.exists() else None
+        if previous is not None:
+            old = json.loads(previous)
+            if all(old.get(k) == v for k, v in assignment.items() if k != "updated_at"):
+                return
+
+        def atomic_write(path, content):
+            staged_name = None
+            try:
+                with NamedTemporaryFile(mode="wb", dir=path.parent, delete=False) as staged:
+                    staged_name = staged.name
+                    staged.write(content)
+                    staged.flush()
+                    os.fsync(staged.fileno())
+                os.replace(staged_name, path)
+            finally:
+                if staged_name:
+                    Path(staged_name).unlink(missing_ok=True)
+
+        if previous is not None and old.get("groups") != assignment["groups"]:
+            atomic_write(target.with_name("split_assignment.previous.json"), previous)
+        atomic_write(target, json.dumps(assignment, ensure_ascii=False, indent=2).encode("utf-8"))
+
     @staticmethod
     def _record_groups(records: list) -> dict[str, list]:
         groups: dict[str, list] = defaultdict(list)
@@ -112,11 +183,17 @@ class DatasetManager:
         path = self.split_assignment_path(project)
         groups = self._record_groups(project.images)
         payload: dict[str, Any] = {}
-        if path.is_file() and not force_rebalance:
+        if path.is_file():
             try:
                 payload = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, ValueError, TypeError):
-                payload = {}
+            except (OSError, ValueError, TypeError) as exc:
+                raise ValueError("Không đọc được phân tập đã lưu; chưa thay đổi dữ liệu. "
+                                 "Cần kiểm tra/khôi phục split_assignment.json trước khi tiếp tục.") from exc
+            if not isinstance(payload, dict) or not isinstance(payload.get("groups"), dict):
+                raise ValueError("Phân tập đã lưu không hợp lệ; chưa thay đổi dữ liệu.")
+            if any(v not in {"train", "val", "test"} for v in payload["groups"].values() if isinstance(v, str)) or any(
+                    not isinstance(v, str) for v in payload["groups"].values()):
+                raise ValueError("Phân tập chứa tên tập không hợp lệ; chưa thay đổi dữ liệu.")
         assignments = {
             str(key): str(value)
             for key, value in dict(payload.get("groups", {})).items()
@@ -124,14 +201,14 @@ class DatasetManager:
         }
         source = "locked"
         if force_rebalance:
-            balanced = self.split_capture_groups(groups, seed)
+            balanced = self.split_capture_groups(groups, seed, train_only=self.supplement_parent_groups(project))
             assignments = {key: split for split, keys in balanced.items() for key in keys}
             source = "rebalanced"
         elif not assignments:
             assignments = self._bootstrap_from_latest_export(project, groups)
             source = "historical_export" if assignments else "initial_balance"
             if not assignments:
-                balanced = self.split_capture_groups(groups, seed)
+                balanced = self.split_capture_groups(groups, seed, train_only=self.supplement_parent_groups(project))
                 assignments = {key: split for split, keys in balanced.items() for key in keys}
         new_groups = []
         for key in groups:
@@ -150,11 +227,11 @@ class DatasetManager:
             "groups": assignments,
         }
         if persist:
-            path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+            self._write_split_assignment(project, result)
         return result
 
     def split_summary(self, project: Project) -> dict[str, Any]:
-        assignment = self.ensure_split_assignment(project)
+        assignment = self.ensure_split_assignment(project, persist=False)
         groups = self._record_groups(project.images)
         counts = {split: 0 for split in ("train", "val", "test")}
         group_counts = {split: 0 for split in counts}
@@ -186,33 +263,39 @@ class DatasetManager:
                 "sources": " | ".join(sorted({cycle_title(source_identity(record)) for record in records})),
                 "dates": sorted({str(record.metadata.get("capturedAt") or "")[:10] for record in records} - {""}),
             })
+            if project.metadata.get("template") == "Hydroponic Slot Condition":
+                from dataclasses import replace
+                from .hydro_statistics import attribute_summary
+                subset = attribute_summary(replace(project, images=records), assignment["groups"])
+                rows[-1]["label_counts"] = " · ".join(
+                    f"{item['title']} {item['splits'][rows[-1]['split']].get('positive', 0)}/"
+                    f"{item['splits'][rows[-1]['split']].get('negative', 0)}" for item in subset)
         order = {"test": 0, "val": 1, "train": 2}
         return sorted(rows, key=lambda item: (order[item["split"]], -item["images"], item["group"]))
 
     def set_group_split(self, project: Project, group_key: str, split: str) -> None:
         self.set_groups_split(project, [group_key], split)
 
-    def set_groups_split(self, project: Project, group_keys: list[str], split: str) -> None:
+    def set_groups_split(self, project: Project, group_keys: list[str], split: str, *, expected_revision=None) -> None:
         if split not in {"train", "val", "test"}:
             raise ValueError(f"Tập không hợp lệ: {split}")
+        if expected_revision is not None and self.split_revision(project) != expected_revision:
+            raise ValueError("Dữ liệu đã thay đổi; hãy tải lại danh sách trước khi chuyển nhóm.")
         assignment = self.ensure_split_assignment(project, persist=False)
-        if not group_keys or any(key not in assignment["groups"] for key in group_keys):
+        current_groups = self._record_groups(project.images)
+        if not group_keys or any(key not in current_groups for key in group_keys):
             raise KeyError("Không tìm thấy nhóm đã chọn; chưa thay đổi phân tập.")
+        if split != "train":
+            from .split_health import SplitConflictError
+            parents = self.supplement_parent_groups(project)
+            conflicts = {key: parents[key] for key in group_keys if key in parents}
+            if conflicts:
+                raise SplitConflictError(conflicts)
         for key in group_keys:
             assignment["groups"][key] = split
         assignment["updated_at"] = datetime.now().isoformat(timespec="seconds")
         assignment["source"] = "manual"
-        import os
-        from tempfile import NamedTemporaryFile
-        target = self.split_assignment_path(project)
-        with NamedTemporaryFile(mode="w", encoding="utf-8", dir=target.parent, delete=False) as staged:
-            staged.write(json.dumps(assignment, ensure_ascii=False, indent=2))
-            staged.flush()
-            os.fsync(staged.fileno())
-        try:
-            os.replace(staged.name, target)
-        finally:
-            Path(staged.name).unlink(missing_ok=True)
+        self._write_split_assignment(project, assignment)
 
     def _split_keys_for_strategy(
         self,
@@ -262,7 +345,7 @@ class DatasetManager:
         return version_dir
 
     @staticmethod
-    def split_capture_groups(groups: dict[str, list], seed: int = 42) -> dict[str, list[str]]:
+    def split_capture_groups(groups: dict[str, list], seed: int = 42, *, train_only=()) -> dict[str, list[str]]:
         """Split whole capture groups while balancing the number of images.
 
         Splitting merely by group count can be very skewed when one video group
@@ -282,7 +365,14 @@ class DatasetManager:
             allowed.append("val")
         if len(keys) >= 3:
             allowed.append("test")
+        protected = set(train_only)
         for key in keys:
+            if key in protected:
+                result["train"].append(key)
+                counts["train"] += len(groups[key])
+        for key in keys:
+            if key in protected:
+                continue
             split = max(
                 allowed,
                 key=lambda name: (targets[name] - counts[name], targets[name], -allowed.index(name)),
@@ -468,6 +558,7 @@ class DatasetManager:
         elif split_strategy == self.STRATEGY_TRAIN_ALL:
             write_split_keys["val"] = list(split_keys["train"])
         physical_crops = 0
+        class_counts_by_split = {s: Counter({v: 0 for v in train_values}) for s in ("train", "val", "test")}
         for split, selected in write_split_keys.items():
             for group_key in selected:
                 for record in groups[group_key]:
@@ -489,6 +580,7 @@ class DatasetManager:
                             physical_crops += 1
                             if not (synthetic_validation and split == "val"):
                                 counts[value] += 1
+                                class_counts_by_split[split][value] += 1
                             continue
                         for ann in record.annotations:
                             value = ann.attributes.get(attribute_key, "")
@@ -513,6 +605,7 @@ class DatasetManager:
                             physical_crops += 1
                             if not (synthetic_validation and split == "val"):
                                 counts[value] += 1
+                                class_counts_by_split[split][value] += 1
 
         supplement_manifest = []
         for source, value, provenance in supplements:
@@ -521,6 +614,7 @@ class DatasetManager:
             with Image.open(source) as opened:
                 opened.convert("RGB").save(target, quality=95)
             counts[value] += 1
+            class_counts_by_split["train"][value] += 1
             physical_crops += 1
             supplement_manifest.append({**provenance, "exportedFile": target.relative_to(export_dir).as_posix()})
         exported = sum(counts.values())
@@ -544,6 +638,7 @@ class DatasetManager:
             "padding_ratio": padding_ratio,
             "classes": class_folders,
             "counts": dict(counts),
+            "class_counts_by_split": {s: dict(c) for s, c in class_counts_by_split.items()},
             "split_counts": {
                 split: sum(len(groups[key]) for key in selected)
                 for split, selected in split_keys.items()

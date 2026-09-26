@@ -130,6 +130,41 @@ class TrainingFeedbackTests(unittest.TestCase):
         self.assertIn("model hỏng", self.log())
         self.assertIn("CHƯA BẮT ĐẦU TRAIN", self.log())
 
+    def test_split_conflict_is_reported_once_before_exports_and_can_open_repair(self):
+        for open_repair in (False, True):
+            with self.subTest(open_repair=open_repair), \
+                    patch.object(self.app.datasets, "split_health", return_value={"conflicts": {"fixture-group": ["variant"]}}), \
+                    patch.object(app_module.messagebox, "askyesno", return_value=open_repair) as question, \
+                    patch.object(self.app, "_open_split_manager") as repair, \
+                    patch.object(self.app.datasets, "export_classification") as export, \
+                    patch.object(app_module, "TrainingJob") as job:
+                self.app._start_training_for_current_mode()
+            export.assert_not_called()
+            job.assert_not_called()
+            self.assertEqual(question.call_count, 1)
+            self.assertIn("fixture-group", self.log())
+            self.assertIn("Không cần xóa ảnh", self.log())
+            if open_repair:
+                repair.assert_called_once_with(problems_only=True)
+            else:
+                repair.assert_not_called()
+
+    def test_busy_state_blocks_rebalance_and_lock(self):
+        with patch.object(self.app, "_can_change_project", return_value=False), \
+                patch.object(self.app.datasets, "preview_rebalance") as preview, \
+                patch.object(self.app.datasets, "ensure_split_assignment") as lock:
+            self.app._rebalance_split_assignment()
+            self.app._lock_split_assignment()
+        preview.assert_not_called()
+        lock.assert_not_called()
+
+    def test_cancel_rebalance_preview_does_not_apply(self):
+        with patch.object(app_module.messagebox, "askyesno", return_value=False) as question, \
+                patch.object(self.app.datasets, "apply_rebalance") as apply:
+            self.app._rebalance_split_assignment()
+        self.assertIn("mục tiêu", question.call_args.args[1])
+        apply.assert_not_called()
+
     def test_worker_launch_failure_releases_ownership_for_both_modes(self):
         for project, method in ((self.hydro, "export_classification"), (self.generic, "export_yolo")):
             with self.subTest(project=project.name):

@@ -81,6 +81,28 @@ class SupplementTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "VAL/TEST"):
             self.manager.export_classification(self.project, "yellow_leaf", split_strategy="train_all")
 
+    def test_export_counts_track_real_classes_per_split_not_validation_mirror(self):
+        for strategy in ("locked", "final_keep_test", "train_all"):
+            out = self.manager.export_classification(self.project, "yellow_leaf", split_strategy=strategy)
+            meta = json.loads((out / "export.json").read_text(encoding="utf-8"))
+            counts = meta["class_counts_by_split"]
+            self.assertEqual(counts["train"]["present"], 1)
+            self.assertEqual(counts["test"]["present"], 0)
+            self.assertEqual(counts["val"]["present"], 0)
+            self.assertEqual(sum(sum(c.values()) for c in counts.values()), meta["exported_crops"])
+            if strategy != "locked":
+                self.assertEqual(sum(counts["val"].values()), 0)
+
+    def test_conflict_preflight_precedes_image_decoding_and_snapshot_creation(self):
+        from unittest.mock import patch
+        self.assignment["train"] = "val"
+        self.manager.split_assignment_path(self.project).write_text(json.dumps({"groups": self.assignment}))
+        with patch("smartlabel.training_supplements.pixel_hash") as decode:
+            with self.assertRaisesRegex(ValueError, "Xem / chuyển nhóm"):
+                self.manager.export_classification(self.project, "yellow_leaf")
+        decode.assert_not_called()
+        self.assertFalse(list((self.store.project_dir(self.project) / "exports").glob("classify_*")))
+
     def test_manifest_validation_does_not_mutate_project_or_split(self):
         before = deepcopy(self.project.to_dict())
         split = self.manager.split_assignment_path(self.project).read_bytes()

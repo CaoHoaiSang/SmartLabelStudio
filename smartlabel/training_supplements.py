@@ -136,6 +136,8 @@ def validate_manifest_samples(store, project, attribute, assignments, data, *, p
         return []
     if not any(row.get("enabled") is True for row in data["images"]):
         return []
+    from .split_health import require_compatible_supplements
+    require_compatible_supplements(project, data, assignments)
     attributes = {a["id"]: a for a in model_attributes(project)}
     identities = {k: training_identity(a) for k, a in attributes.items()}
     # JSON round-trip normalizes tuples in the contract identity.
