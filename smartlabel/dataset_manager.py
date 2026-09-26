@@ -407,6 +407,7 @@ class DatasetManager:
         reviewed_only: bool = True,
         seed: int = 42,
         split_strategy: str = STRATEGY_LOCKED,
+        progress=None,
     ) -> Path:
         task = task or ("segment" if segmentation else "detect")
         require_legacy_project(project, self.store)
@@ -417,6 +418,8 @@ class DatasetManager:
             self.store.project_dir(project) / "exports",
             f"yolo_{task}_{stamp}",
         )
+        if progress:
+            progress.reserve_export(export_dir)
         for split in ("train", "val", "test"):
             (export_dir / "images" / split).mkdir(parents=True, exist_ok=True)
             (export_dir / "labels" / split).mkdir(parents=True, exist_ok=True)
@@ -426,10 +429,14 @@ class DatasetManager:
         split_keys = self._split_keys_for_strategy(project, groups, split_strategy)
         exported_annotations = 0
         skipped_annotations = 0
+        processed = 0
+        total = sum(len(groups[key]) for selected in split_keys.values() for key in selected)
         # Ensure tiny datasets still produce a valid training folder.
         for split, selected in split_keys.items():
             for key in selected:
                 for record in groups[key]:
+                    if progress:
+                        progress.report(f"Xuất ảnh {task}", processed, total)
                     source = self.store.image_path(project, record)
                     shutil.copy2(source, export_dir / "images" / split / record.file_name)
                     label_path = export_dir / "labels" / split / f"{Path(record.file_name).stem}.txt"
@@ -442,6 +449,9 @@ class DatasetManager:
                         else:
                             skipped_annotations += 1
                     label_path.write_text("\n".join(line for line in lines if line), encoding="utf-8")
+                    processed += 1
+        if progress:
+            progress.report(f"Xuất ảnh {task}", processed, total)
         validation_enabled = split_strategy == self.STRATEGY_LOCKED and bool(split_keys["val"])
         test_enabled = split_strategy != self.STRATEGY_TRAIN_ALL and bool(split_keys["test"])
         val_path = (
@@ -489,6 +499,7 @@ class DatasetManager:
         seed: int = 42,
         padding_ratio: float = 0.05,
         split_strategy: str = STRATEGY_LOCKED,
+        progress=None,
     ) -> Path:
         """Export object crops for a second-stage, single-label classifier.
 
@@ -523,7 +534,8 @@ class DatasetManager:
         if hydro_attribute and scope == "image":
             from .training_supplements import validated_samples
             supplements = validated_samples(self.store, project, hydro_attribute,
-                                            self.ensure_split_assignment(project, persist=False)["groups"])
+                                            self.ensure_split_assignment(project, persist=False)["groups"],
+                                            progress=progress)
             if any(value not in train_values for _, value, _ in supplements):
                 raise ValueError("Nhãn ảnh bổ trợ đang bị loại khỏi train; cần kiểm tra lại cấu hình thuộc tính.")
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -531,6 +543,8 @@ class DatasetManager:
             self.store.project_dir(project) / "exports",
             f"classify_{attribute_key}_{stamp}",
         )
+        if progress:
+            progress.reserve_export(export_dir)
 
         class_folders: dict[str, str] = {}
         used_folders: set[str] = set()
@@ -559,9 +573,14 @@ class DatasetManager:
             write_split_keys["val"] = list(split_keys["train"])
         physical_crops = 0
         class_counts_by_split = {s: Counter({v: 0 for v in train_values}) for s in ("train", "val", "test")}
+        processed = 0
+        total = sum(len(groups[key]) for selected in write_split_keys.values() for key in selected)
         for split, selected in write_split_keys.items():
             for group_key in selected:
                 for record in groups[group_key]:
+                    if progress:
+                        progress.report(f"Xuất ảnh · {title}", processed, total)
+                    processed += 1
                     source = self.store.image_path(project, record)
                     with Image.open(source) as opened:
                         image = opened.convert("RGB")
@@ -607,8 +626,12 @@ class DatasetManager:
                                 counts[value] += 1
                                 class_counts_by_split[split][value] += 1
 
+        if progress:
+            progress.report(f"Xuất ảnh · {title}", processed, total)
         supplement_manifest = []
-        for source, value, provenance in supplements:
+        for index, (source, value, provenance) in enumerate(supplements):
+            if progress:
+                progress.report(f"Xuất ảnh bổ trợ · {title}", index, len(supplements))
             # Added after any compatibility VAL mirror: supplements are TRAIN only.
             target = export_dir / "train" / class_folders[value] / f"supplement_{provenance['sha256']}.jpg"
             with Image.open(source) as opened:
@@ -617,6 +640,8 @@ class DatasetManager:
             class_counts_by_split["train"][value] += 1
             physical_crops += 1
             supplement_manifest.append({**provenance, "exportedFile": target.relative_to(export_dir).as_posix()})
+        if progress:
+            progress.check()
         exported = sum(counts.values())
         if not exported:
             raise ValueError(

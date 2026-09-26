@@ -2,6 +2,8 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
+from threading import Event, get_ident
+from time import monotonic, sleep
 import json
 import tkinter as tk
 import unittest
@@ -29,6 +31,10 @@ class TrainingFeedbackTests(unittest.TestCase):
         cls.store.save(cls.hydro)
         cls.generic = cls.store.create_project("Detection log fixture", classes=["plant"])
         cls.patches = [patch.object(app_module, "WORKSPACE", cls.workspace),
+                       # These are UI/ownership tests, not real checkpoint loading.
+                       # Never let a base .pt already on the workstation add an
+                       # unbounded library/model load to a timed cancellation test.
+                       patch("smartlabel.training_preparation.inspect_model", side_effect=lambda model, *args, **kwargs: model),
                        patch.object(app_module.SmartLabelApp, "_refresh_hardware"),
                        patch.object(app_module.messagebox, "showerror"),
                        patch.object(app_module.messagebox, "showwarning"),
@@ -40,6 +46,10 @@ class TrainingFeedbackTests(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        pending = cls.app.training_preparation_job
+        if pending and pending.thread and pending.thread.is_alive():
+            pending.stop()
+            pending.thread.join(10)
         cls.app.destroy()
         for item in reversed(cls.patches):
             item.stop()
@@ -52,6 +62,14 @@ class TrainingFeedbackTests(unittest.TestCase):
         self.app.pending_training_note = ""
         self.app._change_project_context(self.hydro)
         app_module.messagebox.showerror.reset_mock()
+
+    def wait_preparation(self):
+        deadline = monotonic() + 10
+        while self.app.training_preparation_running and monotonic() < deadline:
+            self.app._drain_events()
+            self.app.update()
+            sleep(.01)
+        self.assertFalse(self.app.training_preparation_running, "Preparation did not complete")
 
     def log(self, widget=None):
         return (widget or self.app.train_log).get("1.0", "end-1c")
@@ -89,13 +107,15 @@ class TrainingFeedbackTests(unittest.TestCase):
         self.app.train_model_entry.insert(0, "fixture-cls.pt")
         observed = []
         def reject_export(*args, **kwargs):
-            observed.append(self.log())
+            observed.append(get_ident())
             raise ValueError("fixture: chưa đủ hai lớp trong train")
         with patch.object(self.app.datasets, "export_classification", side_effect=reject_export), \
                 patch.object(app_module, "TrainingJob") as job:
             self.app._start_training_for_current_mode()
+            self.assertIn("ĐÃ NHẬN YÊU CẦU TRAIN", self.log())
+            self.wait_preparation()
         self.assertTrue(observed)
-        self.assertIn("ĐÃ NHẬN YÊU CẦU TRAIN", observed[0])
+        self.assertNotEqual(observed[0], get_ident())
         self.assertIn("chưa đủ hai lớp", self.log())
         self.assertIn("CHƯA BẮT ĐẦU TRAIN", self.log())
         job.assert_not_called()
@@ -105,6 +125,7 @@ class TrainingFeedbackTests(unittest.TestCase):
         with patch.object(self.app.datasets, "export_yolo", side_effect=ValueError("fixture: thiếu nhãn")), \
                 patch.object(app_module, "TrainingJob") as job:
             self.app._start_training_for_current_mode()
+            self.wait_preparation()
         self.assertIn("ĐÃ NHẬN YÊU CẦU TRAIN", self.log())
         self.assertIn("thiếu nhãn", self.log())
         job.assert_not_called()
@@ -139,6 +160,7 @@ class TrainingFeedbackTests(unittest.TestCase):
                     patch.object(self.app.datasets, "export_classification") as export, \
                     patch.object(app_module, "TrainingJob") as job:
                 self.app._start_training_for_current_mode()
+                self.wait_preparation()
             export.assert_not_called()
             job.assert_not_called()
             self.assertEqual(question.call_count, 1)
@@ -183,13 +205,103 @@ class TrainingFeedbackTests(unittest.TestCase):
                         patch.object(app_module, "TrainingJob") as job:
                     job.return_value.start.side_effect = RuntimeError("fixture: cannot create thread")
                     self.app._start_training_for_current_mode()
-                self.assertEqual(self.app.train_start_button.cget("state"), "disabled")
-                self.app._drain_events()
+                    self.assertEqual(self.app.train_start_button.cget("state"), "disabled")
+                    self.wait_preparation()
+                    self.app._drain_events()
                 self.assertIn("cannot create thread", self.log())
                 self.assertIn("ĐÃ NHẬN YÊU CẦU TRAIN", self.log())
                 self.assertFalse(self.app.running_training_task)
                 self.assertFalse(self.app.batch_training_active)
                 self.assertEqual(self.app.train_start_button.cget("state"), "normal")
+
+    def test_ui_heartbeat_cancel_and_ownership_while_export_is_busy(self):
+        entered, release, heartbeat = Event(), Event(), Event()
+        def slow_export(*args, **kwargs):
+            entered.set()
+            release.wait(8)
+            kwargs["progress"].check()
+            raise AssertionError("Cancelled preparation must not finish export")
+        with patch.object(self.app.datasets, "export_classification", side_effect=slow_export), \
+                patch.object(app_module, "TrainingJob") as training:
+            self.app._start_training_for_current_mode()
+            try:
+                self.assertTrue(entered.wait(3))
+                self.app.after(0, heartbeat.set)
+                self.app.update()
+                self.assertTrue(heartbeat.is_set(), "Tk cannot process events during export")
+                self.assertTrue(self.app._project_job_busy())
+                self.assertFalse(self.app._can_change_project())
+                current_job = self.app.training_preparation_job
+                self.app._start_training_for_current_mode()
+                self.assertIs(self.app.training_preparation_job, current_job)
+                self.app._stop_training()
+                self.assertTrue(self.app._project_job_busy(), "Cancel must retain ownership until done")
+            finally:
+                release.set()
+                self.wait_preparation()
+            training.assert_not_called()
+        self.assertIn("ĐÃ DỪNG CHUẨN BỊ", self.log())
+        self.assertFalse(self.app._project_job_busy())
+        self.assertEqual(self.app.train_start_button.cget("state"), "normal")
+
+    def test_preparation_thread_start_failure_releases_ownership(self):
+        with patch.object(app_module.TrainingPreparationJob, "start", side_effect=RuntimeError("no thread")), \
+                patch.object(app_module, "TrainingJob") as training:
+            self.app._start_training_for_current_mode()
+        self.assertIn("no thread", self.log())
+        self.assertFalse(self.app._project_job_busy())
+        self.assertEqual(self.app.train_start_button.cget("state"), "normal")
+        training.assert_not_called()
+
+    def test_cancel_after_worker_done_but_before_handoff_does_not_start_train(self):
+        with patch.object(self.app.datasets, "export_classification", side_effect=ValueError("fixture error")), \
+                patch.object(app_module, "TrainingJob") as training:
+            self.app._start_training_for_current_mode()
+            job = self.app.training_preparation_job
+            try:
+                job.thread.join(5)
+                self.assertFalse(job.thread.is_alive())
+                self.assertTrue(self.app._project_job_busy())
+            finally:
+                self.app._stop_training()
+                self.wait_preparation()
+        training.assert_not_called()
+        self.assertIn("ĐÃ DỪNG CHUẨN BỊ", self.log())
+        app_module.messagebox.showerror.assert_not_called()
+
+    def test_close_requests_cancel_but_keeps_window_until_worker_finishes(self):
+        entered, release = Event(), Event()
+        def slow_export(*args, **kwargs):
+            entered.set()
+            release.wait(8)
+            kwargs["progress"].check()
+        with patch.object(self.app.datasets, "export_classification", side_effect=slow_export), \
+                patch.object(self.app, "destroy") as destroy:
+            self.app._start_training_for_current_mode()
+            try:
+                self.assertTrue(entered.wait(3))
+                self.app._on_close()
+                self.assertTrue(self.app.training_preparation_job.cancel_event.is_set())
+                self.assertTrue(self.app._project_job_busy())
+                destroy.assert_not_called()
+            finally:
+                release.set()
+                self.wait_preparation()
+
+    def test_stale_completion_cannot_release_active_preparation(self):
+        from types import SimpleNamespace
+        current = SimpleNamespace(source_project=self.app.project)
+        previous = SimpleNamespace(source_project=self.app.project)
+        self.app.training_preparation_job = current
+        self.app.training_preparation_running = True
+        try:
+            self.app._finish_training_preparation(previous, None, ValueError("stale"), False)
+            self.assertIs(self.app.training_preparation_job, current)
+            self.assertTrue(self.app.training_preparation_running)
+            self.assertNotIn("stale", self.log())
+        finally:
+            self.app.training_preparation_job = None
+            self.app.training_preparation_running = False
 
 
 if __name__ == "__main__":

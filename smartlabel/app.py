@@ -52,6 +52,7 @@ from .project_overview import ProjectOverview
 from .quality import inspect_project
 from .split_dialog import SplitManagerDialog
 from .training import TrainingConfig, TrainingJob
+from .training_preparation import TrainingPreparationJob
 from .ui_components import (
     IMAGE_REVIEW_STATUS_STYLE,
     ProjectSettingsDialog,
@@ -239,6 +240,8 @@ class SmartLabelApp(ctk.CTk):
         self.event_queue: Queue[tuple[str, object]] = Queue()
         self.cancel_event = Event()
         self.training_job: TrainingJob | None = None
+        self.training_preparation_job: TrainingPreparationJob | None = None
+        self.training_preparation_running = False
         self.running_training_task = ""
         self.running_classification_key = ""
         self.classification_batch_vars: dict[str, tk.BooleanVar] = {}
@@ -675,6 +678,8 @@ class SmartLabelApp(ctk.CTk):
         self._new_project("hydroponic_slot")
 
     def _import_capture_manifest(self) -> None:
+        if not self._can_change_project():
+            return
         if self.import_in_progress:
             messagebox.showinfo("Đang nhập dữ liệu", "Hãy đợi lượt nhập hiện tại hoàn tất.", parent=self)
             return
@@ -775,6 +780,8 @@ class SmartLabelApp(ctk.CTk):
         return True
 
     def _import_capture_dataset_archive(self) -> None:
+        if not self._can_change_project():
+            return
         if self.import_in_progress:
             messagebox.showinfo("Đang nhập dữ liệu", "Hãy đợi lượt nhập hiện tại hoàn tất.", parent=self)
             return
@@ -791,6 +798,9 @@ class SmartLabelApp(ctk.CTk):
         self._start_hydro_archive_import(project, path)
 
     def _start_hydro_archive_import(self, project: Project, path: str, confirmed_repair_digest: str | None = None) -> None:
+        if self.training_preparation_running:
+            self._can_change_project()
+            return
         if self.project is not project:
             return
         self.import_in_progress = True
@@ -962,7 +972,7 @@ class SmartLabelApp(ctk.CTk):
         # Keep ownership through completion callbacks, not just while the
         # subprocess is alive. Those callbacks register models on self.project.
         return bool(self.import_in_progress or self.supplement_review_running or self.auto_label_running or self.evaluation_running
-                or self.running_training_task or self.batch_training_active
+                or self.training_preparation_running or self.running_training_task or self.batch_training_active
                 or self.running_rknn_task or self.rknn_batch_active or self.hydro_export_running)
 
     def _can_change_project(self) -> bool:
@@ -1152,6 +1162,8 @@ class SmartLabelApp(ctk.CTk):
             self._run_import(files)
 
     def _import_video(self) -> None:
+        if not self._can_change_project():
+            return
         if self.import_in_progress:
             messagebox.showinfo("Đang nhập dữ liệu", "Hãy đợi lượt nhập hiện tại hoàn tất.", parent=self)
             return
@@ -1343,6 +1355,8 @@ class SmartLabelApp(ctk.CTk):
         )
 
     def _run_import(self, paths) -> None:
+        if not self._can_change_project():
+            return
         if self.import_in_progress:
             messagebox.showinfo("Đang nhập dữ liệu", "Hãy đợi lượt nhập hiện tại hoàn tất.", parent=self)
             return
@@ -2014,6 +2028,9 @@ class SmartLabelApp(ctk.CTk):
         self._delete_current_image()
 
     def _delete_current_image(self) -> None:
+        if self.training_preparation_running:
+            self._can_change_project()
+            return
         if self._supplement_active():
             return self.supplement_view.delete()
         if self.import_in_progress:
@@ -3685,6 +3702,8 @@ class SmartLabelApp(ctk.CTk):
         return bool(answer and answer.strip().upper() == "TRAIN ALL")
 
     def _create_version(self) -> None:
+        if not self._can_change_project():
+            return
         if not self.project:
             return
         name = ask_dataset_version_name(self)
@@ -3697,6 +3716,8 @@ class SmartLabelApp(ctk.CTk):
             messagebox.showerror("Không tạo được", str(exc))
 
     def _export_yolo(self, task: str) -> None:
+        if not self._can_change_project():
+            return
         if not self.project:
             return
         if not self._confirm_split_strategy():
@@ -3732,6 +3753,8 @@ class SmartLabelApp(ctk.CTk):
         return getattr(self, "classification_group_lookup", {}).get(self.classification_group_var.get(), "")
 
     def _export_classification(self) -> None:
+        if not self._can_change_project():
+            return
         if not self.project:
             return
         key = self._selected_classification_key()
@@ -3763,6 +3786,8 @@ class SmartLabelApp(ctk.CTk):
             messagebox.showerror("Export Classification lỗi", str(exc))
 
     def _export_selected_classification_groups(self) -> None:
+        if not self._can_change_project():
+            return
         if not self.project:
             return
         keys = self._selected_batch_classification_keys()
@@ -4350,6 +4375,9 @@ class SmartLabelApp(ctk.CTk):
         self._set_status(f"Classifier triển khai: {self._attribute_config(key)['title']} · {source.name}")
 
     def _start_batch_rknn_export(self) -> None:
+        if self.training_preparation_running:
+            self._can_change_project()
+            return
         if not self.project:
             return
         if not self._check_rknn_environment():
@@ -4664,6 +4692,9 @@ class SmartLabelApp(ctk.CTk):
         return max(candidates, key=lambda path: path.stat().st_mtime) if candidates else None
 
     def _export_deployment_model(self) -> None:
+        if self.training_preparation_running:
+            self._can_change_project()
+            return
         if not self.project:
             return
         source_text = self.deploy_model_path.get().strip()
@@ -4786,6 +4817,9 @@ class SmartLabelApp(ctk.CTk):
         return ready
 
     def _start_training_for_current_mode(self) -> None:
+        if self.running_rknn_task or self.rknn_batch_active:
+            messagebox.showinfo("Đang xuất RKNN", "Hãy chờ xuất model kết thúc trước khi train.", parent=self)
+            return
         if self.import_in_progress:
             messagebox.showinfo("Đang nhập dữ liệu", "Hãy chờ nhập dữ liệu kết thúc trước khi train.", parent=self)
             return
@@ -4803,7 +4837,7 @@ class SmartLabelApp(ctk.CTk):
             return
         # Keep ownership until completion has been consumed, including the gap
         # between two classifiers, even if the worker thread has already exited.
-        if (self.running_training_task or self.batch_training_active
+        if (self.training_preparation_running or self.running_training_task or self.batch_training_active
                 or (self.training_job and self.training_job.thread and self.training_job.thread.is_alive())):
             messagebox.showinfo("Train đang chạy", "Hãy chờ lượt train hiện tại kết thúc.", parent=self)
             return
@@ -4811,9 +4845,6 @@ class SmartLabelApp(ctk.CTk):
         self.pending_training_note = ""
         self._append_log(self.train_log, f"ĐÃ NHẬN YÊU CẦU TRAIN · {datetime.now():%H:%M:%S}\nĐang kiểm tra cấu hình và chuẩn bị dataset; chưa chạy epoch.")
         self._set_button_enabled(self.train_start_button, False)
-        # Render the acknowledgement before synchronous model/dataset preflight.
-        # Do not call update(): it would allow reentrant project edits here.
-        self.update_idletasks()
         try:
             if self.project.attribute_classification_enabled:
                 self._start_batch_classification_training()
@@ -4822,7 +4853,7 @@ class SmartLabelApp(ctk.CTk):
         except Exception as exc:
             self._training_error("Không khởi động được train", str(exc))
         finally:
-            if not self.running_training_task and not self.batch_training_active:
+            if not self.training_preparation_running and not self.running_training_task and not self.batch_training_active:
                 self._set_button_enabled(self.train_start_button, True)
 
     def _training_error(self, title: str, detail: str) -> None:
@@ -4830,162 +4861,132 @@ class SmartLabelApp(ctk.CTk):
         messagebox.showerror(title, detail, parent=self)
 
     def _start_localization_training_with_auto_export(self) -> None:
-        if not self.project:
-            return
         task = self.train_task_menu.get()
         if task not in {"detect", "segment", "obb", "pose"}:
             self._training_error("Task không hợp lệ", "Hãy chọn Detection, SEG, OBB hoặc ORI/Pose.")
             return
-        if self.training_job and self.training_job.thread and self.training_job.thread.is_alive():
-            messagebox.showerror("Train đang chạy", "Hãy chờ hoặc dừng tác vụ train hiện tại trước.")
-            return
-        if not self._confirm_split_strategy():
-            self._append_log(self.train_log, "ĐÃ HỦY · Chưa bắt đầu train.")
-            return
-        split_strategy = self._selected_split_strategy()
-        try:
-            reviewed_only = bool(self.reviewed_only_switch.get()) if hasattr(self, "reviewed_only_switch") else True
-            export_dir = self.datasets.export_yolo(
-                self.project,
-                task=task,
-                reviewed_only=reviewed_only,
-                split_strategy=split_strategy,
-            )
-            metadata = json.loads((export_dir / "export.json").read_text(encoding="utf-8"))
-            exported_annotations = int(metadata.get("exported_annotations", 0))
-            if exported_annotations <= 0:
-                review_hint = " Hãy duyệt ảnh có nhãn hoặc tắt “Chỉ ảnh đã duyệt”." if reviewed_only else ""
-                raise ValueError(f"Không có nhãn {task} hợp lệ để train.{review_hint}")
-            data_yaml = export_dir / "data.yaml"
-            self.last_yolo_export = export_dir
-            self.train_data_entry.delete(0, tk.END)
-            self.train_data_entry.insert(0, str(data_yaml))
-            if metadata.get("independent_test"):
-                self.evaluation_data_path.set(str(data_yaml))
-            self.pending_training_note = (
-                f"AUTO EXPORT DATASET · task {task} · {exported_annotations} nhãn\n"
-                f"Chiến lược: {split_strategy} · {metadata.get('counts')}\n"
-                f"data.yaml: {data_yaml}"
-            )
-            self._set_status(f"Đã tự export {exported_annotations} nhãn {task} · bắt đầu train")
-        except Exception as exc:
-            self._training_error("Tự export dataset trước khi train thất bại", str(exc))
-            return
-        self._start_training()
+        self._begin_training_preparation(task, [])
 
     def _start_batch_classification_training(self) -> None:
-        if not self.project:
-            return
-        if self.training_job and self.training_job.thread and self.training_job.thread.is_alive():
-            messagebox.showerror("Train đang chạy", "Hãy chờ hoặc dừng tác vụ train hiện tại trước.")
-            return
-        if not self._confirm_split_strategy():
-            self._append_log(self.train_log, "ĐÃ HỦY · Chưa bắt đầu train.")
-            return
-        split_strategy = self._selected_split_strategy()
         keys = self._selected_batch_classification_keys()
         if not keys:
             self._training_error("Chưa chọn nhóm", "Hãy tick ít nhất một nhóm thuộc tính trong phần Train hàng loạt.")
             return
-        from .split_health import SplitConflictError
-        try:
-            health = self.datasets.split_health(self.project)
-            if health["conflicts"]:
-                raise SplitConflictError(health["conflicts"])
-        except SplitConflictError as exc:
-            self._append_log(self.train_log, f"CHƯA BẮT ĐẦU TRAIN · Xung đột phân tập\n{exc}")
-            if messagebox.askyesno("Cần xử lý ảnh gốc / ảnh bổ trợ", f"{exc}\n\nMở đúng các nhóm cần xử lý ngay?", parent=self):
-                self._open_split_manager(problems_only=True)
+        self._begin_training_preparation("classify", [(key, self._attribute_config(key)["title"]) for key in keys])
+
+    def _begin_training_preparation(self, task, keys) -> None:
+        if not self.project or self.training_preparation_running:
             return
-        except (ValueError, OSError) as exc:
-            self._training_error("Chưa kiểm tra được phân tập", str(exc))
+        if not self._confirm_split_strategy():
+            self._append_log(self.train_log, "ĐÃ HỦY · Chưa bắt đầu train.")
             return
-        model_path = self.train_model_entry.get().strip()
-        auto_model_selected = False
         try:
-            if Path(model_path).is_file():
-                from ultralytics import YOLO
-                if YOLO(model_path).task != "classify":
-                    model_path = "yolo11n-cls.pt"
-                    auto_model_selected = True
-            elif "-cls" not in Path(model_path).name.lower():
-                model_path = "yolo11n-cls.pt"
-                auto_model_selected = True
-            if self.train_model_entry.get().strip() != model_path:
-                self.train_model_entry.delete(0, tk.END)
-                self.train_model_entry.insert(0, model_path)
-            image_size = int(self.imgsz_entry.get())
-            if image_size == 640:
-                image_size = 224
-                self.imgsz_entry.delete(0, tk.END)
-                self.imgsz_entry.insert(0, "224")
+            strategy = self._selected_split_strategy()
             options = {
-                "model": model_path,
+                "model": self.train_model_entry.get().strip(),
                 "epochs": int(self.epochs_entry.get()),
-                "image_size": image_size,
+                "image_size": int(self.imgsz_entry.get()),
                 "batch": int(self.batch_entry.get()),
                 "patience": int(self.patience_entry.get()),
                 "device": self.train_device_menu.get(),
-                "split_strategy": split_strategy,
-                "validate": split_strategy == DatasetManager.STRATEGY_LOCKED,
+                "split_strategy": strategy,
+                "validate": strategy == DatasetManager.STRATEGY_LOCKED,
             }
-        except ValueError as exc:
-            self._training_error("Cấu hình train chưa hợp lệ", str(exc))
+            if (options["epochs"] <= 0 or options["image_size"] <= 0
+                    or options["batch"] == 0 or options["patience"] < 0):
+                raise ValueError()
+        except ValueError:
+            self._training_error("Sai thông số",
+                "Epoch và Image size phải > 0; Batch khác 0; Patience phải ≥ 0. Tất cả phải là số nguyên.")
             return
-        reviewed_only = bool(self.reviewed_only_switch.get()) if hasattr(self, "reviewed_only_switch") else True
-        prepared: list[tuple[str, Path]] = []
-        problems: list[str] = []
-        self._append_log(self.train_log, f"CHUẨN BỊ TRAIN HÀNG LOẠT · {len(keys)} NHÓM")
-        if auto_model_selected:
-            self._append_log(self.train_log, "Đã tự chọn model khởi tạo Classification: yolo11n-cls.pt")
-        for key in keys:
-            title = self._attribute_config(key)["title"]
-            try:
-                data_path = self.datasets.export_classification(
-                    self.project,
-                    key,
-                    reviewed_only=reviewed_only,
-                    split_strategy=split_strategy,
-                )
-                metadata = json.loads((data_path / "export.json").read_text(encoding="utf-8"))
-                from .split_health import classification_training_problem
-                problem = classification_training_problem(metadata)
-                if problem:
-                    raise ValueError(problem)
-                populated = [name for name, count in metadata.get("counts", {}).items() if count]
-                if len(populated) < 2:
-                    raise ValueError("cần ít nhất hai giá trị thuộc tính có crop")
-                prepared.append((key, data_path))
-                self._append_log(
-                    self.train_log,
-                    f"✓ {title}: {metadata.get('exported_crops', 0)} crop · {len(populated)} nhãn",
-                )
-                if metadata.get("supplement_count", 0):
-                    self._append_log(self.train_log,
-                        f"  Gồm {metadata['supplement_count']} ảnh bổ trợ chỉ vào TRAIN; VAL/TEST giữ dữ liệu giàn.")
-            except Exception as exc:
-                problems.append(f"{title}: {exc}")
-        if problems:
-            self._training_error(
-                "Không thể train hàng loạt",
-                "Hãy sửa dữ liệu của các nhóm sau rồi thử lại:\n\n" + "\n".join(problems),
-            )
-            return
-        self.show_attribute_panel.set(True)
-        self._toggle_attribute_panel()
-        self.train_task_menu.set("classify")
-        self.batch_training_queue = prepared
-        self.batch_training_results = {}
-        self.batch_training_options = options
-        self.batch_training_total = len(prepared)
-        self.batch_training_active = True
-        self.batch_training_cancelled = False
-        self._set_button_enabled(self.batch_train_button, False)
-        self._append_log(
-            self.train_log,
-            "\nMỗi nhóm dùng một head/label space riêng. Khi hoàn tất, ứng dụng sẽ tạo một gói ZIP quản lý chung.",
-        )
-        self._start_next_batch_classification_training()
+        if task == "classify" and options["image_size"] == 640:
+            options["image_size"] = 224
+        request = {"task": task, "keys": keys, "options": options,
+                   "reviewed_only": bool(self.reviewed_only_switch.get())}
+        job = TrainingPreparationJob(self.project, self.datasets, request,
+                                      lambda kind, payload: self.event_queue.put((kind, payload)))
+        self.training_preparation_job = job
+        self.training_preparation_running = True
+        self._set_button_enabled(self.train_start_button, False)
+        self.train_start_button.configure(text="ĐANG CHUẨN BỊ DATASET…")
+        self._append_log(self.train_log, "CHUẨN BỊ CHẠY NỀN · Có thể nhấn Dừng train để hủy; chưa chạy epoch.")
+        self._append_log(self.train_log, "Dùng ảnh/nhãn và thông số tại lúc bấm Train; chỉnh sửa nhãn sau đó áp dụng cho lượt kế tiếp.")
+        try:
+            job.start()
+        except Exception as exc:
+            self._finish_training_preparation(job, None, exc, False)
+
+    def _finish_training_preparation(self, job, result, error, cancelled) -> None:
+        if job is not self.training_preparation_job:
+            return  # A stale completion cannot release another run's ownership.
+        self.training_preparation_running = False
+        self.training_preparation_job = None
+        self.train_start_button.configure(text="BẮT ĐẦU TRAIN")
+        try:
+            if self.project is not job.source_project:
+                self._append_log(self.train_log, "ĐÃ BỎ KẾT QUẢ · Dự án không còn là dự án đã bắt đầu chuẩn bị.")
+                return
+            if cancelled or job.cancel_event.is_set():
+                self._append_log(self.train_log, "ĐÃ DỪNG CHUẨN BỊ · Chưa chạy epoch, không thay model hiện có.")
+                return
+            if error is not None:
+                from .split_health import SplitConflictError
+                if isinstance(error, SplitConflictError):
+                    self._append_log(self.train_log, f"CHƯA BẮT ĐẦU TRAIN · Xung đột phân tập\n{error}")
+                    if messagebox.askyesno("Cần xử lý ảnh gốc / ảnh bổ trợ",
+                            f"{error}\n\nMở đúng các nhóm cần xử lý ngay?", parent=self):
+                        self._open_split_manager(problems_only=True)
+                else:
+                    self._training_error("Chuẩn bị dataset/model thất bại", str(error))
+                return
+            snapshot = job.project
+            if (self.project.attribute_schema != snapshot.attribute_schema
+                    or self.project.attribute_settings != snapshot.attribute_settings
+                    or self.project.classes != snapshot.classes
+                    or self.project.attribute_classification_enabled != snapshot.attribute_classification_enabled):
+                self._training_error("Cấu hình dự án đã đổi",
+                    "Nhãn hoặc loại bài đã đổi trong lúc chuẩn bị. Chưa chạy train; hãy bắt đầu lại với cấu hình mới.")
+                return
+            options = result["options"]
+            self.train_model_entry.delete(0, tk.END)
+            self.train_model_entry.insert(0, options["model"])
+            self.imgsz_entry.delete(0, tk.END)
+            self.imgsz_entry.insert(0, str(options["image_size"]))
+            if options["model"] != job.request["options"]["model"]:
+                self._append_log(self.train_log, f"Đã tự chọn model khởi tạo Classification: {options['model']}")
+            if result["task"] == "classify":
+                self.show_attribute_panel.set(True)
+                self._toggle_attribute_panel()
+                self.train_task_menu.set("classify")
+                self.batch_training_queue = [(key, path) for key, path, _ in result["prepared"]]
+                self.batch_training_results = {}
+                self.batch_training_options = options
+                self.batch_training_total = len(self.batch_training_queue)
+                self.batch_training_active = True
+                self.batch_training_cancelled = False
+                self._append_log(self.train_log, "ĐÃ CHUẨN BỊ XONG · Mỗi nhóm dùng một classifier riêng.")
+                self._start_next_batch_classification_training()
+            else:
+                _, export_dir, metadata = result["prepared"][0]
+                self.last_yolo_export = export_dir
+                data_path = export_dir / "data.yaml"
+                self.train_data_entry.delete(0, tk.END)
+                self.train_data_entry.insert(0, str(data_path))
+                if metadata.get("independent_test"):
+                    self.evaluation_data_path.set(str(data_path))
+                self._append_log(self.train_log,
+                    f"AUTO EXPORT DATASET · task {result['task']} · {metadata['exported_annotations']} nhãn\n"
+                    f"Chiến lược: {options['split_strategy']} · {metadata.get('counts')}\ndata.yaml: {data_path}")
+                options["validate"] = bool(metadata.get("validation_enabled", True))
+                self._start_prepared_training(result["task"], data_path, options)
+        except Exception as exc:
+            self.batch_training_active = False
+            self.batch_training_queue = []
+            self.running_training_task = ""
+            self._training_error("Không khởi động được train", str(exc))
+        finally:
+            if not self.training_preparation_running and not self.running_training_task and not self.batch_training_active:
+                self._set_button_enabled(self.train_start_button, True)
 
     def _start_next_batch_classification_training(self) -> None:
         if not self.batch_training_active or self.batch_training_cancelled:
@@ -5075,125 +5076,30 @@ class SmartLabelApp(ctk.CTk):
             self._append_log(self.train_log, f"\nTẠO GÓI CLASSIFIER LỖI: {exc}")
             messagebox.showerror("Không tạo được gói classifier", str(exc))
 
-    def _start_training(self) -> None:
-        data_path = Path(self.train_data_entry.get())
-        model_path = self.train_model_entry.get().strip()
-        if not data_path.exists():
-            self._training_error("Thiếu dataset", "Hãy export YOLO rồi chọn data.yaml.")
-            return
-        if not self.project:
-            return
-        expected_task = self.train_task_menu.get()
-        if expected_task == "classify":
-            if not self.project.attribute_classification_enabled:
-                self._training_error(
-                    "Classification chưa bật",
-                    "Hãy tick “Bật Classification thuộc tính” trong trang GÁN NHÃN hoặc chọn task classify lại.",
-                )
-                return
-            classification_key = self._selected_classification_key()
-            if not classification_key:
-                self._training_error("Chưa chọn nhóm", "Hãy chọn nhóm thuộc tính cần train Classification.")
-                return
-        else:
-            classification_key = ""
-        export_metadata: dict = {}
-        metadata_path = (data_path / "export.json") if data_path.is_dir() else (data_path.parent / "export.json")
-        if metadata_path.is_file():
-            try:
-                export_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-                exported_task = export_metadata.get("task", "detect")
-                if exported_task != expected_task:
-                    self._training_error("Sai loại dataset", f"Dataset là task {exported_task}, nhưng mục Train đang chọn {expected_task}.")
-                    return
-                if expected_task == "classify" and export_metadata.get("attribute_key") != classification_key:
-                    self._training_error(
-                        "Sai nhóm thuộc tính",
-                        "Dataset Classification được xuất cho nhóm khác với nhóm đang chọn trong trang Train.",
-                    )
-                    return
-                if expected_task == "classify":
-                    from .split_health import classification_training_problem
-                    problem = classification_training_problem(export_metadata)
-                    if problem:
-                        self._training_error("Phân tập chưa đủ dữ liệu train", problem)
-                        return
-                    populated = [name for name, count in export_metadata.get("counts", {}).items() if count]
-                    if len(populated) < 2:
-                        self._training_error(
-                            "Classification cần ít nhất hai nhãn",
-                            "Dataset hiện chỉ có một giá trị thuộc tính có ảnh. Hãy gán và duyệt dữ liệu cho ít nhất hai giá trị.",
-                        )
-                        return
-            except (OSError, json.JSONDecodeError):
-                pass
-        try:
-            if Path(model_path).is_file():
-                from ultralytics import YOLO
-                model_task = YOLO(model_path).task
-                if model_task != expected_task:
-                    self._training_error(
-                        "Model không đúng task",
-                        f"Model đã chọn là {model_task}, nhưng dataset cần {expected_task}.\n"
-                        "Hãy nhấn “Dùng model khởi tạo phù hợp” hoặc chọn checkpoint đúng task.",
-                    )
-                    return
-            else:
-                lower_name = Path(model_path).name.lower()
-                required = {"segment": "-seg", "obb": "-obb", "pose": "-pose", "classify": "-cls"}.get(expected_task)
-                if required and required not in lower_name:
-                    self._training_error("Model không đúng task", f"Task {expected_task} cần model có hậu tố {required}.pt.")
-                    return
-        except Exception as exc:
-            self._training_error("Không kiểm tra được model", str(exc))
-            return
-        try:
-            epochs = int(self.epochs_entry.get())
-            image_size = int(self.imgsz_entry.get())
-            batch = int(self.batch_entry.get())
-            patience = int(self.patience_entry.get())
-            if epochs <= 0 or image_size <= 0 or batch == 0 or patience < 0:
-                raise ValueError
-            validate = bool(export_metadata.get("validation_enabled", True))
-            split_strategy = str(export_metadata.get("split_strategy", DatasetManager.STRATEGY_LOCKED))
-            config = TrainingConfig(
-                model=model_path,
-                data=str(data_path),
-                project_dir=str(self.store.project_dir(self.project) / "runs"),
-                task=expected_task,
-                run_name=f"candidate_{expected_task}_{split_strategy}",
-                epochs=epochs,
-                image_size=image_size,
-                batch=batch,
-                patience=patience,
-                device=self.train_device_menu.get(),
-                validate=validate,
-            )
-        except ValueError:
-            self._training_error(
-                "Sai thông số",
-                "Epoch và Image size phải > 0; Batch khác 0; Patience phải ≥ 0. Tất cả phải là số nguyên.",
-            )
-            return
-        if self.pending_training_note:
-            self._append_log(self.train_log, self.pending_training_note)
-            self.pending_training_note = ""
+    def _start_prepared_training(self, task, data_path, options) -> None:
+        config = TrainingConfig(
+            model=options["model"], data=str(data_path),
+            project_dir=str(self.store.project_dir(self.project) / "runs"),
+            task=task, run_name=f"candidate_{task}_{options['split_strategy']}",
+            epochs=options["epochs"], image_size=options["image_size"],
+            batch=options["batch"], patience=options["patience"],
+            device=options["device"], validate=options["validate"])
         if not config.validate:
-            self._append_log(
-                self.train_log,
-                "CHẾ ĐỘ FINAL: Validation và early stopping đã tắt; Patience không được sử dụng. "
-                f"Model sẽ chạy đủ {config.epochs} epoch.",
-            )
-        self.running_training_task = expected_task
-        self.running_classification_key = classification_key
-        self.training_job = TrainingJob(
-            config,
+            self._append_log(self.train_log,
+                f"CHẾ ĐỘ FINAL: Validation và early stopping đã tắt; chạy đủ {config.epochs} epoch.")
+        self.running_training_task = task
+        self.running_classification_key = ""
+        self.training_job = TrainingJob(config,
             lambda line: self.event_queue.put(("train_line", line)),
-            lambda code: self.event_queue.put(("train_done", code)),
-        )
+            lambda code: self.event_queue.put(("train_done", code)))
         self._launch_training_job()
 
+
     def _stop_training(self) -> None:
+        if self.training_preparation_running and self.training_preparation_job:
+            self.training_preparation_job.stop()
+            self._append_log(self.train_log, "ĐANG DỪNG CHUẨN BỊ · Chờ bước kiểm tra/ảnh hiện tại kết thúc; chưa chạy epoch.")
+            return
         if self.batch_training_active:
             self.batch_training_cancelled = True
             self.batch_training_queue = []
@@ -5587,7 +5493,13 @@ class SmartLabelApp(ctk.CTk):
         try:
             while True:
                 kind, payload = self.event_queue.get_nowait()
-                if kind == "status":
+                if kind == "train_prepare_progress":
+                    job, text = payload
+                    if job is self.training_preparation_job and self.project is job.source_project:
+                        self._append_log(self.train_log, text)
+                elif kind == "train_prepare_done":
+                    self._finish_training_preparation(*payload)
+                elif kind == "status":
                     self._set_status(str(payload))
                 elif kind == "error":
                     messagebox.showerror("Lỗi", str(payload))
@@ -5928,6 +5840,11 @@ class SmartLabelApp(ctk.CTk):
                 self.after(100, self._drain_events)
 
     def _on_close(self) -> None:
+        if self.training_preparation_running:
+            self._stop_training()
+            messagebox.showinfo("Đang dừng chuẩn bị train",
+                "Hãy chờ bước đang xử lý kết thúc rồi đóng ứng dụng. Chưa chạy epoch.", parent=self)
+            return
         if self.import_in_progress:
             messagebox.showinfo("Đang nhập dữ liệu", "Hãy chờ lượt nhập kết thúc rồi đóng ứng dụng.", parent=self)
             return

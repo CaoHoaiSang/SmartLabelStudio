@@ -1,5 +1,19 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 26/09/2026
 
+## Hiện hành: chuẩn bị train chạy nền — 26/09
+
+Nạp/kiểm model, kiểm nguồn/phân tập, quét pixel ảnh bổ trợ và xuất dataset
+đã chuyển sang TrainingPreparationJob cho Classification và bài định vị.
+Có tiến độ theo ảnh, Dừng trước epoch, snapshot lựa chọn, giữ khóa project
+đến completion và kiểm completion đúng job/project. Không bypass guard phân
+tập/nguồn/checksum, không đổi weights hoặc chính sách Operational/TEST độc lập.
+Lỗi/hủy chỉ dọn export mới của job; snapshot cũ và dữ liệu gốc giữ nguyên.
+TrainingJob cũng nhớ Dừng lúc dò CPU/CUDA. [Chi tiết và giới hạn](TRAINING_PREPARATION.md).
+Không tự đóng app hoặc train dữ liệu thật; cần lưu việc và mở lại SmartLabel.
+Lượt cuối toàn bộ431/431test đạt752,834giây; compileall/diff check đạt.
+SmokeTk nạp model nền thật7,312giây:582nhịpUI, khoảng ngắt lớn nhất125ms,
+không epoch/project người dùng. Chưa nghiệm thu lượt train thật sau mở lại.
+
 ## Hiện hành: chặn xung đột phân tập / ảnh bổ trợ — 26/09
 
 Phân lại70/15/15 giữ nhóm nguồn của biến thể đang dùng ởTRAIN, có xem trước

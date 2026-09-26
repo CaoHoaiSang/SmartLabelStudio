@@ -71,6 +71,22 @@ class TrainingJobTests(unittest.TestCase):
         self.assertEqual(done, [1])
         launch.assert_not_called()
 
+    def test_stop_before_start_or_during_device_check_never_launches(self):
+        for before_start in (True, False):
+            with self.subTest(before_start=before_start):
+                done = []
+                job = TrainingJob(self.config(), lambda line: None, done.append)
+                if before_start:
+                    job.stop()
+                def check_device(device):
+                    job.stop()
+                    return "cpu"
+                with patch("smartlabel.training.best_ultralytics_device", side_effect=check_device), \
+                        patch("smartlabel.training.subprocess.Popen") as launch:
+                    job._run()
+                launch.assert_not_called()
+                self.assertEqual(done, [130])
+
     def test_process_start_failure_reports_completion_once(self):
         lines, done = [], []
         with patch("smartlabel.training.best_ultralytics_device", return_value="cpu"), \

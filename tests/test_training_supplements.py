@@ -110,6 +110,17 @@ class SupplementTests(unittest.TestCase):
         self.assertEqual(before, self.project.to_dict())
         self.assertEqual(split, self.manager.split_assignment_path(self.project).read_bytes())
 
+    def test_cancel_pixel_scan_is_cooperative_without_bypassing_integrity(self):
+        from smartlabel.training_preparation import PreparationProgress, PreparationCancelled
+        from unittest.mock import patch
+        from smartlabel.training_supplements import pixel_hash
+        progress = PreparationProgress(lambda line: progress.cancel_event.set()
+            if line.startswith("Đối chiếu nội dung ảnh gốc") else None)
+        with patch("smartlabel.training_supplements.pixel_hash", wraps=pixel_hash) as decode:
+            with self.assertRaises(PreparationCancelled):
+                validated_samples(self.store, self.project, self.yellow, self.assignment, progress=progress)
+        self.assertLessEqual(decode.call_count, 1)
+
     def test_corrupt_image_hash_and_parent_hash_block(self):
         for target in (self.row, self.row["provenance"]):
             with self.subTest(target=target):

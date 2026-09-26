@@ -121,14 +121,14 @@ def validate_review_labels(project, row):
     return trainable
 
 
-def validated_samples(store, project, attribute, assignments):
+def validated_samples(store, project, attribute, assignments, *, progress=None):
     if project.metadata.get("template") != "Hydroponic Slot Condition":
         return []
     data = read_manifest(store, project)
-    return validate_manifest_samples(store, project, attribute, assignments, data)
+    return validate_manifest_samples(store, project, attribute, assignments, data, progress=progress)
 
 
-def validate_manifest_samples(store, project, attribute, assignments, data, *, pixel_cache=None):
+def validate_manifest_samples(store, project, attribute, assignments, data, *, pixel_cache=None, progress=None):
     """Validate a candidate sidecar without writing it, using the export contract."""
     if project.metadata.get("template") != "Hydroponic Slot Condition":
         return []
@@ -148,7 +148,9 @@ def validate_manifest_samples(store, project, attribute, assignments, data, *, p
     seen_ids, seen_hashes = set(), set()
     source_pixels = None
     result = []
-    for row in data["images"]:
+    for index, row in enumerate(data["images"]):
+        if progress:
+            progress.report("Kiểm tra ảnh bổ trợ", index, len(data["images"]))
         if row.get("enabled") is not True:
             continue
         identifier = row.get("id")
@@ -177,8 +179,12 @@ def validate_manifest_samples(store, project, attribute, assignments, data, *, p
             raise ValueError(f"{identifier}: ảnh thay đổi hoặc bị trùng.")
         seen_hashes.add(digest)
         if source_pixels is None:
-            source_pixels = {(pixel_cache.fingerprint(store.image_path(project, r))[1] if pixel_cache is not None
-                              else pixel_hash(store.image_path(project, r))) for r in project.images}
+            source_pixels = set()
+            for image_index, record in enumerate(project.images):
+                if progress:
+                    progress.report("Đối chiếu nội dung ảnh gốc (chống trùng)", image_index, len(project.images))
+                path = store.image_path(project, record)
+                source_pixels.add(pixel_cache.fingerprint(path)[1] if pixel_cache is not None else pixel_hash(path))
         if pixels is None:
             pixels = pixel_hash(source)
         if pixels in source_pixels:

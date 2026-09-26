@@ -181,7 +181,7 @@ class ProjectSwitchingTests(unittest.TestCase):
         original = self.app.project
         for flag in ("import_in_progress", "auto_label_running", "evaluation_running",
                      "running_training_task", "batch_training_active", "running_rknn_task", "rknn_batch_active",
-                     "hydro_export_running"):
+                     "hydro_export_running", "training_preparation_running"):
             before = getattr(self.app, flag)
             try:
                 setattr(self.app, flag, "classify" if flag.startswith("running_") else True)
