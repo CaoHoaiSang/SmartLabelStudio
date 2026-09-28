@@ -36,7 +36,10 @@ class HeldoutCameraGuardTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "8091"): camera.assert_camera_service_stopped()
 
     def test_failed_process_check_or_running_service_blocks(self):
-        with patch.object(camera.sys, "platform", "win32"), patch.object(camera.socket, "socket") as sock, patch.object(camera.subprocess, "run") as run:
+        # Simulate the complete Windows subprocess surface even on Linux CI.
+        with patch.object(camera.sys, "platform", "win32"), \
+                patch.object(camera.subprocess, "CREATE_NO_WINDOW", 0x08000000, create=True), \
+                patch.object(camera.socket, "socket") as sock, patch.object(camera.subprocess, "run") as run:
             sock.return_value.__enter__.return_value.connect_ex.return_value = 1
             for code, output in ((1, ""), (0, "not a count"), (0, "1")):
                 run.return_value = SimpleNamespace(returncode=code, stdout=output)
@@ -44,6 +47,15 @@ class HeldoutCameraGuardTests(unittest.TestCase):
             run.return_value = SimpleNamespace(returncode=0, stdout="0")
             camera.assert_camera_service_stopped()
             self.assertIn(r"\bserve\b", run.call_args.args[0][-1])
+            self.assertEqual(run.call_args.kwargs["creationflags"], 0x08000000)
+
+    def test_non_windows_rejects_before_socket_or_process_access(self):
+        with patch.object(camera.sys, "platform", "linux"), \
+                patch.object(camera.socket, "socket") as sock, patch.object(camera.subprocess, "run") as run:
+            with self.assertRaisesRegex(ValueError, "Windows"):
+                camera.assert_camera_service_stopped()
+            sock.assert_not_called()
+            run.assert_not_called()
 
     def test_timeout_and_cancel_kill_only_own_worker(self):
         with TemporaryDirectory() as root, patch.object(camera.subprocess, "Popen") as popen:

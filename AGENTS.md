@@ -17,6 +17,10 @@ the same permission again. Stage only task-owned changes; preserve existing
 workspace/project edits and keep datasets, runtime artifacts and secrets out of
 new commits. Verify the remote received the commit and report the branch, commit
 and GitHub link. This does not authorize merging the main branch or force-pushing.
+After every push, inspect GitHub Actions for that exact commit and report it
+separately from local tests and remote SHA verification. Pending or failed CI
+is not completion; do not disable safeguards or skip tests to hide failures.
+See docs/CI_VERIFICATION.md for platform dependencies and acceptance.
 
 Check Git status before edits. Existing tracked `workspace/` data and model artifacts
 are legacy; do not rewrite history, untrack them wholesale, overwrite labels, or
