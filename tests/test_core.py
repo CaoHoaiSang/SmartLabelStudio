@@ -28,6 +28,9 @@ from smartlabel.frame_filter import (
 )
 from smartlabel.frame_filter_dialog import PREVIEW_BACKGROUND, PREVIEW_SIZE, build_contained_preview
 from smartlabel.frame_filter_dialog import SmartFrameFilterDialog
+from smartlabel.ui_components import IMAGE_REVIEW_STATUS_STYLE, PROJECT_TEMPLATE_HELP, PROJECT_TEMPLATE_LABELS, ThumbnailList
+from smartlabel.ui_components import ToolTip
+from smartlabel.app import PROJECT_ACTION_GROUPS, PROJECT_ACTION_TOOLTIPS, REVIEW_ACTION_GROUPS
 
 
 class SmartLabelCoreTests(unittest.TestCase):
@@ -182,6 +185,102 @@ class SmartLabelCoreTests(unittest.TestCase):
         self.assertTrue((self.source / "image_1.jpg").exists())
         loaded = self.store.load(self.project.id)
         self.assertEqual(loaded.images, [])
+        self.assertEqual(loaded.last_import_batch, "")
+
+    def test_delete_latest_import_keeps_previous_batch_and_original_sources(self):
+        self.store.import_images(self.project, [self.source])
+        first_record = self.project.images[0]
+        first_batch = self.project.last_import_batch
+
+        latest_source = self.root / "accidental_bottle_import"
+        latest_source.mkdir()
+        Image.new("RGB", (100, 80), "blue").save(latest_source / "bottle_1.jpg")
+        Image.new("RGB", (100, 80), "green").save(latest_source / "bottle_2.jpg")
+        self.store.import_images(self.project, [latest_source])
+        latest_records = latest_import_records(self.project)
+        self.assertEqual(len(latest_records), 2)
+        latest_records[0].annotations.append(Annotation.create_box(0, [1, 2, 30, 40]))
+        latest_records[0].review_status = "reviewed"
+        self.store.save(self.project)
+
+        removed_images, removed_annotations = self.store.delete_images(self.project, latest_records)
+
+        self.assertEqual((removed_images, removed_annotations), (2, 1))
+        self.assertEqual([record.id for record in self.project.images], [first_record.id])
+        self.assertEqual(self.project.last_import_batch, first_batch)
+        self.assertTrue((latest_source / "bottle_1.jpg").exists())
+        self.assertTrue((latest_source / "bottle_2.jpg").exists())
+        loaded = self.store.load(self.project.id)
+        self.assertEqual([record.id for record in loaded.images], [first_record.id])
+        self.assertEqual(loaded.last_import_batch, first_batch)
+
+    def test_new_project_templates_are_presets_not_saved_project_entries(self):
+        self.assertEqual(
+            set(PROJECT_TEMPLATE_LABELS.values()),
+            {"deltax_bottle", "hydroponic_slot", "blank"},
+        )
+        self.assertEqual(set(PROJECT_TEMPLATE_HELP), set(PROJECT_TEMPLATE_LABELS.values()))
+        self.assertTrue(all("project_" not in code for code in PROJECT_TEMPLATE_LABELS.values()))
+
+    def test_thumbnail_status_dot_reuses_the_canonical_review_colors(self):
+        self.assertEqual(set(IMAGE_REVIEW_STATUS_STYLE), {"unlabeled", "draft", "reviewed", "rejected"})
+        for status, style in IMAGE_REVIEW_STATUS_STYLE.items():
+            self.assertEqual(ThumbnailList.status_style(status), style)
+            self.assertTrue(style["indicator"].startswith("#"))
+            self.assertTrue(style["label"])
+        self.assertEqual(ThumbnailList.status_style("unknown"), IMAGE_REVIEW_STATUS_STYLE["unlabeled"])
+
+    def test_project_page_actions_have_groups_and_detailed_hydro_help(self):
+        self.assertEqual(set(PROJECT_ACTION_GROUPS), {"import", "cleanup", "settings", "lifecycle"})
+        self.assertIn("QUẢN LÝ DỰ ÁN", PROJECT_ACTION_GROUPS["lifecycle"][0])
+        self.assertIn("DỌN DỮ LIỆU NHẬP", PROJECT_ACTION_GROUPS["cleanup"][0])
+        self.assertEqual(set(REVIEW_ACTION_GROUPS), {"checks", "triage"})
+        self.assertIn("KIỂM TRA DATASET", REVIEW_ACTION_GROUPS["checks"][0])
+        self.assertEqual(
+            set(PROJECT_ACTION_TOOLTIPS),
+            {
+                "import_folder",
+                "import_files",
+                "capture_dataset_archive",
+                "capture_manifest",
+                "import_video",
+                "hydro_qa",
+                "smart_filter",
+                "delete_latest",
+                "project_settings",
+            },
+        )
+        for variants in PROJECT_ACTION_TOOLTIPS.values():
+            self.assertEqual(set(variants), {"standard", "hydro"})
+            self.assertGreater(len(variants["standard"]), 50)
+            self.assertGreater(len(variants["hydro"]), 80)
+        self.assertIn("đủ rọ theo bố cục", PROJECT_ACTION_TOOLTIPS["capture_manifest"]["hydro"])
+        self.assertIn("bỏ qua an toàn", PROJECT_ACTION_TOOLTIPS["capture_dataset_archive"]["hydro"])
+        self.assertIn("trang Kiểm duyệt", PROJECT_ACTION_TOOLTIPS["hydro_qa"]["hydro"])
+        self.assertIn("hiện kết quả trực tiếp bên dưới", PROJECT_ACTION_TOOLTIPS["hydro_qa"]["hydro"])
+        self.assertIn("không tự sửa hay xóa", PROJECT_ACTION_TOOLTIPS["hydro_qa"]["hydro"])
+        self.assertIn("không thể hoàn tác", PROJECT_ACTION_TOOLTIPS["delete_latest"]["hydro"])
+        self.assertIn("Cài đặt AI Camera", PROJECT_ACTION_TOOLTIPS["project_settings"]["hydro"])
+
+    def test_tooltip_text_can_change_with_project_context(self):
+        tooltip = object.__new__(ToolTip)
+        tooltip.text = "standard"
+        tooltip.after_id = None
+        tooltip.window = None
+
+        tooltip.set_text("hydro")
+
+        self.assertEqual(tooltip.text, "hydro")
+
+    def test_detailed_tooltip_prefers_side_without_covering_its_button(self):
+        self.assertEqual(
+            ToolTip._placement(60, 200, 220, 36, 360, 100, 1500, 900),
+            (288, 200),
+        )
+        self.assertEqual(
+            ToolTip._placement(1250, 820, 220, 36, 360, 100, 1500, 900),
+            (882, 792),
+        )
 
     def test_bulk_delete_and_video_frame_filter_keep_original_images(self):
         self.store.import_images(self.project, [self.source])
@@ -450,6 +549,14 @@ class SmartLabelCoreTests(unittest.TestCase):
         self.project.images[0].annotations.append(Annotation.create_box(0, [-2, 0, 20, 20]))
         issues = inspect_project(self.project)
         self.assertTrue(any("ngoài ảnh" in issue.message for issue in issues))
+
+    def test_generic_quality_is_not_polluted_by_hydro_rules(self):
+        self.store.import_images(self.project, [self.source])
+        record = self.project.images[0]
+        issues = inspect_project(self.project)
+        messages = [issue.message for issue in issues]
+        self.assertNotIn("Project chứa đường dẫn nguồn tuyệt đối", messages)
+        self.assertNotIn("Nhãn condition mâu thuẫn với plant_presence", messages)
 
     def test_seg_annotation_can_still_export_as_detection_box(self):
         ann = Annotation.create_box(1, [10, 20, 30, 40])

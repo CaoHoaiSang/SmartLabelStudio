@@ -141,6 +141,8 @@ def auto_label_project(
     progress: Callable[[int, int, str], None] | None = None,
     cancel_event: Event | None = None,
 ) -> AutoLabelStats:
+    if project.metadata.get("template") == "Hydroponic Slot Condition":
+        raise ValueError("Bài Hydro cần luồng classifier thuộc tính toàn ảnh; không dùng detector Auto-Label.")
     started = time.perf_counter()
     labeler = YoloAutoLabeler(model_path, device=device)
     # Synchronize class names while preserving stable IDs used by annotations.

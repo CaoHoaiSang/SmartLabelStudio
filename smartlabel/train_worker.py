@@ -5,12 +5,20 @@ import sys
 
 
 def main() -> int:
-    from ultralytics import YOLO
-
+    # A running app may still use the legacy launcher without PYTHONIOENCODING.
+    # Configure both pipes before the first Vietnamese message or library import.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
     if len(sys.argv) != 2:
         print("Thiếu cấu hình train", flush=True)
         return 2
     config = json.loads(sys.argv[1])
+    from .fleet_boundaries import require_legacy_training_data
+    require_legacy_training_data(config.get("data"))  # Also covers an older, already-running desktop launcher.
+    print("Đang nạp thư viện huấn luyện Ultralytics…", flush=True)
+    from ultralytics import YOLO
+
     print(f"Nạp model: {config['model']}", flush=True)
     print(f"Task: {config.get('task', 'detect')}", flush=True)
     print(f"Thiết bị: {config['device']}", flush=True)

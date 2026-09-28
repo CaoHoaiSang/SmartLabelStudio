@@ -82,6 +82,12 @@ class ImageRecord:
     review_status: str = "unlabeled"  # unlabeled | draft | reviewed | rejected
     annotations: list[Annotation] = field(default_factory=list)
     quality: dict[str, float] = field(default_factory=dict)
+    attributes: dict[str, str] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    parent_asset_id: str = ""
+    asset_role: str = "full_frame"  # full_frame | roi | slot
+    lineage: dict[str, Any] = field(default_factory=dict)
+    sha256: str = ""
     created_at: str = field(default_factory=utc_now)
     updated_at: str = field(default_factory=utc_now)
 
@@ -92,9 +98,7 @@ class ImageRecord:
         return cls(**values)
 
     def to_dict(self) -> dict[str, Any]:
-        data = asdict(self)
-        data["annotations"] = [item.to_dict() for item in self.annotations]
-        return data
+        return asdict(self)
 
 
 @dataclass
@@ -104,6 +108,7 @@ class Project:
     name: str
     task: str = "instance_segmentation"
     description: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
     classes: list[LabelClass] = field(default_factory=list)
     attribute_schema: dict[str, list[str]] = field(default_factory=dict)
     # Per-group metadata.  The schema keeps the stable machine values while
@@ -123,20 +128,22 @@ class Project:
 
     @classmethod
     def create(cls, name: str, task: str = "instance_segmentation") -> "Project":
-        return cls(schema_version=1, id=new_id("project"), name=name, task=task)
+        return cls(schema_version=2, id=new_id("project"), name=name, task=task)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Project":
         values = dict(data)
+        # V1 did not have image-level attributes or asset lineage. Dataclass
+        # defaults migrate those fields in memory; the next atomic save writes V2.
+        if int(values.get("schema_version", 1)) not in {1, 2}:
+            raise ValueError(f"Project schema không được hỗ trợ: {values.get('schema_version')}")
+        values["schema_version"] = 2
         values["classes"] = [LabelClass.from_dict(item) for item in data.get("classes", [])]
         values["images"] = [ImageRecord.from_dict(item) for item in data.get("images", [])]
         return cls(**values)
 
     def to_dict(self) -> dict[str, Any]:
-        data = asdict(self)
-        data["classes"] = [asdict(item) for item in self.classes]
-        data["images"] = [item.to_dict() for item in self.images]
-        return data
+        return asdict(self)
 
     def class_by_id(self, class_id: int) -> LabelClass | None:
         return next((item for item in self.classes if item.id == class_id), None)

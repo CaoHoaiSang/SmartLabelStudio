@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, fields, is_dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Iterable
@@ -12,9 +12,18 @@ import shutil
 from PIL import Image, ImageStat
 
 from .models import ImageRecord, LabelClass, Project, new_id, utc_now
+from .attribute_defaults import image_attribute_defaults
 
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
+
+
+def _json_record(value):
+    # Saving is synchronous: encode dataclass fields directly instead of making
+    # several deep copies of every image. to_dict still provides detached snapshots.
+    if is_dataclass(value) and not isinstance(value, type):
+        return {field.name: getattr(value, field.name) for field in fields(value)}
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 class ProjectStore:
@@ -34,6 +43,46 @@ class ProjectStore:
     def image_path(self, project: Project, record: ImageRecord) -> Path:
         return self.project_dir(project) / "images" / record.file_name
 
+    def _managed_project_path(self, folder: Path, name: str) -> Path:
+        if not re.fullmatch(r"project_[a-zA-Z0-9_-]+", name):
+            raise ValueError("Mã dự án không hợp lệ.")
+        target = folder / name
+        if folder.resolve().parent != self.workspace or target.resolve().parent != folder.resolve():
+            raise ValueError("Đường dẫn dự án nằm ngoài kho của ứng dụng.")
+        if target.is_symlink():
+            raise ValueError("Không thao tác trên liên kết thư mục dự án.")
+        return target
+
+    def trash_project(self, project: Project) -> Path:
+        """Recoverable deletion: move the complete local project, not sources."""
+        source = self._managed_project_path(self.projects_dir, project.id)
+        if not (source / "project.json").is_file() or self.load(source).id != project.id:
+            raise ValueError("Không tìm thấy đúng dự án cần xóa.")
+        trash = self.workspace / "project_trash"
+        destination = self._managed_project_path(trash, project.id)
+        if destination.exists():
+            raise ValueError("Dự án cùng mã đã có trong thùng rác; hãy khôi phục trước.")
+        trash.mkdir(exist_ok=True)
+        # Save unsaved labels before the atomic same-volume move.
+        self.save(project)
+        source.rename(destination)
+        return destination
+
+    def list_trashed_projects(self) -> list[Path]:
+        trash = self.workspace / "project_trash"
+        if trash.resolve().parent != self.workspace:
+            return []
+        return sorted(trash.glob("*/project.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+
+    def restore_project(self, project_id: str) -> Project:
+        source = self._managed_project_path(self.workspace / "project_trash", project_id)
+        destination = self._managed_project_path(self.projects_dir, project_id)
+        project = self.load(source)
+        if project.id != project_id or destination.exists():
+            raise ValueError("Không khôi phục vì mã dự án không khớp hoặc dự án đã tồn tại.")
+        source.rename(destination)
+        return project
+
     def create_project(
         self,
         name: str,
@@ -45,7 +94,7 @@ class ProjectStore:
         for index, class_name in enumerate(classes or []):
             project.classes.append(LabelClass(index, class_name, palette[index % len(palette)]))
         target = self.project_dir(project)
-        for folder in ("images", "versions", "exports", "runs", "cache"):
+        for folder in ("images", "assets", "versions", "exports", "runs", "cache"):
             (target / folder).mkdir(parents=True, exist_ok=True)
         self.save(project)
         return project
@@ -56,7 +105,7 @@ class ProjectStore:
         target.mkdir(parents=True, exist_ok=True)
         path = target / "project.json"
         temp = path.with_suffix(".json.tmp")
-        temp.write_text(json.dumps(project.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        temp.write_text(json.dumps(project, default=_json_record, ensure_ascii=False, indent=2), encoding="utf-8")
         temp.replace(path)
 
     def load(self, path_or_id: str | Path) -> Project:
@@ -84,6 +133,10 @@ class ProjectStore:
 
         ordered = sorted(enumerate(project.images), key=lambda pair: (created(pair[1]), pair[0]))
         if not ordered:
+            if project.last_import_batch:
+                project.last_import_batch = ""
+                self.save(project)
+                return True
             return False
         changed = False
         current_batch = ""
@@ -113,6 +166,15 @@ class ProjectStore:
             self.save(project)
         return changed
 
+    @staticmethod
+    def _sync_last_import_batch(project: Project) -> None:
+        """Point to the newest batch that still has at least one image."""
+
+        project.last_import_batch = next(
+            (record.import_batch for record in reversed(project.images) if record.import_batch),
+            "",
+        )
+
     def import_images(
         self,
         project: Project,
@@ -126,6 +188,10 @@ class ProjectStore:
                 files.extend(p for p in path.rglob("*") if p.suffix.lower() in IMAGE_EXTENSIONS)
             elif path.suffix.lower() in IMAGE_EXTENSIONS:
                 files.append(path)
+        from .fleet_intake import reject_generic_fleet_sources
+        reject_generic_fleet_sources(files)  # Preflight the entire selection before copying or changing labels.
+        from .fleet_boundaries import reject_benchmark_sources
+        reject_benchmark_sources(files)
         known_hashes = {self._hash_file(self.image_path(project, image)) for image in project.images if self.image_path(project, image).exists()}
         import_batch = new_id("import")
         added = skipped = 0
@@ -156,6 +222,9 @@ class ProjectStore:
                     width=width,
                     height=height,
                     quality={"brightness": round(brightness, 2), "contrast": round(contrast, 2)},
+                    attributes=image_attribute_defaults(project),
+                    metadata=({"hydroAttributeDefaults": image_attribute_defaults(project)}
+                              if project.metadata.get("template") == "Hydroponic Slot Condition" else {}),
                 )
             )
             known_hashes.add(digest)
@@ -179,11 +248,14 @@ class ProjectStore:
 
         image_path = self.image_path(project, record)
         annotation_count = len(record.annotations)
+        previous_last_import_batch = project.last_import_batch
         project.images.remove(record)
+        self._sync_last_import_batch(project)
         try:
             self.save(project)
         except Exception:
             project.images.append(record)
+            project.last_import_batch = previous_last_import_batch
             raise
 
         try:
@@ -203,11 +275,14 @@ class ProjectStore:
         annotation_count = sum(len(record.annotations) for record in targets)
         paths = [self.image_path(project, record) for record in targets]
         previous = list(project.images)
+        previous_last_import_batch = project.last_import_batch
         project.images = [record for record in project.images if record.id not in record_ids]
+        self._sync_last_import_batch(project)
         try:
             self.save(project)
         except Exception:
             project.images = previous
+            project.last_import_batch = previous_last_import_batch
             raise
         failures = []
         for path in paths:

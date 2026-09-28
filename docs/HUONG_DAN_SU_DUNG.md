@@ -36,32 +36,105 @@ Nếu chọn `cuda` nhưng CUDA chưa sẵn sàng, ứng dụng dừng job và b
 
 1. Nhấn **Dự án mới**.
 2. Nhập tên dự án.
-3. Ứng dụng tạo sẵn ba class demo.
-4. Nhấn **Quản lý Class & thuộc tính**.
-5. Trong tab **CLASS**, thêm Class, đổi tên hoặc bấm ô màu để chọn màu overlay.
-6. Chỉ Class cuối chưa được nhãn sử dụng mới có thể xóa; quy tắc này bảo vệ ánh xạ Class ID của model/dataset.
-7. Trong tab **THUỘC TÍNH**, nhấn **+ Thêm nhóm thuộc tính** để tạo nhóm mới hoặc sửa các nhóm tình trạng, che khuất và nắp chai có sẵn.
-8. Mỗi nhóm gồm:
+3. Chọn **Mẫu cấu hình ban đầu**. Đây chỉ là bộ Class/thuộc tính/kiểu bài toán được tạo sẵn cho dự án mới, không phải danh sách dự án đã lưu:
+   - **DeltaX chai**: tạo sẵn ba Class chai và các nhóm thuộc tính hiện có.
+   - **Hydroponic**: tạo Classification toàn ảnh cho 10 slot với `plant_presence`, `yellow_leaf`, `wilt`.
+   - **Dự án trống**: không tạo sẵn Class hay thuộc tính.
+4. Muốn mở dự án `Cao` hoặc dự án đã có khác, đóng hộp thoại **Dự án mới** và chọn ở danh sách trên thanh trên cùng.
+5. Nhấn **Quản lý Class & thuộc tính**.
+6. Trong tab **CLASS**, thêm Class, đổi tên hoặc bấm ô màu để chọn màu overlay.
+7. Chỉ Class cuối chưa được nhãn sử dụng mới có thể xóa; quy tắc này bảo vệ ánh xạ Class ID của model/dataset.
+8. Trong tab **THUỘC TÍNH**, nhấn **+ Thêm nhóm thuộc tính** để tạo nhóm mới hoặc sửa các nhóm tình trạng, che khuất và nắp chai có sẵn.
+9. Mỗi nhóm gồm:
    - **Tên nhóm**: tên nhìn thấy trong trang Gán nhãn.
    - **Mã**: khóa ổn định lưu trong `project.json`; ứng dụng tự tạo và không đổi khi sửa tên.
-   - **Mặc định**: tự gán cho nhãn mới; chọn “Không mặc định” nếu muốn người dùng quyết định từng nhãn.
+   - **Mặc định**: tự gán cho nhãn hình học mới, hoặc ảnh nhập mới nếu phạm vi là toàn ảnh. Thay đổi mặc định không sửa nhãn đã có, không tự duyệt ảnh.
    - **Bắt buộc**: không cho Duyệt ảnh khi nhãn còn thiếu nhóm này.
    - **Mục đích**: metadata, Classification hai giai đoạn, hoặc điều kiện OK/NG. Nhóm Classification có thể được export thành các crop để train classifier riêng.
+   - **Phạm vi nhãn**: theo nhãn hình học hoặc toàn ảnh / ảnh rọ.
+
+Với mẫu **Hydro**, dùng **+ Thêm tình trạng** và đặt tên, ví dụ “Đốm lá”. Mỗi
+tình trạng có các lựa chọn Có / Không / Chưa chắc chắn / Không áp dụng. Mục
+**Mặc định** chọn được và được giữ khi lưu, mở lại hoặc đổi tên cùng tình trạng.
+**Bắt buộc**, **Mục đích: Phân loại AI Hydro** và **Phạm vi nhãn: Toàn ảnh / ảnh rọ**
+được hiện để đối chiếu, cố định theo hợp đồng Hydro. Project thông thường vẫn
+sửa được các mục này. Đổi tên sang một bệnh/dấu hiệu khác phải thêm tình trạng
+mới và train model tương ứng, không đổi tên model cũ để nhận diện việc khác.
+
+**Chỉnh tên từng giá trị Hydro:** nhập trực tiếp ở cột **Tên giá trị · có thể chỉnh**.
+Cột **Ý nghĩa cố định** bên cạnh cho biết Có/Không đối với đúng tình trạng đang
+sửa. Ví dụ tên “Có đốm lá” có thể đổi thành “Phát hiện đốm lá”, vẫn mang nghĩa Có.
+Tên cần 1–100 ký tự và không trùng trong cùng nhóm; không dùng ký tự xuống dòng.
+Nhấn **Lưu thay đổi** để áp dụng; **Hủy** bỏ toàn bộ sửa trong hộp thoại.
+
+Tên tùy chỉnh được hiện ở Mặc định, Gán nhãn và phân bố QA với tiền tố ý nghĩa,
+ví dụ **Có · Phát hiện đốm lá**. Nếu giữ đúng tên gợi ý thì chỉ hiện một lần.
+Rê chuột vào mục chọn để xem đầy đủ tên dài. Mã nhãn, giá trị mặc định đã chọn,
+review ảnh, model và thứ tự đầu ra giữ nguyên; chỉ đổi cách gọi cùng ý nghĩa
+không cần train lại. Model bundle đã xuất trước đó giữ nguyên như một bản chụp;
+bundle xuất mới sẽ mang tên mới, không tự cập nhật model đang chạy trên Hydro.
+
+Khi đổi tên nhóm cùng tình trạng, tên giá trị còn giống nguyên tên gợi ý sẽ theo
+tên nhóm mới; tên đã tùy chỉnh được giữ lại để người kỹ thuật chủ động chỉnh.
+Ứng dụng không đoán nghĩa từ nội dung tên. Người đánh nhãn cần đặt tên phù hợp
+với ý nghĩa cố định, không dùng đổi tên để đổi bệnh hoặc tạo thêm mức phân loại.
+
+Mặc định áp dụng cho ảnh **nhập mới sau khi lưu cấu hình**, gồm ZIP/manifest Hydro
+và nhập ảnh/video thông thường. Ví dụ chọn Có cây, Không có lá vàng, Không có héo
+để điền trước bộ nhãn thường gặp, rồi kiểm tra và sửa từng ảnh trước khi Duyệt.
+Ảnh đã nhập hoặc nhập trùng giữ nguyên nhãn/review. Khi không chọn mặc định,
+Hydro khởi tạo Chưa chắc chắn cho có cây và Không áp dụng cho tình trạng.
+Nếu mặc định có cây chưa là Có, các tình trạng đều Không áp dụng kể cả khi đã
+chọn mặc định Có/Không cho tình trạng. Ảnh nhập thường không tự có lineage Hydro.
+
+Tên do người kỹ thuật đặt đi cùng schema/model; không dùng tên chữ để đoán nghĩa.
+Mã nhãn ổn định, `meaning` và thứ tự đầu ra model xác định Có/Không. Một cây có thể
+đồng thời vàng lá và héo nên mỗi tình trạng là một classifier độc lập. “Không có
+lá vàng” không khẳng định cây hoàn toàn khỏe; Chưa chắc chắn/Không áp dụng không
+được train thành nhãn Không. Hệ chưa có khung phân loại Hydro tùy ý nhiều mức
+trong cùng một thuộc tính (ví dụ nhẹ/vừa/nặng); việc đó cần mở rộng contract và QA.
 
 Nên đặt tên class theo loại sản phẩm, không theo hình dạng tạm thời. Ví dụ chai bị cán dẹp vẫn là `Chai_trong`; chọn thuộc tính `condition=can_dep`.
 
 ## 4. Nhập dữ liệu
 
-Trong trang **DỰ ÁN**:
+Trong trang **DỰ ÁN**, các thao tác được chia theo đúng thứ tự sử dụng. Rê chuột lên từng nút để xem giải thích chi tiết theo loại project đang mở:
+
+### 4.1. Nhập dữ liệu
 
 - **Nhập thư mục ảnh**: quét cả thư mục con.
 - **Nhập các ảnh**: chọn một hoặc nhiều file.
 - **Tách frame từ video**: ứng dụng đọc tổng số frame, đề xuất khoảng `N` để tạo tối đa khoảng 500 ảnh và cảnh báo trước nếu lựa chọn dự kiến tạo quá nhiều ảnh. `N=4` nghĩa là lưu mỗi 4 frame, không phải chỉ lưu 4 ảnh.
-- **Nạp demo 126 ảnh chai**: sử dụng dữ liệu tại thư mục Demo hiện có.
+- **Nhập gói HydroFlow (.zip)** *(chỉ hiện với project Hydro)*: luồng thông
+  thường để chuyển nhiều capture đã duyệt từ HydroFlow, có kiểm tra checksum,
+  lineage, hình học và cấu trúc slot.
+- **Nhập một capture đơn · Nâng cao** *(chỉ hiện với project Hydro)*: nhập trực
+  tiếp một `CaptureManifestV1` đã giải nén để kiểm tra hoặc phục hồi kỹ thuật.
+  Không phải cách nhập hằng ngày và không thay cho gói HydroFlow `.zip`.
+
+### 4.2. Dọn dữ liệu vừa nhập
+
+- **Lọc ảnh thông minh**: đề xuất ảnh gần trùng, trống hoặc chất lượng kém; người dùng vẫn phải duyệt và xác nhận.
+- **Xóa lần nhập gần nhất · N**: xóa đúng toàn bộ `N` ảnh của lượt nhập thành công gần nhất cùng nhãn/trạng thái trong dự án. Hộp xác nhận hiển thị trước dự án, thời gian, nguồn rút gọn, số ảnh và số nhãn. Ảnh/video nguồn ban đầu và Dataset đã export không bị xóa.
+
+### 4.3. Cấu hình nhãn
+
+- **Quản lý Class & thuộc tính / Quản lý nhãn & thuộc tính**: sửa cấu trúc nhãn của project. Với Hydro, đây là `plant_presence`, `yellow_leaf`, `wilt`; lịch camera, exposure/WB và ROI/slot được cấu hình trong website Hydro, không nằm ở nút này.
+
+Khi chiều cao cửa sổ nhỏ, dùng thanh cuộn riêng trong cột **Công cụ dự án** để mở nhóm phía dưới.
 
 Ứng dụng sao chép ảnh vào dự án. Ảnh giống hệt nhau được nhận diện bằng SHA-256 và bỏ qua.
 
 ## 5. Gán nhãn thủ công
+
+**Kiểm tra từng nhãn/thuộc tính:** ở danh sách ảnh bên trái, chọn trường
+(ví dụ Lá vàng), rồi chọn giá trị Có/Không/Chưa chắc/Không áp dụng hoặc
+**Chưa gán giá trị**. Có thể kết hợp với Bản nháp/Đã duyệt/Từ chối phía trên.
+Chai nhựa có thêm lọc Class và thuộc tính trên vật. Hai nút Ảnh trước/Ảnh sau
+chỉ đi trong kết quả lọc; số ảnh/phân trang cũng theo kết quả này. Khi sửa
+nhãn làm ảnh không còn khớp, ứng dụng chuyển sang ảnh còn lại. Bộ lọc được
+nhớ riêng theo project trong phiên. Mở ảnh từ kết quả QA sẽ bỏ bộ lọc nếu
+cần để hiển thị đúng ảnh được yêu cầu.
 
 1. Mở trang **GÁN NHÃN**.
 2. Chọn ảnh bên trái.
@@ -192,7 +265,12 @@ Model được chạy với ngưỡng thấp để các dự đoán yếu đi v�
 
 Ứng dụng gắn một mã `import_batch` cho mỗi lần nhập có thêm ảnh thành công. Nếu một lượt nhập chỉ gặp ảnh trùng và không thêm ảnh nào thì lượt mới nhất trước đó vẫn được giữ nguyên. Khi mở bộ lọc lần đầu với dự án cũ chưa có mã này, ứng dụng tự nhóm metadata theo các phiên nhập liên tiếp dựa trên `created_at`; thao tác chuyển đổi không sửa ảnh, nhãn hay trạng thái duyệt.
 
-Trang **KIỂM DUYỆT** tìm các lỗi như class không tồn tại, box ngoài ảnh, polygon thiếu điểm hoặc ảnh đã duyệt nhưng không có nhãn.
+Trang **KIỂM DUYỆT** gom các phép kiểm tra và hàng đợi xử lý vào hai khung riêng:
+
+- **Quét lỗi nhãn** tìm các lỗi như Class không tồn tại, box ngoài ảnh, polygon thiếu điểm hoặc ảnh đã duyệt nhưng không có nhãn.
+- **Kiểm tra Dataset Hydro** *(chỉ hiện với project Hydro)* kiểm tra thêm ảnh hỏng/trùng/thiếu, nhãn mâu thuẫn, phân bố nhãn, lineage và leakage theo plant/crop cycle. Báo cáo chỉ đọc được hiển thị ngay trong vùng kết quả bên dưới, không mở cửa sổ riêng và không tự sửa hoặc xóa dữ liệu; chọn dòng có ảnh rồi bấm **Mở ảnh đang chọn** để xử lý.
+- **Ảnh AI chưa chắc** tạo hàng đợi ưu tiên theo confidence thấp và Class hiếm; AI không tự duyệt ảnh.
+- **Mở ảnh đang chọn** chuyển sang trang **GÁN NHÃN** tại đúng ảnh cần sửa.
 
 ## 9. Tạo dataset
 
@@ -237,6 +315,15 @@ Ba tập là cần thiết nếu muốn biết model có thực sự tổng quá
 5. Chọn `auto`, `cpu` hoặc `cuda`.
 6. Nhấn **BẮT ĐẦU TRAIN**. Ứng dụng tự export ảnh/nhãn theo task đang chọn, tạo `data.yaml`, kiểm tra có nhãn hợp lệ rồi mới khởi chạy train.
 
+Theo dõi ô **NHẬT KÝ TRAIN / XUẤT MODEL**:
+
+- **ĐÃ NHẬN YÊU CẦU TRAIN**: ứng dụng đang kiểm tra cấu hình và chuẩn bị dataset; chưa chạy epoch.
+- **KHỞI ĐỘNG TRAIN** và **TIẾN TRÌNH TRAIN ĐÃ MỞ**: đang kiểm tra CPU/CUDA, mở tiến trình và nạp thư viện/model. Khi học bắt đầu, nhật ký hiển thị các epoch do thư viện train gửi về.
+- **CHƯA BẮT ĐẦU TRAIN**: có lỗi cấu hình hoặc dữ liệu; nguyên nhân được giữ trong nhật ký cùng hộp thông báo. **ĐÃ HỦY** nghĩa là đã hủy bước xác nhận trước train.
+- **TRAIN THÀNH CÔNG** hoặc **TRAIN DỪNG/LỖI**: kết quả của tiến trình. Với nhiều thuộc tính, xem thêm kết quả toàn lượt train hàng loạt.
+
+Nhật ký chỉ đọc, vẫn cho chọn và sao chép. Nút Train được khóa trong lượt đang chạy để tránh khởi động trùng. Nhật ký này thuộc phiên ứng dụng, không phải lịch sử được lưu qua lần đóng/mở; kết quả và checkpoint nằm trong thư mục `runs` của dự án.
+
 Ý nghĩa thông số:
 
 - **Epoch**: số lần model đi qua toàn bộ Train. Bắt đầu 30–50 epoch; nếu loss/validation còn cải thiện có thể tăng. Với Final Train không có validation, dùng gần epoch tốt nhất của lần phát triển trước (model chai hiện tại đạt validation tốt nhất khoảng epoch 47).
@@ -265,6 +352,21 @@ Sau khi train định vị thành công, ứng dụng đăng ký `best.pt` và c
 Trang **AUTO-LABEL** hiển thị dòng xanh `ĐANG DÙNG` cùng tên model và thời điểm cập nhật. Nếu ứng dụng bị đóng đúng lúc train vừa hoàn tất, lần khởi động sau sẽ tự khôi phục `best.pt` mới nhất từ thư mục `runs`.
 
 ### Đánh giá model
+
+**Với Hydro:** chọn thuộc tính ở đầu ô Đánh giá Model, chọn `test` hoặc
+`val`, rồi nhấn **ĐÁNH GIÁ MODEL**. Ứng dụng lấy classifier đã lưu của nhóm
+và dataset gốc từ checkpoint, nên không nhập tay hai đường dẫn này. Không
+xóa thư mục export đã dùng train nếu còn cần đánh giá. Tập bị dùng để train
+(Train All hoặc Val đã gộp trong Final), thiếu ảnh Có/Không hoặc trùng nội
+dung Train sẽ được báo rõ. Bộ đánh giá hiện dùng benchmark gốc của checkpoint;
+chưa có hộp chọn benchmark Hydro mới ngoài dataset gốc.
+
+Nhật ký báo số ảnh, Accuracy, Precision, Recall, F1, số đúng/báo nhầm/bỏ sót
+và đường dẫn JSON có xác suất từng ảnh. Đừng chỉ nhìn Accuracy nếu ảnh Có
+héo/vàng ít hơn nhiều ảnh Không. Kết quả Val có thể tạo gợi ý ngưỡng xuất;
+Test chỉ để đo kết quả, không được dùng để chọn ngưỡng.
+
+**Với Chai nhựa và bài định vị:** tiếp tục quy trình sau.
 
 Khung **ĐÁNH GIÁ MODEL · VALIDATION / TEST** tách riêng hai đầu vào:
 
@@ -332,6 +434,81 @@ workspace\projects\<project_id>\bundles\classification_models_*.zip
 ```
 
 ## 11. Dùng model đã train và triển khai
+
+### Tạo gói model Hydro bằng một nút
+
+Sau khi train đủ các nhóm, dùng **TẠO GÓI MODEL HYDRO**. Ứng dụng tự thực
+hiện cả xuất ONNX và tạo Hydro Model Bundle; không còn cần bấm hai nút.
+
+1. Kiểm tra các nhóm cần thiết đã có model được lưu; đánh giá model trước khi phát hành.
+2. Nhấn **TẠO GÓI MODEL HYDRO**, xem nguồn ngưỡng gợi ý, điều chỉnh nếu cần và chọn runtime đích. Các thông tin dataset/source/profile có sẵn được khóa; chỉ nhập phần còn thiếu.
+3. Chọn nơi lưu một lần. Ứng dụng chạy nền và báo tiến độ trong nhật ký:
+
+| Bước | Hệ thống thực hiện |
+| --- | --- |
+| **1/3 · Kiểm tra** | Kiểm đủ checkpoint, cấu hình và QA dữ liệu. Lỗi được ghi rõ trước khi chuyển model. |
+| **2/3 · Chuyển ONNX** | Tự chuyển từng classifier từ `.pt` đã lưu sang `.onnx`, hiện tên nhóm và số model đang xử lý. |
+| **3/3 · Đóng gói** | Kiểm contract nhãn và tạo folder/ZIP chứa model, ý nghĩa nhãn, ngưỡng, checksum, profile cùng runtime đích. |
+
+Khi hoàn tất, nhật ký và hộp thông báo chỉ rõ **file ZIP để tải lên Hydro**.
+ONNX vẫn có trong thư mục `models` của gói để kỹ thuật viên kiểm tra riêng.
+Tạo gói không train lại; mỗi lần tạo đều lấy PT hiện hành, không lấy ONNX cũ.
+
+**Dừng tạo gói** chờ bước đang xử lý kết thúc rồi dọn tệp tạm. Model gốc và
+các gói trước đó được giữ nguyên; lỗi ở một bước không được báo thành công.
+Trong lúc tạo gói, ứng dụng chặn đổi dự án và khởi động Train mới. Đóng ứng
+dụng lúc này sẽ yêu cầu dừng và chờ. Nếu chỉ lưu metadata dự án bị lỗi, ZIP
+đã tạo vẫn còn và đường dẫn được báo trong nhật ký.
+
+Nếu train hàng loạt dừng giữa chừng, bỏ tick các nhóm đã hoàn thành và chỉ
+train nhóm lỗi/chưa train. Khi đủ nhóm, **Tạo gói model Hydro** lấy cả model
+mới và model đã lưu trước đó. ZIP PT tự tạo sau batch chỉ để quản lý
+checkpoint, không phải gói dùng để cài lên Hydro.
+
+Windows dùng ONNX Runtime; Nano build TensorRT engine trên thiết bị. Chọn riêng
+**Runtime đích** và **Chế độ sử dụng**: mặc định **Vận hành thật**, hoặc chọn
+**Shadow** để ghi kết quả mà chưa cảnh báo AI. Cả hai runtime có cùng điều kiện
+QA holdout cho vận hành thật; không hạ tự động xuống shadow nếu QA chưa đạt.
+Gói cũ giữ nguyên chế độ đã lưu. QA dataset không thay thế đánh giá độ chính xác
+model trên tập test và ảnh thực tế. Hydro Camera/backend cần nạp bản source hỗ
+trợ Windows operational trước khi nhận gói mới; tạo ZIP không tự kích hoạt model.
+
+**Ngưỡng điền sẵn:** Low 0.30 / High 0.70 là mức khởi đầu, chưa hiệu chỉnh.
+Score Có ≤ Low được xem là Không; ≥ High là Có; khoảng giữa là Chưa chắc.
+Sau Đánh giá Val, ứng dụng có thể đề xuất low/high từ dữ liệu nếu ít nhất
+20 ảnh mỗi phía và kết quả đủ phân biệt. Dòng dưới từng nhóm ghi rõ nguồn.
+Gợi ý chỉ dùng cho đúng checkpoint/ý nghĩa nhãn đã đánh giá; ngưỡng đã xác
+nhận khi tạo gói được giữ cho cùng checkpoint. Model đổi thì cần xem lại.
+Test không tạo gợi ý ngưỡng. Đây không phải cam kết model đã đủ tốt để phát hành.
+
+### Auto-Label cho Hydro
+
+Danh sách hiển thị từng classifier thực sự được dùng: tên thuộc tính, tên tệp
+PT và trạng thái có tệp/chưa có/thiếu tệp. Di chuột lên dòng để xem đường dẫn.
+Danh sách cập nhật khi đổi dự án hoặc train xong; Hydro không dùng ô model định
+vị đơn. Tệp tồn tại chưa chứng minh đúng nhãn: Auto-Label kiểm contract khi chạy.
+Các bài vật thể giữ lựa chọn model Detection/Segmentation riêng.
+
+Sau khi đã train đủ các nhóm, mở **AUTO-LABEL** và nhấn **CHẠY AUTO-LABEL**.
+Ứng dụng tự chọn các classifier đã đăng ký; không cần detector hoặc SAM.
+Chỉ xử lý ảnh `slot`, không tự cắt giàn từ ảnh toàn cảnh. Confidence mặc định
+0.80: score Có ≥0.80 gợi ý Có, ≤0.20 gợi ý Không, khoảng giữa là Chưa chắc.
+Nếu chưa xác nhận Có cây, các điều kiện phụ được xem là Không áp dụng.
+
+- **Chỉ nhãn trống / khởi tạo**: điền phần thiếu và các giá trị mặc định có
+  nguồn gốc từ khi nhập ảnh. Ảnh Có/Không cũ thiếu thông tin nguồn được giữ
+  nguyên; hệ thống không suy đoán đó là nhãn mặc định hay người dùng đã gán.
+- Khi bỏ lựa chọn trên, **Thay gợi ý AI cũ** cho phép chạy lại phần do AI
+  tạo mà người dùng chưa sửa. Ảnh đã duyệt/từ chối và nhãn nhập tay được giữ.
+- Kết quả luôn là **Bản nháp** để người dùng kiểm tra rồi duyệt. Chỉnh sửa
+  đến trong lúc worker chạy được giữ, không ghi đè khi job trả kết quả.
+- **Dừng** chờ ảnh đang xử lý; các đề xuất đã xong được áp dụng dưới dạng
+  nháp, nhật ký báo số ảnh/lỗi/bỏ qua. Đang xử lý thì không đổi bài/train/xuất.
+
+Ngưỡng Confidence của Auto-Label chỉ phục vụ gợi ý đánh nhãn, độc lập với
+low/high trong gói model để chạy Hydro.
+
+### Auto-Label và triển khai DeltaX/Radxa
 
 Tại **AUTO-LABEL**, chọn `best.pt`, chọn phạm vi rồi nhấn **CHẠY AUTO-LABEL** một lần. Ứng dụng chạy lần lượt toàn bộ ảnh thuộc phạm vi:
 

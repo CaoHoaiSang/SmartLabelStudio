@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
 from .models import Project
+from .hydro_labels import model_attributes
+from .label_schema import meaning_for
 
 
 @dataclass
@@ -16,9 +17,25 @@ class QualityIssue:
 def inspect_project(project: Project) -> list[QualityIssue]:
     issues: list[QualityIssue] = []
     valid_classes = {item.id for item in project.classes}
+    is_hydro = project.metadata.get("template") == "Hydroponic Slot Condition"
+    attrs = model_attributes(project) if is_hydro else []
+    presence = next((a for a in attrs if a["role"] == "presence"), None)
     for image in project.images:
-        if image.review_status == "reviewed" and not image.annotations:
+        image_level = any(
+            project.attribute_settings.get(key, {}).get("scope") == "image"
+            for key in project.attribute_schema
+        )
+        if image.review_status == "reviewed" and not image.annotations and not image_level:
             issues.append(QualityIssue(image.id, "", "warning", "Ảnh đã duyệt nhưng không có nhãn"))
+        for key, values in project.attribute_schema.items():
+            settings = project.attribute_settings.get(key, {})
+            if settings.get("scope") == "image" and settings.get("required") and image.attributes.get(key) not in values:
+                issues.append(QualityIssue(image.id, "", "error", f"Thiếu thuộc tính ảnh bắt buộc: {key}"))
+        if presence and meaning_for(presence, image.attributes.get(presence["id"])) != "positive" and any(
+            meaning_for(attr, image.attributes.get(attr["id"])) != "not_applicable"
+            for attr in attrs if attr["role"] == "condition"
+        ):
+            issues.append(QualityIssue(image.id, "", "error", "Nhãn condition mâu thuẫn với plant_presence"))
         for ann in image.annotations:
             if ann.class_id not in valid_classes:
                 issues.append(QualityIssue(image.id, ann.id, "error", "Class ID không tồn tại"))

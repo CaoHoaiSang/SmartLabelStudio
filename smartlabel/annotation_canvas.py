@@ -25,8 +25,9 @@ class AnnotationCanvas(tk.Canvas):
         self.offset_x = 0.0
         self.offset_y = 0.0
         self.mode = "select"
+        self.read_only = False
         self.geometry_mode = "rect"
-        self.active_class_id = 0
+        self.active_class_id: int | None = None
         self.default_attributes: dict[str, str] = {}
         self.selected_id: str | None = None
         self.drag_start: tuple[float, float] | None = None
@@ -56,6 +57,7 @@ class AnnotationCanvas(tk.Canvas):
         self.bind("<ButtonRelease-2>", self._pan_release)
 
     def load(self, project: Project, record: ImageRecord, image_path: str) -> None:
+        self.clear_image()
         self.project = project
         self.record = record
         with Image.open(image_path) as source:
@@ -69,6 +71,11 @@ class AnnotationCanvas(tk.Canvas):
 
     def clear_image(self) -> None:
         """Reset the canvas after the last image is removed from a project."""
+        self.cancel_action()
+        self.pan_start = None
+        self.pan_origin = None
+        self.space_pressed = False
+        self.project = None
         self.record = None
         self.image = None
         self.photo = None
@@ -98,12 +105,16 @@ class AnnotationCanvas(tk.Canvas):
         self._notify_view()
 
     def undo(self) -> None:
+        if self.read_only:
+            return
         if not self.record or not self.history:
             return
         self.future.append([ann.to_dict() for ann in self.record.annotations])
         self._restore(self.history.pop())
 
     def redo(self) -> None:
+        if self.read_only:
+            return
         if not self.record or not self.future:
             return
         self.history.append([ann.to_dict() for ann in self.record.annotations])
@@ -267,6 +278,9 @@ class AnnotationCanvas(tk.Canvas):
         self.focus_set()
         if not self.record:
             return
+        if self.read_only:
+            self._pan_press(event)
+            return
         if self.mode == "select":
             handle = self._handle_at(event.x, event.y)
             if handle and self.selected_id:
@@ -381,7 +395,7 @@ class AnnotationCanvas(tk.Canvas):
         w, h = abs(x2 - x1), abs(y2 - y1)
         self.drag_start = None
         self.preview_item = None
-        if w >= 3 and h >= 3:
+        if w >= 3 and h >= 3 and self.project and self.active_class_id in {item.id for item in self.project.classes}:
             self.checkpoint()
             ann = Annotation.create_box(self.active_class_id, [x, y, w, h])
             ann.attributes.update(self.default_attributes)
@@ -464,7 +478,12 @@ class AnnotationCanvas(tk.Canvas):
         self.configure(cursor="arrow" if self.mode == "select" else "crosshair")
 
     def _double_click(self, _event) -> None:
+        if self.read_only:
+            return
         if self.mode != "polygon" or not self.record or len(self.polygon_points) < 3:
+            return
+        if not self.project or self.active_class_id not in {item.id for item in self.project.classes}:
+            self.cancel_action()
             return
         xs = [point[0] for point in self.polygon_points]
         ys = [point[1] for point in self.polygon_points]
@@ -494,6 +513,8 @@ class AnnotationCanvas(tk.Canvas):
         self._notify_view()
 
     def delete_selected(self) -> None:
+        if self.read_only:
+            return
         if not self.record or not self.selected_id:
             return
         self.checkpoint()
