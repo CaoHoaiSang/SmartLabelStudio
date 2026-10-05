@@ -28,9 +28,13 @@ Actions của SmartLabel không đọc repo Fleet private.
 
 Pha B thêm thao tác tường minh sau khi gói Hydro tạo xong: hộp thoại hỏi
 **Chuẩn bị phát hành qua Fleet**, rồi `prepare_fleet_release_candidate` đọc
-`bundle.json` trong ZIP, tính ba hash bằng `contract_hash`, kiểm
-`operationalAcceptance` khi chưa kiểm định, và ghi `release_candidate.json`
-cạnh ZIP. Project có marker Fleet bị chặn. Không đổi `project.json` hay nhãn.
+`bundle.json` trong ZIP, kiểm giới hạn entry/dung lượng giải nén/đường dẫn,
+tập tệp, SHA-256/ngưỡng của từng model, model khớp schema nhãn và ràng buộc
+TensorRT của Jetson; sau đó tính ba hash bằng `contract_hash`, kiểm
+`operationalAcceptance` khi chưa kiểm định, và ghi
+`<tên ZIP>.release_candidate.json` cạnh ZIP. Hai ZIP cùng thư mục không ghi
+đè ứng viên của nhau. Project có marker Fleet bị chặn. Không đổi
+`project.json` hay nhãn.
 
 Unit ngày 05/10/2026:
 `python -m unittest discover -s tests -p test_hydro_release_candidate*.py -v`

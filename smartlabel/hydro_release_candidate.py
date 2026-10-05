@@ -6,16 +6,21 @@ the candidate from a project remains an explicit Phase B operation.
 from __future__ import annotations
 
 from pathlib import Path
+from pathlib import PurePosixPath
 import hashlib
 import json
 import os
 import re
+import stat
 
 
 SCHEMA = "HydroModelReleaseCandidateV1"
 MAX_CANDIDATE_BYTES = 8 * 1024
 MAX_JSON_DEPTH = 32
 MAX_BUNDLE_BYTES = 64 * 1024 * 1024
+MAX_BUNDLE_ENTRIES = 32
+MAX_BUNDLE_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024
+LEGACY_MODEL_KEYS = {"plant_presence", "yellow_leaf", "wilt"}
 RUNTIME_TARGETS = {"windows_onnxruntime_cpu", "jetson_nano_tensorrt_fp16"}
 VALIDATION_STATUSES = {"pilot_unvalidated", "validated_holdout", "operational_unvalidated"}
 FIELDS = {
@@ -147,7 +152,7 @@ def prepare_fleet_release_candidate(archive, project, store=None):
     archive = Path(archive)
     if not archive.is_file() or archive.is_symlink() or archive.suffix.lower() != ".zip":
         raise ValueError("Không tìm thấy ZIP gói model hoặc ZIP là liên kết.")
-    destination = archive.with_name("release_candidate.json")
+    destination = archive.with_name(archive.stem + ".release_candidate.json")
     if destination.exists() or destination.is_symlink():
         raise ValueError("Ứng viên phát hành đã tồn tại; không ghi đè.")
     before = archive.stat()
@@ -217,10 +222,24 @@ def _bundle_from_zip(archive):
     except zipfile.BadZipFile:
         raise ValueError("ZIP gói model không đọc được.") from None
     with package:
-        names = package.namelist()
-        if names.count("bundle.json") != 1 or any(
-                name.startswith("/") or ".." in Path(name).parts or name.endswith("/") for name in names):
-            raise ValueError("ZIP gói model không đúng cấu trúc bundle.json.")
+        entries = package.infolist()
+        if len(entries) > MAX_BUNDLE_ENTRIES:
+            raise ValueError("ZIP gói model có quá 32 tệp.")
+        if sum(entry.file_size for entry in entries) > MAX_BUNDLE_UNCOMPRESSED_BYTES:
+            raise ValueError("ZIP gói model vượt 1 GiB sau giải nén.")
+        names = [entry.filename for entry in entries]
+        if len(names) != len(set(names)):
+            raise ValueError("ZIP gói model có tên tệp trùng lặp.")
+        for entry in entries:
+            relative = PurePosixPath(entry.filename)
+            mode = entry.external_attr >> 16
+            if (entry.is_dir() or entry.filename.startswith(("/", "\\"))
+                    or "\\" in entry.filename or ":" in entry.filename
+                    or not entry.filename or "." in relative.parts or ".." in relative.parts
+                    or stat.S_ISLNK(mode)):
+                raise ValueError("ZIP gói model có đường dẫn hoặc liên kết không an toàn.")
+        if names.count("bundle.json") != 1:
+            raise ValueError("ZIP gói model phải có đúng một bundle.json.")
         info = package.getinfo("bundle.json")
         if info.file_size > MAX_CANDIDATE_BYTES:
             raise ValueError("bundle.json vượt giới hạn.")
@@ -229,9 +248,63 @@ def _bundle_from_zip(archive):
                                  parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("Số không hữu hạn.")))
         except (UnicodeError, json.JSONDecodeError, ValueError):
             raise ValueError("bundle.json trong ZIP không phải JSON hợp lệ.") from None
-    if not isinstance(bundle, dict):
-        raise ValueError("bundle.json trong ZIP không phải object.")
+        if not isinstance(bundle, dict):
+            raise ValueError("bundle.json trong ZIP không phải object.")
+        _validate_bundle_archive(package, bundle, set(names))
     return bundle
+
+
+def _validate_bundle_archive(package, bundle, names):
+    models = bundle.get("models")
+    if not isinstance(models, dict) or not models:
+        raise ValueError("bundle.json thiếu danh sách model.")
+    version = bundle.get("schemaVersion")
+    if version == 3:
+        from .label_schema import validate_label_schema
+        try:
+            schema = validate_label_schema(bundle.get("labelSchema"))
+        except ValueError as exc:
+            raise ValueError("labelSchema trong bundle.json không hợp lệ.") from exc
+        expected_models = {attribute["id"] for attribute in schema["attributes"]}
+    elif version in (1, 2):
+        expected_models = LEGACY_MODEL_KEYS
+    else:
+        raise ValueError("Phiên bản bundle không hợp lệ.")
+    if set(models) != expected_models:
+        raise ValueError("Tập model không khớp labelSchema hoặc ba model legacy.")
+    model_paths = set()
+    for model_id, model in models.items():
+        if not isinstance(model, dict):
+            raise ValueError("Khai báo model trong bundle.json không hợp lệ.")
+        relative = model.get("path")
+        if (not isinstance(relative, str) or not relative
+                or PurePosixPath(relative).is_absolute() or "\\" in relative or ":" in relative
+                or "." in PurePosixPath(relative).parts or ".." in PurePosixPath(relative).parts):
+            raise ValueError("Đường dẫn model trong bundle.json không an toàn.")
+        if relative in model_paths:
+            raise ValueError("Hai model không được dùng chung một tệp.")
+        model_paths.add(relative)
+        if relative not in names:
+            raise ValueError("ZIP thiếu tệp model đã khai báo.")
+        expected_hash = model.get("sha256")
+        if not isinstance(expected_hash, str) or not SHA256.fullmatch(expected_hash):
+            raise ValueError("SHA-256 model trong bundle.json không hợp lệ.")
+        digest = hashlib.sha256()
+        with package.open(relative) as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+        if digest.hexdigest() != expected_hash:
+            raise ValueError("SHA-256 model trong ZIP không khớp bundle.json.")
+        low, high = model.get("lowThreshold"), model.get("highThreshold")
+        if (type(low) not in (int, float) or type(high) not in (int, float)
+                or not 0 <= low < high <= 1):
+            raise ValueError("Ngưỡng model phải thỏa 0 ≤ low < high ≤ 1.")
+    if names != {"bundle.json", *model_paths}:
+        raise ValueError("ZIP chỉ được chứa bundle.json và đúng các tệp model đã khai báo.")
+    if (bundle.get("runtimeTarget") == "jetson_nano_tensorrt_fp16"
+            and (not isinstance(bundle.get("minimumTensorRTVersion"), str)
+                 or not bundle["minimumTensorRTVersion"].strip())):
+        raise ValueError("Gói Jetson thiếu minimumTensorRTVersion.")
 
 
 def release_object_sha256(value):

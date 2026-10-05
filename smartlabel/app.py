@@ -4612,7 +4612,7 @@ class SmartLabelApp(ctk.CTk):
         if messagebox.askyesno(
                 "Phát hành qua Fleet",
                 "Chuẩn bị ứng viên phát hành qua Fleet từ ZIP vừa tạo?\n"
-                "Bước này chỉ ghi release_candidate.json cạnh ZIP. Chưa ký và chưa tải lên.",
+                "Bước này chỉ ghi <tên ZIP>.release_candidate.json cạnh ZIP. Chưa ký và chưa tải lên.",
                 parent=self):
             self._prepare_fleet_release_candidate(result["archive"], job.source_project)
 
@@ -4624,7 +4624,9 @@ class SmartLabelApp(ctk.CTk):
             self._append_log(self.train_log, f"CHƯA TẠO ĐƯỢC ỨNG VIÊN FLEET · {exc}")
             messagebox.showerror("Chưa tạo được ứng viên Fleet", str(exc), parent=self)
             return
-        message = f"Đã ghi ứng viên phát hành cạnh ZIP.\n{Path(archive).with_name('release_candidate.json')}"
+        archive_path = Path(archive)
+        candidate_path = archive_path.with_name(archive_path.stem + ".release_candidate.json")
+        message = f"Đã ghi ứng viên phát hành cạnh ZIP.\n{candidate_path}"
         self._append_log(self.train_log, message)
         messagebox.showinfo("Ứng viên Fleet đã sẵn sàng", message, parent=self)
 
