@@ -37,7 +37,8 @@ class HydroExportUiTests(unittest.TestCase):
         cls.patches = [patch.object(app_module, "WORKSPACE", cls.store.workspace),
                        patch.object(app_module.SmartLabelApp, "_refresh_hardware"),
                        patch.object(app_module.messagebox, "showerror"),
-                       patch.object(app_module.messagebox, "showinfo")]
+                       patch.object(app_module.messagebox, "showinfo"),
+                       patch.object(app_module.messagebox, "askyesno", return_value=False)]
         for item in cls.patches:
             item.start()
         cls.app = app_module.SmartLabelApp()
@@ -199,3 +200,28 @@ class HydroExportUiTests(unittest.TestCase):
         self.assertEqual(job.output.with_suffix(".zip").read_bytes(), b"fixture package")
         self.assertEqual(self.app.project.metadata, self.before)
         self.assertIn("Gói đã lưu nhưng", self.log())
+
+    def test_successful_export_asks_before_writing_a_fleet_candidate(self):
+        def build(project, store, output, config, progress, cancel):
+            output.with_suffix(".zip").write_bytes(b"fixture package")
+            return self.result(output)
+        question = app_module.messagebox.askyesno
+        question.reset_mock()
+        question.return_value = False
+        with patch.object(hydro_export, "build_hydro_package", side_effect=build), \
+                patch.object(self.app, "_prepare_fleet_release_candidate") as prepare:
+            self.app._export_hydro_bundle()
+            job = self.app.hydro_export_job
+            job.thread.join(3)
+            self.app._drain_events()
+            question.assert_called_once()
+            self.assertIn(".release_candidate.json", question.call_args.args[1])
+            prepare.assert_not_called()
+            question.return_value = True
+            question.reset_mock()
+            self.app._export_hydro_bundle()
+            job = self.app.hydro_export_job
+            job.thread.join(3)
+            self.app._drain_events()
+            prepare.assert_called_once()
+        question.return_value = False
