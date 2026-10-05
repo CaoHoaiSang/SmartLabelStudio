@@ -82,6 +82,23 @@ class HydroReleaseCandidateContractTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "SHA-256"):
                 verify_candidate_archive(self.candidate, archive)
 
+    def test_non_string_status_fields_raise_value_error(self):
+        for field in ("runtimeTarget", "deploymentMode", "validationStatus"):
+            with self.assertRaises(ValueError):
+                validate_release_candidate({**self.candidate, field: ["windows_onnxruntime_cpu"]})
+
+    def test_fractional_seconds_and_unvalidated_v2_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "không đúng hợp đồng"):
+            validate_release_candidate({**self.candidate, "createdAt": "2026-10-05T14:00:00.12+00:00"})
+        with self.assertRaisesRegex(ValueError, "không đúng hợp đồng"):
+            validate_release_candidate({**self.candidate, "createdAt": "2026-10-05T14:00:00.123456+00:00"})
+        with self.assertRaisesRegex(ValueError, "không khớp"):
+            validate_release_candidate({
+                **self.candidate, "bundleSchemaVersion": 2, "pipeline": "fixed_slot_multilabel_v2",
+                "deploymentMode": "operational", "validationStatus": "operational_unvalidated",
+                "labelSchemaSha256": None,
+            })
+
     def test_invalid_calendar_date_and_smoke_status_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "không đúng hợp đồng"):
             validate_release_candidate({**self.candidate, "createdAt": "2026-02-31T00:00:00Z"})

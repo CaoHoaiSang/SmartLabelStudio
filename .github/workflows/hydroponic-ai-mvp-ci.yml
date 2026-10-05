@@ -28,6 +28,8 @@ jobs:
       - name: Install a virtual display and window manager for owned-dialog tests
         run: sudo apt-get update && sudo apt-get install -y xvfb python3-tk openbox x11-utils
       - name: Run all tests with real window ownership and stacking
+        env:
+          FLEET_RELEASE_VECTORS: ${{ github.workspace }}/tests/fixtures/fleet-model-releases
         run: xvfb-run -a -s "-screen 0 1920x1080x24" bash scripts/run_ci_tests.sh
       - name: Reject newly added runtime data, secrets, and deploy artifacts
         shell: bash

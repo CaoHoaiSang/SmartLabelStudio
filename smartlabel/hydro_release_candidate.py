@@ -5,7 +5,6 @@ the candidate from a project remains an explicit Phase B operation.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from pathlib import Path
 import hashlib
 import json
@@ -13,7 +12,8 @@ import re
 
 
 SCHEMA = "HydroModelReleaseCandidateV1"
-MAX_CANDIDATE_BYTES = 32 * 1024
+MAX_CANDIDATE_BYTES = 8 * 1024
+MAX_JSON_DEPTH = 32
 MAX_BUNDLE_BYTES = 64 * 1024 * 1024
 RUNTIME_TARGETS = {"windows_onnxruntime_cpu", "jetson_nano_tensorrt_fp16"}
 VALIDATION_STATUSES = {"pilot_unvalidated", "validated_holdout", "operational_unvalidated"}
@@ -48,13 +48,13 @@ def _sha(value, *, nullable=False):
 
 def _utc(value):
     if not isinstance(value, str) or not re.fullmatch(
-            r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?(?:Z|\+00:00)", value):
+            r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{3})?(?:Z|\+00:00)", value):
         return False
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return False
-    return parsed.tzinfo is not None and parsed.utcoffset() == timezone.utc.utcoffset(parsed)
+    year, month, day = int(value[0:4]), int(value[5:7]), int(value[8:10])
+    hour, minute, second = int(value[11:13]), int(value[14:16]), int(value[17:19])
+    leap = year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+    days = (31, 29 if leap else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+    return 1 <= month <= 12 and 1 <= day <= days[month - 1] and hour <= 23 and minute <= 59 and second <= 59
 
 
 def validate_release_candidate(value):
@@ -69,9 +69,9 @@ def validate_release_candidate(value):
             or value["bundleSchemaVersion"] not in {1, 2, 3}
             or value["pipeline"] != f"fixed_slot_multilabel_v{value['bundleSchemaVersion']}"
             or not isinstance(value["cropCode"], str) or not CROP_CODE.fullmatch(value["cropCode"])
-            or value["runtimeTarget"] not in RUNTIME_TARGETS
-            or value["deploymentMode"] not in {"shadow", "operational"}
-            or value["validationStatus"] not in VALIDATION_STATUSES
+            or not isinstance(value["runtimeTarget"], str) or value["runtimeTarget"] not in RUNTIME_TARGETS
+            or not isinstance(value["deploymentMode"], str) or value["deploymentMode"] not in {"shadow", "operational"}
+            or not isinstance(value["validationStatus"], str) or value["validationStatus"] not in VALIDATION_STATUSES
             or not _sha(value["bundleZipSha256"])
             or not _sha(value["bundleContractSha256"])
             or not _sha(value["labelSchemaSha256"], nullable=True)
@@ -89,9 +89,34 @@ def validate_release_candidate(value):
             or (value["deploymentMode"] == "shadow"
                 and value["validationStatus"] != "pilot_unvalidated")
             or (value["deploymentMode"] == "operational"
-                and value["validationStatus"] not in {"validated_holdout", "operational_unvalidated"})):
+                and value["validationStatus"] not in {"validated_holdout", "operational_unvalidated"})
+            or (value["validationStatus"] == "operational_unvalidated"
+                and (value["bundleSchemaVersion"] != 3 or value["deploymentMode"] != "operational"
+                     or value["evaluationEvidenceSha256"] is not None))):
         raise ValueError("Trạng thái kiểm định, schema hoặc chế độ triển khai của ứng viên không khớp.")
     return {**value, "lineage": dict(lineage)}
+
+
+def _container_depth(text):
+    depth = deepest = 0
+    in_string = escape = False
+    for char in text:
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char in "{[":
+            depth += 1
+            deepest = max(deepest, depth)
+        elif char in "}]":
+            depth = max(0, depth - 1)
+    return deepest
 
 
 def load_release_candidate(path):
@@ -101,8 +126,11 @@ def load_release_candidate(path):
             or not 0 < path.stat().st_size <= MAX_CANDIDATE_BYTES):
         raise ValueError("Tệp ứng viên không có, là liên kết hoặc vượt giới hạn.")
     try:
+        text = path.read_text(encoding="utf-8")
+        if _container_depth(text) > MAX_JSON_DEPTH:
+            raise ValueError("Ứng viên phát hành không đúng hợp đồng HydroModelReleaseCandidateV1.")
         value = json.loads(
-            path.read_text(encoding="utf-8"),
+            text,
             object_pairs_hook=_pairs,
             parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("Số không hữu hạn.")),
         )

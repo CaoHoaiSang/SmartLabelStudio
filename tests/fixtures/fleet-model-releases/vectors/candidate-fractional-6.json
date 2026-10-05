@@ -1,0 +1,22 @@
+{
+  "schema": "HydroModelReleaseCandidateV1",
+  "purpose": "hydro-model",
+  "bundleId": "hydro_cai_ngot_20261005T140000Z",
+  "bundleZipSha256": "ef43388809eb31061a5615a5fd2028989fe752cd6618cf9d13317d4cfcbcde75",
+  "bundleZipBytes": 55,
+  "bundleContractSha256": "17f5dfdb7f0b78bfbb2869111145ff33be98f985ac7f4c5bc12b585b351f5863",
+  "bundleSchemaVersion": 3,
+  "pipeline": "fixed_slot_multilabel_v3",
+  "cropCode": "cai_ngot",
+  "runtimeTarget": "windows_onnxruntime_cpu",
+  "deploymentMode": "shadow",
+  "validationStatus": "pilot_unvalidated",
+  "labelSchemaSha256": "e9707cac735820abf18f199cc248a9f57acd8aa78d81179e024425291e1dfc4e",
+  "evaluationEvidenceSha256": null,
+  "datasetVersion": "dataset-test-20261005",
+  "sourceCommit": "be853f00f007252a273ab43bc9df3a3555122806",
+  "lineage": {
+    "kind": "legacy_only"
+  },
+  "createdAt": "2026-10-05T14:00:00.123456+00:00"
+}

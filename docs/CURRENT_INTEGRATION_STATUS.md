@@ -17,11 +17,19 @@ Fleet**, chưa ghi `release_candidate.json`, chưa ký, upload hoặc thay luồ
 Schema/vector Ed25519 TEST dùng chung nằm ở nhánh Fleet P2 Pha A và phải pin
 exact commit + SHA-256 sau khi reviewer duyệt.
 
-Unit contract riêng ngày 05/10/2026:
-`python -m unittest discover -s tests -p test_hydro_release_candidate.py -v`
-đạt 9/9. Full suite GUI chạy trong CI với xvfb, không chạy trên desktop vận
-hành. Chưa chạy thiết bị hoặc nghiệm thu thực địa. Dừng sau Pha A để reviewer
-chốt contract trước khi nối thao tác tạo candidate.
+Pha A2 ngày 05/10/2026 siết parser cho khớp review: thời gian chỉ nhận phần
+thập phân 3 chữ số hoặc không có, `operational_unvalidated` bắt buộc V3,
+trường enum không phải chuỗi trả ValueError, và độ sâu JSON tối đa 32. Ba hash
+vẫn là `contract_hash` của `bundle.json` trong ZIP; Pha B mới ghi candidate.
+Vector đối chiếu nằm ở `tests/fixtures/fleet-model-releases`, copy từ Fleet
+`3a81e43e1e247fb17541102053e8afe42b404034`, và được so SHA-256 với
+`artifact-manifest.json`. CI đặt `FLEET_RELEASE_VECTORS` vào thư mục này vì
+Actions của SmartLabel không đọc repo Fleet private.
+
+Unit ngày 05/10/2026:
+`python -m unittest discover -s tests -p test_hydro_release_candidate*.py -v`
+đạt 12/12. Full suite GUI chạy trong CI với xvfb. Chưa chạy thiết bị hoặc
+nghiệm thu thực địa.
 
 ## Hiện hành: chuẩn bị train chạy nền — 26/09
 
