@@ -1,5 +1,28 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 26/09/2026
 
+## P2 Pha A: contract ứng viên phát hành — 05/10/2026
+
+Nhánh `feature/hydro-release-candidate-20261005`, base
+`be853f00f007252a273ab43bc9df3a3555122806`, chỉ thêm parser strict
+`HydroModelReleaseCandidateV1` và unit test. Parser khóa allowlist, hai
+runtime Hydro hiện có, quan hệ schema/validation/deployment, chỉ chấp nhận
+`lineage.kind=legacy_only`, băm lại ZIP và phát hiện lệch byte/SHA hoặc file
+đổi trong lúc đọc. `release_object_sha256` gọi `contract_hash` sẵn có, không
+viết lại dumps. Không thêm dependency.
+
+Đây chưa phải Pha B: SmartLabel chưa có thao tác **Chuẩn bị phát hành qua
+Fleet**, chưa ghi `release_candidate.json`, chưa ký, upload hoặc thay luồng
+`build_hydro_package`. Dữ liệu có marker Fleet tiếp tục bị chặn bởi
+`fleet_boundaries`; không train/model/dataset/người dùng nào bị sửa. JSON
+Schema/vector Ed25519 TEST dùng chung nằm ở nhánh Fleet P2 Pha A và phải pin
+exact commit + SHA-256 sau khi reviewer duyệt.
+
+Unit contract riêng ngày 05/10/2026:
+`python -m unittest discover -s tests -p test_hydro_release_candidate.py -v`
+đạt 9/9. Full suite GUI chạy trong CI với xvfb, không chạy trên desktop vận
+hành. Chưa chạy thiết bị hoặc nghiệm thu thực địa. Dừng sau Pha A để reviewer
+chốt contract trước khi nối thao tác tạo candidate.
+
 ## Hiện hành: chuẩn bị train chạy nền — 26/09
 
 Nạp/kiểm model, kiểm nguồn/phân tập, quét pixel ảnh bổ trợ và xuất dataset
