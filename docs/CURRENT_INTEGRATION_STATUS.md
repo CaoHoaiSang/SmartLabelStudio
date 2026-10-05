@@ -26,10 +26,16 @@ Vector đối chiếu nằm ở `tests/fixtures/fleet-model-releases`, copy từ
 `artifact-manifest.json`. CI đặt `FLEET_RELEASE_VECTORS` vào thư mục này vì
 Actions của SmartLabel không đọc repo Fleet private.
 
+Pha B thêm thao tác tường minh sau khi gói Hydro tạo xong: hộp thoại hỏi
+**Chuẩn bị phát hành qua Fleet**, rồi `prepare_fleet_release_candidate` đọc
+`bundle.json` trong ZIP, tính ba hash bằng `contract_hash`, kiểm
+`operationalAcceptance` khi chưa kiểm định, và ghi `release_candidate.json`
+cạnh ZIP. Project có marker Fleet bị chặn. Không đổi `project.json` hay nhãn.
+
 Unit ngày 05/10/2026:
 `python -m unittest discover -s tests -p test_hydro_release_candidate*.py -v`
-đạt 12/12. Full suite GUI chạy trong CI với xvfb. Chưa chạy thiết bị hoặc
-nghiệm thu thực địa.
+đạt 17/17 ở máy local cho các tệp candidate. Full suite GUI chạy trong CI với
+xvfb. Chưa chạy thiết bị hoặc nghiệm thu thực địa.
 
 ## Hiện hành: chuẩn bị train chạy nền — 26/09
 

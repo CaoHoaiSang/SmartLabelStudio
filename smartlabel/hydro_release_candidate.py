@@ -8,6 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 import hashlib
 import json
+import os
 import re
 
 
@@ -137,6 +138,100 @@ def load_release_candidate(path):
     except (OSError, UnicodeError, json.JSONDecodeError):
         raise ValueError("Không đọc được tệp ứng viên UTF-8 hợp lệ.") from None
     return validate_release_candidate(value)
+
+
+def prepare_fleet_release_candidate(archive, project, store=None):
+    """Write release_candidate.json beside a finished ZIP. This is an explicit action."""
+    from .fleet_boundaries import reject_fleet_metadata, require_legacy_project
+    require_legacy_project(project, store)
+    archive = Path(archive)
+    if not archive.is_file() or archive.is_symlink() or archive.suffix.lower() != ".zip":
+        raise ValueError("Không tìm thấy ZIP gói model hoặc ZIP là liên kết.")
+    destination = archive.with_name("release_candidate.json")
+    if destination.exists() or destination.is_symlink():
+        raise ValueError("Ứng viên phát hành đã tồn tại; không ghi đè.")
+    before = archive.stat()
+    if not 0 < before.st_size <= MAX_BUNDLE_BYTES:
+        raise ValueError("ZIP gói model rỗng hoặc vượt 64 MiB.")
+    bundle = _bundle_from_zip(archive)
+    reject_fleet_metadata(bundle)
+    contract = release_object_sha256(bundle)
+    status = bundle.get("validationStatus")
+    acceptance = bundle.get("operationalAcceptance")
+    if status == "operational_unvalidated":
+        if not isinstance(acceptance, dict) or acceptance.get("bundleContractSha256") != contract:
+            raise ValueError("Xác nhận vận hành không khớp contract của bundle.json trong ZIP.")
+    elif acceptance is not None:
+        raise ValueError("Xác nhận vận hành chưa kiểm định không khớp trạng thái gói.")
+    version = bundle.get("schemaVersion")
+    label_schema = bundle.get("labelSchema")
+    evidence = bundle.get("evaluationEvidence")
+    if version == 3:
+        if not isinstance(label_schema, dict):
+            raise ValueError("Gói V3 thiếu schema nhãn trong bundle.json.")
+        label_hash = release_object_sha256(label_schema)
+    elif label_schema is None:
+        label_hash = None
+    else:
+        raise ValueError("Schema nhãn chỉ được có trong gói Hydro V3.")
+    if status == "validated_holdout":
+        if not isinstance(evidence, dict):
+            raise ValueError("Gói đã kiểm định thiếu evaluationEvidence trong bundle.json.")
+        evidence_hash = release_object_sha256(evidence)
+    elif evidence is None:
+        evidence_hash = None
+    else:
+        raise ValueError("Bằng chứng kiểm định không khớp trạng thái gói.")
+    digest = hashlib.sha256()
+    with archive.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    after = archive.stat()
+    if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+        raise ValueError("ZIP gói model đã đổi trong lúc kiểm tra.")
+    candidate = validate_release_candidate({
+        "schema": SCHEMA, "purpose": "hydro-model", "bundleId": bundle.get("bundleId"),
+        "bundleZipSha256": digest.hexdigest(), "bundleZipBytes": after.st_size,
+        "bundleContractSha256": contract, "bundleSchemaVersion": version,
+        "pipeline": bundle.get("pipeline"), "cropCode": bundle.get("cropCode"),
+        "runtimeTarget": bundle.get("runtimeTarget"), "deploymentMode": bundle.get("deploymentMode"),
+        "validationStatus": status, "labelSchemaSha256": label_hash,
+        "evaluationEvidenceSha256": evidence_hash, "datasetVersion": bundle.get("datasetVersion"),
+        "sourceCommit": bundle.get("sourceCommit"), "lineage": {"kind": "legacy_only"},
+        "createdAt": bundle.get("createdAt"),
+    })
+    temporary = destination.with_name(destination.name + ".tmp")
+    temporary.write_text(json.dumps(candidate, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(temporary, destination)
+    try:
+        return verify_candidate_archive(load_release_candidate(destination), archive)
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+
+
+def _bundle_from_zip(archive):
+    import zipfile
+    try:
+        package = zipfile.ZipFile(archive)
+    except zipfile.BadZipFile:
+        raise ValueError("ZIP gói model không đọc được.") from None
+    with package:
+        names = package.namelist()
+        if names.count("bundle.json") != 1 or any(
+                name.startswith("/") or ".." in Path(name).parts or name.endswith("/") for name in names):
+            raise ValueError("ZIP gói model không đúng cấu trúc bundle.json.")
+        info = package.getinfo("bundle.json")
+        if info.file_size > MAX_CANDIDATE_BYTES:
+            raise ValueError("bundle.json vượt giới hạn.")
+        try:
+            bundle = json.loads(package.read("bundle.json").decode("utf-8"), object_pairs_hook=_pairs,
+                                 parse_constant=lambda _value: (_ for _ in ()).throw(ValueError("Số không hữu hạn.")))
+        except (UnicodeError, json.JSONDecodeError, ValueError):
+            raise ValueError("bundle.json trong ZIP không phải JSON hợp lệ.") from None
+    if not isinstance(bundle, dict):
+        raise ValueError("bundle.json trong ZIP không phải object.")
+    return bundle
 
 
 def release_object_sha256(value):

@@ -4609,6 +4609,24 @@ class SmartLabelApp(ctk.CTk):
         self.deploy_status_label.configure(text="Gói Hydro đã sẵn sàng · xem đường dẫn trong nhật ký", text_color=COLORS["good"])
         self._append_log(self.train_log, message)
         messagebox.showinfo("Gói model Hydro hoàn tất", message, parent=self)
+        if messagebox.askyesno(
+                "Phát hành qua Fleet",
+                "Chuẩn bị ứng viên phát hành qua Fleet từ ZIP vừa tạo?\n"
+                "Bước này chỉ ghi release_candidate.json cạnh ZIP. Chưa ký và chưa tải lên.",
+                parent=self):
+            self._prepare_fleet_release_candidate(result["archive"], job.source_project)
+
+    def _prepare_fleet_release_candidate(self, archive, project) -> None:
+        from .hydro_release_candidate import prepare_fleet_release_candidate
+        try:
+            candidate = prepare_fleet_release_candidate(archive, project, self.store)
+        except Exception as exc:
+            self._append_log(self.train_log, f"CHƯA TẠO ĐƯỢC ỨNG VIÊN FLEET · {exc}")
+            messagebox.showerror("Chưa tạo được ứng viên Fleet", str(exc), parent=self)
+            return
+        message = f"Đã ghi ứng viên phát hành cạnh ZIP.\n{Path(archive).with_name('release_candidate.json')}"
+        self._append_log(self.train_log, message)
+        messagebox.showinfo("Ứng viên Fleet đã sẵn sàng", message, parent=self)
 
     def _export_deployment_bundle(self) -> None:
         if not self.project:
