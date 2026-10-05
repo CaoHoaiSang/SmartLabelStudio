@@ -38,7 +38,7 @@ TensorRT của Jetson; sau đó tính ba hash bằng `contract_hash`, kiểm
 
 Unit ngày 05/10/2026:
 `python -m unittest discover -s tests -p test_hydro_release_candidate*.py -v`
-đạt 17/17 ở máy local cho các tệp candidate. Full suite GUI chạy trong CI với
+đạt 31/31 ở máy local cho các tệp candidate. Full suite GUI chạy trong CI với
 xvfb. Chưa chạy thiết bị hoặc nghiệm thu thực địa.
 
 ## Hiện hành: chuẩn bị train chạy nền — 26/09
