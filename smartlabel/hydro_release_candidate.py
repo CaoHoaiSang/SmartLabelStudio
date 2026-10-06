@@ -9,6 +9,7 @@ from pathlib import Path
 from pathlib import PurePosixPath
 import hashlib
 import json
+import math
 import os
 import re
 import stat
@@ -166,6 +167,20 @@ def prepare_fleet_release_candidate(archive, project, store=None):
     if status == "operational_unvalidated":
         if not isinstance(acceptance, dict) or acceptance.get("bundleContractSha256") != contract:
             raise ValueError("Xác nhận vận hành không khớp contract của bundle.json trong ZIP.")
+        from datetime import datetime
+        from .operational_policy import validate_acceptance
+        validate_acceptance(acceptance, bundle["models"])
+        # Match the deployed Hydro/Nano acceptance contract, including Python 3.6 time parsing.
+        stamp = acceptance.get("acceptedAt", "")
+        try:
+            if not stamp.endswith("+00:00"):
+                raise ValueError()
+            datetime.strptime(stamp[:-6], "%Y-%m-%dT%H:%M:%S.%f")
+        except (TypeError, ValueError):
+            raise ValueError("Thời điểm xác nhận vận hành không tương thích Hydro.") from None
+        if ("evaluationEvidence" in bundle or
+                any(token in str(bundle.get("trainingPurpose", "")) for token in ("smoke", "fixture"))):
+            raise ValueError("Gói vận hành chưa kiểm định không được dùng bằng chứng hoặc model smoke/fixture.")
     elif acceptance is not None:
         raise ValueError("Xác nhận vận hành chưa kiểm định không khớp trạng thái gói.")
     version = bundle.get("schemaVersion")
@@ -259,13 +274,21 @@ def _validate_bundle_archive(package, bundle, names):
     if not isinstance(models, dict) or not models:
         raise ValueError("bundle.json thiếu danh sách model.")
     version = bundle.get("schemaVersion")
+    for key in ("compatibleCameraProfileIds", "compatibleGeometryProfileIds"):
+        profiles = bundle.get(key)
+        if (not isinstance(profiles, list) or not profiles
+                or any(not isinstance(value, str) or not value for value in profiles)):
+            raise ValueError(f"{key} phải có ít nhất một profile hợp lệ để Hydro nhập gói.")
     if version == 3:
-        from .label_schema import validate_label_schema
+        from .label_schema import validate_label_schema, validate_model_labels
         try:
             schema = validate_label_schema(bundle.get("labelSchema"))
         except ValueError as exc:
             raise ValueError("labelSchema trong bundle.json không hợp lệ.") from exc
-        expected_models = {attribute["id"] for attribute in schema["attributes"]}
+        attributes = {attribute["id"]: attribute for attribute in schema["attributes"]}
+        expected_models = set(attributes)
+        if type(bundle.get("geometrySchemaVersion")) is not int or bundle["geometrySchemaVersion"] not in (1, 2):
+            raise ValueError("Gói V3 cần geometrySchemaVersion 1 hoặc 2.")
     elif version in (1, 2):
         expected_models = LEGACY_MODEL_KEYS
     else:
@@ -299,6 +322,33 @@ def _validate_bundle_archive(package, bundle, names):
         if (type(low) not in (int, float) or type(high) not in (int, float)
                 or not 0 <= low < high <= 1):
             raise ValueError("Ngưỡng model phải thỏa 0 ≤ low < high ≤ 1.")
+        if version == 3:
+            validate_model_labels(attributes[model_id], model)
+            if model.get("labels") != model["outputLabels"]:
+                raise ValueError("labels và outputLabels của model không khớp.")
+        elif model.get("labels") != ["absent", "present"]:
+            raise ValueError("Model legacy cần đúng hai nhãn absent/present.")
+        if model.get("batchSize") != 1 or model.get("dynamic") is not False:
+            raise ValueError("Model phải dùng batch tĩnh bằng 1.")
+        if (model.get("inputLayout", "NCHW") not in {"NCHW", "NHWC"}
+                or model.get("colorOrder") not in {"RGB", "BGR"}
+                or model.get("resizeMode") != "short_side_center_crop"):
+            raise ValueError("Thông tin tiền xử lý ảnh của model không tương thích Hydro.")
+        size = model.get("inputSize")
+        if (not isinstance(size, list) or len(size) != 2
+                or any(type(value) is not int or not 1 <= value <= 4096 for value in size)):
+            raise ValueError("inputSize cần hai kích thước nguyên từ 1 đến 4096.")
+        if version == 3:
+            norm = model.get("normalization")
+            if not isinstance(norm, dict):
+                raise ValueError("Model V3 cần normalization tường minh.")
+            def finite(value):
+                return type(value) in (int, float) and math.isfinite(value)
+            scale, mean, std = (norm.get(key) for key in ("scale", "mean", "std"))
+            if (not finite(scale) or scale <= 0
+                    or not isinstance(mean, list) or len(mean) != 3 or not all(finite(v) for v in mean)
+                    or not isinstance(std, list) or len(std) != 3 or not all(finite(v) and v > 0 for v in std)):
+                raise ValueError("normalization cần scale hữu hạn dương và ba kênh mean/std hợp lệ.")
     if names != {"bundle.json", *model_paths}:
         raise ValueError("ZIP chỉ được chứa bundle.json và đúng các tệp model đã khai báo.")
     if (bundle.get("runtimeTarget") == "jetson_nano_tensorrt_fp16"

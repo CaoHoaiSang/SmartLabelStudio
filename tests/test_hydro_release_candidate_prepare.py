@@ -1,4 +1,5 @@
 import hashlib
+from copy import deepcopy
 import json
 from pathlib import Path
 import stat
@@ -32,6 +33,13 @@ def bundle(**overrides):
             "sha256": hashlib.sha256(MODEL_BYTES[f"models/{attribute['id']}.onnx"]).hexdigest(),
             "lowThreshold": 0.3,
             "highThreshold": 0.7,
+            "attributeId": attribute["id"],
+            "labels": ["absent", "present"], "outputLabels": ["absent", "present"],
+            "negativeIndex": 0, "positiveIndex": 1,
+            "batchSize": 1, "dynamic": False, "inputLayout": "NCHW",
+            "colorOrder": "RGB", "resizeMode": "short_side_center_crop",
+            "inputSize": [224, 224],
+            "normalization": {"scale": 1 / 255, "mean": [0, 0, 0], "std": [1, 1, 1]},
         }
         for attribute in schema["attributes"]
     }
@@ -47,6 +55,9 @@ def bundle(**overrides):
         "sourceCommit": "be853f00f007252a273ab43bc9df3a3555122806",
         "createdAt": "2026-10-05T14:00:00+00:00",
         "labelSchema": schema,
+        "compatibleCameraProfileIds": ["camera-test"],
+        "compatibleGeometryProfileIds": ["geometry-test"],
+        "geometrySchemaVersion": 2,
         "models": models,
     }
     value.update(overrides)
@@ -112,7 +123,9 @@ class PrepareFleetCandidateTests(unittest.TestCase):
     def test_unvalidated_operational_must_match_acceptance_inside_zip(self):
         document = bundle(
             deploymentMode="operational", validationStatus="operational_unvalidated",
-            operationalAcceptance={"schemaVersion": "HydroOperationalAcceptanceV1", "bundleContractSha256": "0" * 64},
+            operationalAcceptance={"schemaVersion": "HydroOperationalAcceptanceV1", "bundleContractSha256": "0" * 64,
+                                   "acknowledged": True, "acceptedAt": "2026-10-05T14:00:00.000000+00:00",
+                                   "checkpointHashes": {key: "a" * 64 for key in bundle()["models"]}},
         )
         archive = self.write_zip(document)
         with self.assertRaisesRegex(ValueError, "không khớp"):
@@ -218,6 +231,44 @@ class PrepareFleetCandidateTests(unittest.TestCase):
         prepare_fleet_release_candidate(second, self.project, self.store)
         self.assertTrue((self.root / "first.release_candidate.json").is_file())
         self.assertTrue((self.root / "second.release_candidate.json").is_file())
+
+    def test_candidate_rejects_metadata_that_hydro_cannot_install(self):
+        invalid = [
+            ("bundle", "compatibleCameraProfileIds", None),
+            ("bundle", "compatibleGeometryProfileIds", []),
+            ("bundle", "geometrySchemaVersion", 3),
+            ("model", "positiveIndex", 0),
+            ("model", "labels", ["present", "absent"]),
+            ("model", "outputLabels", ["missing", "present"]),
+            ("model", "batchSize", 2), ("model", "dynamic", True),
+            ("model", "inputLayout", "INVALID"), ("model", "colorOrder", None),
+            ("model", "resizeMode", "stretch"), ("model", "inputSize", [0, 224]),
+            ("model", "normalization", None),
+            ("model", "normalization", {"scale": 1, "mean": [0, 0, 0], "std": [1, 0, 1]}),
+        ]
+        for index, (scope, key, value) in enumerate(invalid):
+            with self.subTest(scope=scope, key=key, value=value):
+                document = deepcopy(bundle())
+                node = document if scope == "bundle" else document["models"]["plant_presence"]
+                if value is None:
+                    node.pop(key, None)
+                else:
+                    node[key] = value
+                archive = self.write_zip(document, f"invalid-{index}.zip")
+                with self.assertRaises(ValueError):
+                    prepare_fleet_release_candidate(archive, self.project, self.store)
+                self.assertFalse(self.candidate_path(archive).exists())
+
+    def test_matching_acceptance_hash_is_not_enough_without_explicit_consent(self):
+        document = bundle(deploymentMode="operational", validationStatus="operational_unvalidated")
+        document["operationalAcceptance"] = {
+            "schemaVersion": "HydroOperationalAcceptanceV1",
+            "bundleContractSha256": release_object_sha256(document),
+        }
+        archive = self.write_zip(document)
+        with self.assertRaises(ValueError):
+            prepare_fleet_release_candidate(archive, self.project, self.store)
+        self.assertFalse(self.candidate_path(archive).exists())
 
 
 if __name__ == "__main__":

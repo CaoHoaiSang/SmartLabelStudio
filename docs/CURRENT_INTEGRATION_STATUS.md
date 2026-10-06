@@ -1,5 +1,15 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 26/09/2026
 
+## Sửa kiểm định ứng viên Fleet — 06/10/2026
+
+Candidate nay kiểm metadata theo Hydro, gồm profile camera/geometry, ánh xạ
+đầu ra model, preprocessing và xác nhận vận hành chưa kiểm định. Thứ tự nhãn
+đảo vẫn được chấp nhận nếu chỉ số đúng; quyền loại/xóa ảnh và luồng train
+không đổi. Test candidate 33/33, export 20/20 đạt. Full GUI qua SSH còn 19 lỗi
+đã tái hiện trên base; CI được xác minh riêng, chưa coi local full là đạt.
+[Xem phạm vi, bằng chứng và giới hạn](FLEET_RELEASE_CANDIDATE_REVIEW_FIXES.md).
+
+
 ## P2 Pha A: contract ứng viên phát hành — 05/10/2026
 
 Nhánh `feature/hydro-release-candidate-20261005`, base

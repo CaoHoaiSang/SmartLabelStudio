@@ -98,6 +98,14 @@ class HydroPackageTests(unittest.TestCase):
         self.assertTrue(any("[3/3]" in text for text in self.messages))
         self.assert_preserved()
 
+    def test_exported_zip_with_reversed_output_order_is_a_valid_fleet_candidate(self):
+        from smartlabel.hydro_release_candidate import prepare_fleet_release_candidate
+        result = self.build()
+        candidate = prepare_fleet_release_candidate(result["archive"], self.project, self.store)
+        self.assertEqual(candidate["runtimeTarget"], "windows_onnxruntime_cpu")
+        self.assertEqual(candidate["bundleSchemaVersion"], 3)
+        self.assert_preserved()
+
     def test_always_exports_current_pt_not_stale_onnx_metadata(self):
         self.project.metadata["hydroOnnxModels"] = {key: "does-not-exist.onnx" for key in model_keys(self.project)}
         self.before = deepcopy(self.project.to_dict())
