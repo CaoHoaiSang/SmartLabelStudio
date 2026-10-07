@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "testOnly": true,
+  "files": [
+    {
+      "path": "schema.json",
+      "sha256": "99e18f33e5ee449ee40c109483f6687fb1d79796befb06d41c4a6d92e906fa6a"
+    },
+    {
+      "path": "vectors.json",
+      "sha256": "d1ba5cf5e6827b2cf68362904df597de211f84b65773bfc667a6d2424745beeb"
+    }
+  ]
+}

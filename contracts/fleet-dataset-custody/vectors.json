@@ -1,0 +1,2536 @@
+{
+  "testOnly": true,
+  "samples": {
+    "snapshot": {
+      "schemaVersion": "FleetDatasetSnapshotV1",
+      "projectBinding": {
+        "workerId": "00000000-0000-4000-8000-000000000001",
+        "storageId": "00000000-0000-4000-8000-000000000002",
+        "projectId": "project_contract_fixture"
+      },
+      "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+      "items": [
+        {
+          "contributionId": "00000000-0000-4000-8000-000000000010",
+          "assetId": "00000000-0000-4000-8000-000000000011",
+          "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+          "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+          "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+          "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+          "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+          "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+          "split": "train",
+          "sourceKind": "hydro_slot"
+        },
+        {
+          "contributionId": "00000000-0000-4000-8000-000000000020",
+          "assetId": "00000000-0000-4000-8000-000000000021",
+          "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+          "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+          "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+          "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+          "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+          "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+          "split": "train",
+          "sourceKind": "phone_supplement"
+        }
+      ],
+      "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440"
+    },
+    "check": {
+      "schemaVersion": "FleetLineageCheckV1",
+      "operation": "train",
+      "operationId": "00000000-0000-4000-8000-000000000003",
+      "projectBinding": {
+        "workerId": "00000000-0000-4000-8000-000000000001",
+        "storageId": "00000000-0000-4000-8000-000000000002",
+        "projectId": "project_contract_fixture"
+      },
+      "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+      "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+      "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+      "items": [
+        {
+          "contributionId": "00000000-0000-4000-8000-000000000010",
+          "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+        },
+        {
+          "contributionId": "00000000-0000-4000-8000-000000000020",
+          "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+        }
+      ]
+    },
+    "claims": {
+      "schemaVersion": "FleetDatasetGateV1",
+      "iss": "https://fleet.example.invalid",
+      "aud": "fleet-dataset-v1",
+      "jti": "00000000-0000-4000-8000-000000000004",
+      "iat": 1800000000,
+      "exp": 1800000300,
+      "operation": "train",
+      "operationId": "00000000-0000-4000-8000-000000000003",
+      "projectBinding": {
+        "workerId": "00000000-0000-4000-8000-000000000001",
+        "storageId": "00000000-0000-4000-8000-000000000002",
+        "projectId": "project_contract_fixture"
+      },
+      "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+      "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+      "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+      "itemsDigest": "1710958246026af7b3ec63c669c35559e0779c1d5c31074245a763628169eed5"
+    },
+    "custody": {
+      "schemaVersion": "FleetDatasetCustodyV1",
+      "operationId": "00000000-0000-4000-8000-000000000003",
+      "copyId": "00000000-0000-4000-8000-000000000005",
+      "gateTokenId": "00000000-0000-4000-8000-000000000004",
+      "kind": "train_data",
+      "pathClass": "managed_train",
+      "inventoryDigest": "a5cf7c0f726a4bba4070175841a308030225da880b872deb0278d98560ab8ab3",
+      "projectBinding": {
+        "workerId": "00000000-0000-4000-8000-000000000001",
+        "storageId": "00000000-0000-4000-8000-000000000002",
+        "projectId": "project_contract_fixture"
+      },
+      "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+      "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+      "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+      "items": [
+        {
+          "contributionId": "00000000-0000-4000-8000-000000000010",
+          "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+        },
+        {
+          "contributionId": "00000000-0000-4000-8000-000000000020",
+          "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+        }
+      ]
+    },
+    "tombstone": {
+      "schemaVersion": "FleetDatasetWithdrawalV2",
+      "contributionId": "00000000-0000-4000-8000-000000000010",
+      "projectBinding": {
+        "workerId": "00000000-0000-4000-8000-000000000001",
+        "storageId": "00000000-0000-4000-8000-000000000002",
+        "projectId": "project_contract_fixture"
+      },
+      "revocationRevision": 1,
+      "snapshotDigests": [
+        "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440"
+      ],
+      "copyIds": [
+        "00000000-0000-4000-8000-000000000005"
+      ],
+      "revoked": true
+    },
+    "lineage": {
+      "schemaVersion": "FleetRunLineageV1",
+      "kind": "includes_fleet",
+      "runId": "00000000-0000-4000-8000-000000000006",
+      "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+      "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+      "gateTokenId": "00000000-0000-4000-8000-000000000004",
+      "itemCount": 2,
+      "contributionIdsDigest": "3b808dc802b5dbd8f0a752d253df218a2952bbd7eedc6c04302c3e350acaf45a",
+      "checkpointSetDigest": "4d6b14d7d9e7dd9f6d788dff1b4a970aeefa5e85cb1aa2d891060931d6f26b28"
+    }
+  },
+  "vectors": [
+    {
+      "name": "valid_snapshot",
+      "kind": "snapshot",
+      "valid": true,
+      "value": {
+        "schemaVersion": "FleetDatasetSnapshotV1",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          }
+        ],
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440"
+      }
+    },
+    {
+      "name": "valid_check",
+      "kind": "check",
+      "valid": true,
+      "value": {
+        "schemaVersion": "FleetLineageCheckV1",
+        "operation": "train",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          }
+        ]
+      }
+    },
+    {
+      "name": "valid_claims",
+      "kind": "claims",
+      "valid": true,
+      "value": {
+        "schemaVersion": "FleetDatasetGateV1",
+        "iss": "https://fleet.example.invalid",
+        "aud": "fleet-dataset-v1",
+        "jti": "00000000-0000-4000-8000-000000000004",
+        "iat": 1800000000,
+        "exp": 1800000300,
+        "operation": "train",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "itemsDigest": "1710958246026af7b3ec63c669c35559e0779c1d5c31074245a763628169eed5"
+      }
+    },
+    {
+      "name": "valid_custody",
+      "kind": "custody",
+      "valid": true,
+      "value": {
+        "schemaVersion": "FleetDatasetCustodyV1",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "copyId": "00000000-0000-4000-8000-000000000005",
+        "gateTokenId": "00000000-0000-4000-8000-000000000004",
+        "kind": "train_data",
+        "pathClass": "managed_train",
+        "inventoryDigest": "a5cf7c0f726a4bba4070175841a308030225da880b872deb0278d98560ab8ab3",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          }
+        ]
+      }
+    },
+    {
+      "name": "valid_tombstone",
+      "kind": "tombstone",
+      "valid": true,
+      "value": {
+        "schemaVersion": "FleetDatasetWithdrawalV2",
+        "contributionId": "00000000-0000-4000-8000-000000000010",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "revocationRevision": 1,
+        "snapshotDigests": [
+          "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440"
+        ],
+        "copyIds": [
+          "00000000-0000-4000-8000-000000000005"
+        ],
+        "revoked": true
+      }
+    },
+    {
+      "name": "valid_lineage",
+      "kind": "lineage",
+      "valid": true,
+      "value": {
+        "schemaVersion": "FleetRunLineageV1",
+        "kind": "includes_fleet",
+        "runId": "00000000-0000-4000-8000-000000000006",
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "gateTokenId": "00000000-0000-4000-8000-000000000004",
+        "itemCount": 2,
+        "contributionIdsDigest": "3b808dc802b5dbd8f0a752d253df218a2952bbd7eedc6c04302c3e350acaf45a",
+        "checkpointSetDigest": "4d6b14d7d9e7dd9f6d788dff1b4a970aeefa5e85cb1aa2d891060931d6f26b28"
+      }
+    },
+    {
+      "name": "unknown_field_snapshot",
+      "kind": "snapshot",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetSnapshotV1",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          }
+        ],
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "skipValidation": true
+      }
+    },
+    {
+      "name": "missing_version_snapshot",
+      "kind": "snapshot",
+      "valid": false,
+      "value": {
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          }
+        ],
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440"
+      }
+    },
+    {
+      "name": "unknown_field_check",
+      "kind": "check",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetLineageCheckV1",
+        "operation": "train",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          }
+        ],
+        "skipValidation": true
+      }
+    },
+    {
+      "name": "missing_version_check",
+      "kind": "check",
+      "valid": false,
+      "value": {
+        "operation": "train",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          }
+        ]
+      }
+    },
+    {
+      "name": "unknown_field_claims",
+      "kind": "claims",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetGateV1",
+        "iss": "https://fleet.example.invalid",
+        "aud": "fleet-dataset-v1",
+        "jti": "00000000-0000-4000-8000-000000000004",
+        "iat": 1800000000,
+        "exp": 1800000300,
+        "operation": "train",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "itemsDigest": "1710958246026af7b3ec63c669c35559e0779c1d5c31074245a763628169eed5",
+        "skipValidation": true
+      }
+    },
+    {
+      "name": "missing_version_claims",
+      "kind": "claims",
+      "valid": false,
+      "value": {
+        "iss": "https://fleet.example.invalid",
+        "aud": "fleet-dataset-v1",
+        "jti": "00000000-0000-4000-8000-000000000004",
+        "iat": 1800000000,
+        "exp": 1800000300,
+        "operation": "train",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "itemsDigest": "1710958246026af7b3ec63c669c35559e0779c1d5c31074245a763628169eed5"
+      }
+    },
+    {
+      "name": "unknown_field_custody",
+      "kind": "custody",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetCustodyV1",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "copyId": "00000000-0000-4000-8000-000000000005",
+        "gateTokenId": "00000000-0000-4000-8000-000000000004",
+        "kind": "train_data",
+        "pathClass": "managed_train",
+        "inventoryDigest": "a5cf7c0f726a4bba4070175841a308030225da880b872deb0278d98560ab8ab3",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          }
+        ],
+        "skipValidation": true
+      }
+    },
+    {
+      "name": "missing_version_custody",
+      "kind": "custody",
+      "valid": false,
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "copyId": "00000000-0000-4000-8000-000000000005",
+        "gateTokenId": "00000000-0000-4000-8000-000000000004",
+        "kind": "train_data",
+        "pathClass": "managed_train",
+        "inventoryDigest": "a5cf7c0f726a4bba4070175841a308030225da880b872deb0278d98560ab8ab3",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          }
+        ]
+      }
+    },
+    {
+      "name": "unknown_field_tombstone",
+      "kind": "tombstone",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetWithdrawalV2",
+        "contributionId": "00000000-0000-4000-8000-000000000010",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "revocationRevision": 1,
+        "snapshotDigests": [
+          "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440"
+        ],
+        "copyIds": [
+          "00000000-0000-4000-8000-000000000005"
+        ],
+        "revoked": true,
+        "skipValidation": true
+      }
+    },
+    {
+      "name": "missing_version_tombstone",
+      "kind": "tombstone",
+      "valid": false,
+      "value": {
+        "contributionId": "00000000-0000-4000-8000-000000000010",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "revocationRevision": 1,
+        "snapshotDigests": [
+          "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440"
+        ],
+        "copyIds": [
+          "00000000-0000-4000-8000-000000000005"
+        ],
+        "revoked": true
+      }
+    },
+    {
+      "name": "unknown_field_lineage",
+      "kind": "lineage",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetRunLineageV1",
+        "kind": "includes_fleet",
+        "runId": "00000000-0000-4000-8000-000000000006",
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "gateTokenId": "00000000-0000-4000-8000-000000000004",
+        "itemCount": 2,
+        "contributionIdsDigest": "3b808dc802b5dbd8f0a752d253df218a2952bbd7eedc6c04302c3e350acaf45a",
+        "checkpointSetDigest": "4d6b14d7d9e7dd9f6d788dff1b4a970aeefa5e85cb1aa2d891060931d6f26b28",
+        "skipValidation": true
+      }
+    },
+    {
+      "name": "missing_version_lineage",
+      "kind": "lineage",
+      "valid": false,
+      "value": {
+        "kind": "includes_fleet",
+        "runId": "00000000-0000-4000-8000-000000000006",
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "gateTokenId": "00000000-0000-4000-8000-000000000004",
+        "itemCount": 2,
+        "contributionIdsDigest": "3b808dc802b5dbd8f0a752d253df218a2952bbd7eedc6c04302c3e350acaf45a",
+        "checkpointSetDigest": "4d6b14d7d9e7dd9f6d788dff1b4a970aeefa5e85cb1aa2d891060931d6f26b28"
+      }
+    },
+    {
+      "name": "snapshot_hash_tamper",
+      "kind": "snapshot",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetSnapshotV1",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          }
+        ],
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440"
+      }
+    },
+    {
+      "name": "snapshot_duplicate_asset",
+      "kind": "snapshot",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetSnapshotV1",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          }
+        ],
+        "snapshotDigest": "bc5e92085ab0c9f6dcf8b34395379df3694cba7a80fe11e9627cc8cc7cd7af72"
+      }
+    },
+    {
+      "name": "snapshot_unsorted",
+      "kind": "snapshot",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetSnapshotV1",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          }
+        ],
+        "snapshotDigest": "403471b9d385a708224d3d8127a0461801d75c8c34619598098592220df96bda"
+      }
+    },
+    {
+      "name": "phone_holdout",
+      "kind": "snapshot",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetSnapshotV1",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "test",
+            "sourceKind": "phone_supplement"
+          }
+        ],
+        "snapshotDigest": "25e4b1822be9e7dc522a11a75b3441188e0d76dfb444b6baeea104cc213a125a"
+      }
+    },
+    {
+      "name": "overview_source",
+      "kind": "snapshot",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetSnapshotV1",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "overview"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          }
+        ],
+        "snapshotDigest": "23f51a4387672043a369a5c81e6846413d5d3a0c7ca93a44b998a76c537b94b6"
+      }
+    },
+    {
+      "name": "import_uuid_instead_of_hash",
+      "kind": "snapshot",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetSnapshotV1",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "00000000-0000-4000-8000-000000000001",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          }
+        ],
+        "snapshotDigest": "be940c549888afe56f6d334b994fe899ab11f8a93221f94bf66ec469993d9717"
+      }
+    },
+    {
+      "name": "revision_number_instead_of_hash",
+      "kind": "snapshot",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetSnapshotV1",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": 1,
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          }
+        ],
+        "snapshotDigest": "9513e4c6b0c4d923605b9bd0d2ee85c2970292b7c01d187d273d85d0582bf24f"
+      }
+    },
+    {
+      "name": "identifier_trailing_newline",
+      "kind": "snapshot",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetSnapshotV1",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011\n",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          }
+        ],
+        "snapshotDigest": "41ffe35d2166547bc85ca8196dab58f740709477d0a47f25f9e4d2a3a31eb3b3"
+      }
+    },
+    {
+      "name": "unknown_nested_field",
+      "kind": "snapshot",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetSnapshotV1",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture",
+          "root": "D:/arbitrary"
+        },
+        "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          }
+        ],
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440"
+      }
+    },
+    {
+      "name": "empty_snapshot",
+      "kind": "snapshot",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetSnapshotV1",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+        "items": [],
+        "snapshotDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    {
+      "name": "too_many_images",
+      "kind": "snapshot",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetSnapshotV1",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          }
+        ],
+        "snapshotDigest": "57a8013a6893ff48e45943d8b2fdcf1bea3245b9a337baac72da84d585ac5d22"
+      }
+    },
+    {
+      "name": "group_leakage",
+      "kind": "snapshot",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetSnapshotV1",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "test",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          }
+        ],
+        "snapshotDigest": "dee06ed903fae2a9902fb5f346bfdc264e92056223790ddf7cc34619309962e6"
+      }
+    },
+    {
+      "name": "duplicate_pixels",
+      "kind": "snapshot",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetSnapshotV1",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "projectContextSha256": "3fc87d6af484e2418046db6f19bc8b91d072f2c68e5608075b4fee3eccf99669",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "assetId": "00000000-0000-4000-8000-000000000011",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f",
+            "imageSha256": "957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a",
+            "labelSha256": "31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01",
+            "groupId": "b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d",
+            "split": "train",
+            "sourceKind": "hydro_slot"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "assetId": "00000000-0000-4000-8000-000000000021",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6",
+            "imageSha256": "464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947",
+            "pixelFingerprint": "835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503",
+            "reviewRevision": "0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7",
+            "labelSha256": "b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770",
+            "groupId": "541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a",
+            "split": "train",
+            "sourceKind": "phone_supplement"
+          }
+        ],
+        "snapshotDigest": "604fe472b4f2c22bba12b16f818269c443b717ce1fa961c7cf76f725472adb1f"
+      }
+    },
+    {
+      "name": "check_duplicate_import",
+      "kind": "check",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetLineageCheckV1",
+        "operation": "train",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          }
+        ]
+      }
+    },
+    {
+      "name": "check_multiple_imports_one_contribution",
+      "kind": "check",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetLineageCheckV1",
+        "operation": "train",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          }
+        ]
+      }
+    },
+    {
+      "name": "check_too_many_imports",
+      "kind": "check",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetLineageCheckV1",
+        "operation": "train",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          }
+        ]
+      }
+    },
+    {
+      "name": "check_unrecognized_operation",
+      "kind": "check",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetLineageCheckV1",
+        "operation": "force_train",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          }
+        ]
+      }
+    },
+    {
+      "name": "copy_kind_mismatch",
+      "kind": "custody",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetCustodyV1",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "copyId": "00000000-0000-4000-8000-000000000005",
+        "gateTokenId": "00000000-0000-4000-8000-000000000004",
+        "kind": "train_data",
+        "pathClass": "managed_export",
+        "inventoryDigest": "a5cf7c0f726a4bba4070175841a308030225da880b872deb0278d98560ab8ab3",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          }
+        ]
+      }
+    },
+    {
+      "name": "copy_arbitrary_path",
+      "kind": "custody",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetCustodyV1",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "copyId": "00000000-0000-4000-8000-000000000005",
+        "gateTokenId": "00000000-0000-4000-8000-000000000004",
+        "kind": "train_data",
+        "pathClass": "../../photos",
+        "inventoryDigest": "a5cf7c0f726a4bba4070175841a308030225da880b872deb0278d98560ab8ab3",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "items": [
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000010",
+            "importId": "834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f"
+          },
+          {
+            "contributionId": "00000000-0000-4000-8000-000000000020",
+            "importId": "2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6"
+          }
+        ]
+      }
+    },
+    {
+      "name": "claims_long_ttl",
+      "kind": "claims",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetGateV1",
+        "iss": "https://fleet.example.invalid",
+        "aud": "fleet-dataset-v1",
+        "jti": "00000000-0000-4000-8000-000000000004",
+        "iat": 1800000000,
+        "exp": 1800000601,
+        "operation": "train",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "itemsDigest": "1710958246026af7b3ec63c669c35559e0779c1d5c31074245a763628169eed5"
+      }
+    },
+    {
+      "name": "claims_zero_ttl",
+      "kind": "claims",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetGateV1",
+        "iss": "https://fleet.example.invalid",
+        "aud": "fleet-dataset-v1",
+        "jti": "00000000-0000-4000-8000-000000000004",
+        "iat": 1800000000,
+        "exp": 1800000000,
+        "operation": "train",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "itemsDigest": "1710958246026af7b3ec63c669c35559e0779c1d5c31074245a763628169eed5"
+      }
+    },
+    {
+      "name": "claims_non_integer_time",
+      "kind": "claims",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetGateV1",
+        "iss": "https://fleet.example.invalid",
+        "aud": "fleet-dataset-v1",
+        "jti": "00000000-0000-4000-8000-000000000004",
+        "iat": true,
+        "exp": 1800000300,
+        "operation": "train",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "itemsDigest": "1710958246026af7b3ec63c669c35559e0779c1d5c31074245a763628169eed5"
+      }
+    },
+    {
+      "name": "claims_wrong_audience",
+      "kind": "claims",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetGateV1",
+        "iss": "https://fleet.example.invalid",
+        "aud": "hydro-device",
+        "jti": "00000000-0000-4000-8000-000000000004",
+        "iat": 1800000000,
+        "exp": 1800000300,
+        "operation": "train",
+        "operationId": "00000000-0000-4000-8000-000000000003",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "subjectDigest": "5e17a1c58270807cb660a772f09b924fe79eb35710c5d934564b2cf3738c06d7",
+        "itemsDigest": "1710958246026af7b3ec63c669c35559e0779c1d5c31074245a763628169eed5"
+      }
+    },
+    {
+      "name": "tombstone_unrevoke",
+      "kind": "tombstone",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetWithdrawalV2",
+        "contributionId": "00000000-0000-4000-8000-000000000010",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "revocationRevision": 1,
+        "snapshotDigests": [
+          "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440"
+        ],
+        "copyIds": [
+          "00000000-0000-4000-8000-000000000005"
+        ],
+        "revoked": false
+      }
+    },
+    {
+      "name": "tombstone_duplicate_copy",
+      "kind": "tombstone",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetWithdrawalV2",
+        "contributionId": "00000000-0000-4000-8000-000000000010",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "revocationRevision": 1,
+        "snapshotDigests": [
+          "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440"
+        ],
+        "copyIds": [
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000005"
+        ],
+        "revoked": true
+      }
+    },
+    {
+      "name": "tombstone_fractional_revision",
+      "kind": "tombstone",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetDatasetWithdrawalV2",
+        "contributionId": "00000000-0000-4000-8000-000000000010",
+        "projectBinding": {
+          "workerId": "00000000-0000-4000-8000-000000000001",
+          "storageId": "00000000-0000-4000-8000-000000000002",
+          "projectId": "project_contract_fixture"
+        },
+        "revocationRevision": 1.1,
+        "snapshotDigests": [
+          "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440"
+        ],
+        "copyIds": [
+          "00000000-0000-4000-8000-000000000005"
+        ],
+        "revoked": true
+      }
+    },
+    {
+      "name": "lineage_zero_images",
+      "kind": "lineage",
+      "valid": false,
+      "value": {
+        "schemaVersion": "FleetRunLineageV1",
+        "kind": "includes_fleet",
+        "runId": "00000000-0000-4000-8000-000000000006",
+        "snapshotDigest": "993bb5f863c3d47c00480bf4c26bd5034ccccf4cb1bf6c9b96eb5e26571cd440",
+        "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+        "gateTokenId": "00000000-0000-4000-8000-000000000004",
+        "itemCount": 0,
+        "contributionIdsDigest": "3b808dc802b5dbd8f0a752d253df218a2952bbd7eedc6c04302c3e350acaf45a",
+        "checkpointSetDigest": "4d6b14d7d9e7dd9f6d788dff1b4a970aeefa5e85cb1aa2d891060931d6f26b28"
+      }
+    }
+  ],
+  "canonicalItems": "[{\"assetId\":\"00000000-0000-4000-8000-000000000011\",\"contributionId\":\"00000000-0000-4000-8000-000000000010\",\"groupId\":\"b28f313ec2067ddc9b8a85ad6d77e3bcb055257629ac3f752d5bc9dcce42b76d\",\"imageSha256\":\"957388983bcdb3ec7431ac7b92d3a530ae78370dd47fd36457866ce72a062b6d\",\"importId\":\"834da9875a64fb6051bead2f565db9aed9190d19e0ff6b070f822f8e0030718f\",\"labelSha256\":\"31034b7bbe1434132bc7eae3ed1aa7bd5403f355b537521158b75fa853749f01\",\"pixelFingerprint\":\"835d919a781a0dab95d993644179ff8d31847ca3eb8a37e44c2cc9d87ab6d503\",\"reviewRevision\":\"696cd5c4ccc24b722334062a72f28aae0892fe356eb8a377e719c68a1cde1d8a\",\"sourceKind\":\"hydro_slot\",\"split\":\"train\"},{\"assetId\":\"00000000-0000-4000-8000-000000000021\",\"contributionId\":\"00000000-0000-4000-8000-000000000020\",\"groupId\":\"541ecccc2d549e250f73f1ce477221614e46c51e60c16b232c70d184ebb3334a\",\"imageSha256\":\"464d422579072490c002f2e1028b72bbf3dfa24226f2e040e87539f837bc4947\",\"importId\":\"2d0766d2ec19629ceaaa7a7118d01ed63dc06e6d3a18e1ad9a2a113e4d2ca1a6\",\"labelSha256\":\"b83781bf019c95a7b395df7120a38e01d051d56071b2b965454cc30cc029c770\",\"pixelFingerprint\":\"d65db3e88515830445903b1b86e0051fda9e7d64c31e17e25a87557207c871b6\",\"reviewRevision\":\"0f480d4b351a5ae34cac9f408949e3a3341017294f438af11ea45adddb30e9c7\",\"sourceKind\":\"phone_supplement\",\"split\":\"train\"}]",
+  "snapshotBindingDigest": "81b25e14b730004eaf218124f33c9930bbd07eec5e2616f8ea09a11b9b9a1709",
+  "itemsDigest": "1710958246026af7b3ec63c669c35559e0779c1d5c31074245a763628169eed5"
+}

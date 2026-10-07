@@ -1,5 +1,12 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 26/09/2026
 
+## P4 Phase A — 07/10/2026
+
+Contract snapshot/custody có parser thuần và fixture Python/Node dùng chung.
+Chưa có gate online, API/copy/train/withdrawal pipeline; các guard legacy và
+lineage=legacy_only vẫn giữ. [Contract, giới hạn và câu hỏi review](FLEET_DATASET_CUSTODY.md).
+Dừng để duyệt Phase A trước B–E, chưa nạp vận hành.
+
 ## Điều hướng ảnh sau khi từ chối — 07/10/2026
 
 Khi ảnh mất khỏi bộ lọc, chọn ảnh phù hợp kế tiếp hoặc ảnh trước gần nhất

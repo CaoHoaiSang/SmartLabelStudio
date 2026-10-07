@@ -1,0 +1,437 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hydro:fleet-dataset-custody:1",
+  "description": "Phase A draft. Structural validity never grants permission.",
+  "$ref": "#/$defs/snapshot",
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^(?:[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})(?![\\s\\S])",
+      "minLength": 1,
+      "maxLength": 36
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^(?:[a-f0-9]{64})(?![\\s\\S])",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "split": {
+      "type": "string",
+      "enum": [
+        "train",
+        "val",
+        "test"
+      ]
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "snapshot",
+        "export",
+        "train",
+        "bundle",
+        "release"
+      ]
+    },
+    "binding": {
+      "type": "object",
+      "properties": {
+        "workerId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "storageId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^(?:project_[a-zA-Z0-9_-]{1,80})(?![\\s\\S])",
+          "minLength": 1,
+          "maxLength": 88
+        }
+      },
+      "required": [
+        "workerId",
+        "storageId",
+        "projectId"
+      ],
+      "additionalProperties": false
+    },
+    "pair": {
+      "type": "object",
+      "properties": {
+        "contributionId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "importId": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "contributionId",
+        "importId"
+      ],
+      "additionalProperties": false
+    },
+    "item": {
+      "type": "object",
+      "properties": {
+        "contributionId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "assetId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "importId": {
+          "$ref": "#/$defs/hash"
+        },
+        "imageSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "pixelFingerprint": {
+          "$ref": "#/$defs/hash"
+        },
+        "reviewRevision": {
+          "$ref": "#/$defs/hash"
+        },
+        "labelSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "groupId": {
+          "$ref": "#/$defs/hash"
+        },
+        "split": {
+          "$ref": "#/$defs/split"
+        },
+        "sourceKind": {
+          "type": "string",
+          "enum": [
+            "hydro_slot",
+            "phone_supplement"
+          ]
+        }
+      },
+      "required": [
+        "contributionId",
+        "assetId",
+        "importId",
+        "imageSha256",
+        "pixelFingerprint",
+        "reviewRevision",
+        "labelSha256",
+        "groupId",
+        "split",
+        "sourceKind"
+      ],
+      "additionalProperties": false
+    },
+    "snapshot": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "FleetDatasetSnapshotV1"
+        },
+        "projectBinding": {
+          "$ref": "#/$defs/binding"
+        },
+        "projectContextSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/item"
+          },
+          "minItems": 1,
+          "maxItems": 80
+        },
+        "snapshotDigest": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "projectBinding",
+        "projectContextSha256",
+        "items",
+        "snapshotDigest"
+      ],
+      "additionalProperties": false
+    },
+    "check": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "FleetLineageCheckV1"
+        },
+        "operationId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "operation": {
+          "$ref": "#/$defs/operation"
+        },
+        "projectBinding": {
+          "$ref": "#/$defs/binding"
+        },
+        "snapshotDigest": {
+          "$ref": "#/$defs/hash"
+        },
+        "snapshotBindingDigest": {
+          "$ref": "#/$defs/hash"
+        },
+        "subjectDigest": {
+          "$ref": "#/$defs/hash"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pair"
+          },
+          "minItems": 1,
+          "maxItems": 20
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operationId",
+        "operation",
+        "projectBinding",
+        "snapshotDigest",
+        "snapshotBindingDigest",
+        "subjectDigest",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "custody": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "FleetDatasetCustodyV1"
+        },
+        "operationId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "copyId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "gateTokenId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "export",
+            "train_data"
+          ]
+        },
+        "pathClass": {
+          "type": "string",
+          "enum": [
+            "managed_export",
+            "managed_train"
+          ]
+        },
+        "projectBinding": {
+          "$ref": "#/$defs/binding"
+        },
+        "snapshotDigest": {
+          "$ref": "#/$defs/hash"
+        },
+        "snapshotBindingDigest": {
+          "$ref": "#/$defs/hash"
+        },
+        "subjectDigest": {
+          "$ref": "#/$defs/hash"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pair"
+          },
+          "minItems": 1,
+          "maxItems": 20
+        },
+        "inventoryDigest": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operationId",
+        "copyId",
+        "gateTokenId",
+        "kind",
+        "pathClass",
+        "projectBinding",
+        "snapshotDigest",
+        "snapshotBindingDigest",
+        "subjectDigest",
+        "items",
+        "inventoryDigest"
+      ],
+      "additionalProperties": false
+    },
+    "claims": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "FleetDatasetGateV1"
+        },
+        "iss": {
+          "type": "string",
+          "pattern": "^(?:https://[a-zA-Z0-9.-]+(?::[0-9]{1,5})?|http://127\\.0\\.0\\.1:[0-9]{1,5})(?![\\s\\S])",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "aud": {
+          "const": "fleet-dataset-v1"
+        },
+        "jti": {
+          "$ref": "#/$defs/uuid"
+        },
+        "iat": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "exp": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "operationId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "operation": {
+          "$ref": "#/$defs/operation"
+        },
+        "projectBinding": {
+          "$ref": "#/$defs/binding"
+        },
+        "snapshotDigest": {
+          "$ref": "#/$defs/hash"
+        },
+        "snapshotBindingDigest": {
+          "$ref": "#/$defs/hash"
+        },
+        "subjectDigest": {
+          "$ref": "#/$defs/hash"
+        },
+        "itemsDigest": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "iss",
+        "aud",
+        "jti",
+        "iat",
+        "exp",
+        "operationId",
+        "operation",
+        "projectBinding",
+        "snapshotDigest",
+        "snapshotBindingDigest",
+        "subjectDigest",
+        "itemsDigest"
+      ],
+      "additionalProperties": false
+    },
+    "tombstone": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "FleetDatasetWithdrawalV2"
+        },
+        "contributionId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "projectBinding": {
+          "$ref": "#/$defs/binding"
+        },
+        "revocationRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "snapshotDigests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/hash"
+          },
+          "minItems": 0,
+          "maxItems": 80
+        },
+        "copyIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/uuid"
+          },
+          "minItems": 0,
+          "maxItems": 128
+        },
+        "revoked": {
+          "const": true
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "contributionId",
+        "projectBinding",
+        "revocationRevision",
+        "snapshotDigests",
+        "copyIds",
+        "revoked"
+      ],
+      "additionalProperties": false
+    },
+    "lineage": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "FleetRunLineageV1"
+        },
+        "kind": {
+          "const": "includes_fleet"
+        },
+        "runId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "snapshotDigest": {
+          "$ref": "#/$defs/hash"
+        },
+        "snapshotBindingDigest": {
+          "$ref": "#/$defs/hash"
+        },
+        "gateTokenId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "itemCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 80
+        },
+        "contributionIdsDigest": {
+          "$ref": "#/$defs/hash"
+        },
+        "checkpointSetDigest": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "runId",
+        "snapshotDigest",
+        "snapshotBindingDigest",
+        "gateTokenId",
+        "itemCount",
+        "contributionIdsDigest",
+        "checkpointSetDigest"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
