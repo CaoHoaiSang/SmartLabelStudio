@@ -1976,8 +1976,13 @@ class SmartLabelApp(ctk.CTk):
                     self.image_list.clear_selection()
                     self._label_feedback("Đã lưu. Ảnh này không còn thuộc bộ lọc; bạn có thể sửa tiếp hoặc chọn Ảnh sau.")
                     return
-                if self.paged_images:
-                    self.current_index = self.project.images.index(self.paged_images[0])
+                neighbor_id = image_filters.adjacent_visible_image_id(
+                    [image.id for image in self.project.images],
+                    [image.id for image in self.filtered_images], record.id,
+                )
+                if neighbor_id is not None:
+                    self.current_index = next(index for index, image in enumerate(self.project.images)
+                                              if image.id == neighbor_id)
                     self._load_current_image()
                 else:
                     self._clear_current_image()

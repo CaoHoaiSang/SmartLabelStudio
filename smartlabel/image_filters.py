@@ -1,10 +1,26 @@
-"""Read-only image membership rules shared by the browser and inline edits."""
+"""Read-only image membership and selection rules shared by the review views."""
 from .hydro_labels import display_values
 
 
 ALL = "Tất cả nhãn / thuộc tính"
 ANY = "Mọi giá trị"
 MISSING = "Chưa gán giá trị"
+
+
+def adjacent_visible_image_id(ordered_ids, visible_ids, current_id):
+    """Select the next visible neighbor, then the previous; never wrap to the start."""
+    try:
+        position = ordered_ids.index(current_id)
+    except ValueError:
+        return None
+    visible = set(visible_ids)
+    for identifier in ordered_ids[position + 1:]:
+        if identifier in visible:
+            return identifier
+    for identifier in reversed(ordered_ids[:position]):
+        if identifier in visible:
+            return identifier
+    return None
 
 
 def filter_fields(project):

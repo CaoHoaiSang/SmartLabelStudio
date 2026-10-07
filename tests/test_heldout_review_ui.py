@@ -52,3 +52,46 @@ class HeldoutReviewUiTests(unittest.TestCase):
         while view.busy and time.monotonic() < deadline:
             app.update(); time.sleep(.01)
         self.assertFalse(view.busy)
+
+    def test_reject_test_image_keeps_adjacent_preview_and_test_isolation(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = ProjectStore(root / 'workspace')
+            project = store.create_project('TEST navigation fixture', task='classify')
+            apply_hydroponic_slot_template(project)
+            store.save(project)
+            lot = collection.create_lot(store, project, '16', '2026-09-01', reserved=True)
+            collection.save_capture(store, project, lot, payload(root / 'frame'))
+            with patch.object(app_module, 'WORKSPACE', store.workspace), \
+                    patch.object(app_module.SmartLabelApp, '_refresh_hardware'), \
+                    patch.object(app_module.messagebox, 'showerror') as error:
+                app = app_module.SmartLabelApp()
+                app.withdraw()
+                try:
+                    app._change_project_context(deepcopy(project))
+                    app._show_label_workspace('TEST')
+                    view = app.supplement_view
+                    app.image_page_size = 3
+                    app.image_filter.set('Chưa gán nhãn')
+                    app._change_image_filter()
+                    ordered_ids = [row['id'] for row in view.rows]
+                    view.show_row(view.filtered[4])
+                    app._reject_image()
+                    self.drain(app, view)
+                    self.assertEqual(view.selected['id'], ordered_ids[5])
+                    self.assertEqual(view.page, 1)
+                    view.show_row(view.filtered[-1])
+                    app._reject_image()
+                    self.drain(app, view)
+                    self.assertEqual(view.selected['id'], ordered_ids[8])
+                    saved, _revision = collection.load_collection(store, project)
+                    self.assertEqual(len(saved['images']), 10)
+                    self.assertEqual(saved['images'][4]['reviewStatus'], 'rejected')
+                    self.assertEqual(saved['images'][9]['reviewStatus'], 'rejected')
+                    self.assertEqual(app.project.images, [])
+                    self.assertEqual(app.image_filter.get(), 'Chưa gán nhãn')
+                    error.assert_not_called()
+                finally:
+                    for identifier in app.tk.call('after', 'info'):
+                        app.tk.call('after', 'cancel', identifier)
+                    app.destroy()

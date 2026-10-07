@@ -1,5 +1,14 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 26/09/2026
 
+## Điều hướng ảnh sau khi từ chối — 07/10/2026
+
+Khi ảnh mất khỏi bộ lọc, chọn ảnh phù hợp kế tiếp hoặc ảnh trước gần nhất
+nếu đang ở cuối; hết ảnh thì xóa khung xem. Giàn/dự án thông thường, Bổ trợ
+và TEST dùng cùng quy tắc, giữ bộ lọc và đồng bộ trang/thumbnail/canvas.
+Chỉnh nhãn inline và Tất cả vẫn giữ ảnh đang xem. Không đổi nội dung ảnh/nhãn/
+phân tập/schema/gate train hoặc model. Dùng project tạm để kiểm hồi quy;
+cần lưu việc/mở lại Studio để nạp mã. [Hành vi và phạm vi](IMAGE_REVIEW_NAVIGATION.md).
+
 ## Sửa kiểm định ứng viên Fleet — 06/10/2026
 
 Candidate nay kiểm metadata theo Hydro, gồm profile camera/geometry, ánh xạ

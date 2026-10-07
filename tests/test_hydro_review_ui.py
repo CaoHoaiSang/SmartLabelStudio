@@ -201,6 +201,85 @@ class HydroReviewUiTests(unittest.TestCase):
             self.assertFalse(app.project_statistics_dirty)
         app.withdraw()
 
+    def test_reject_middle_image_selects_following_filtered_image(self):
+        self.app.image_filter.set('Bản nháp')
+        self.app._change_image_filter()
+        self.app.current_index = 2
+        self.app._load_current_image()
+        self.app._reject_image()
+        self.assertEqual(self.app.canvas.record.id, '3')
+        self.assertEqual(self.app.project.images[2].review_status, 'rejected')
+        self.assertEqual(self.app.image_filter.get(), 'Bản nháp')
+        self.assertEqual(self.app.image_list.rows[self.app.image_list.curselection()[0]]['key'], '3')
+
+    def test_reject_last_image_selects_preceding_filtered_image(self):
+        self.app.image_filter.set('Bản nháp')
+        self.app._change_image_filter()
+        self.app.current_index = 4
+        self.app._load_current_image()
+        self.app._reject_image()
+        self.assertEqual(self.app.canvas.record.id, '3')
+
+    def test_reject_respects_label_filter_and_clears_empty_view(self):
+        self.app.image_page_size = 1
+        try:
+            self.filter_yellow()
+            self.app.image_filter.set('Bản nháp')
+            self.app._change_image_filter()
+            self.app._reject_image()
+            self.assertEqual(self.app.canvas.record.id, '3')
+            self.app._reject_image()
+            self.assertIsNone(self.app.canvas.record)
+            self.assertEqual(self.app.current_index, -1)
+            self.assertEqual(self.app.reject_image_button.cget('state'), 'disabled')
+            self.assertNotEqual(self.app.label_filter_field.get(), image_filters.ALL)
+        finally:
+            self.app.image_page_size = 50
+
+    def test_reject_updates_page_to_keep_neighbor_selected(self):
+        self.app.image_page_size = 2
+        try:
+            self.app.image_filter.set('Bản nháp')
+            self.app._change_image_filter()
+            self.app.current_index = 1
+            self.app._load_current_image()
+            self.app._reject_image()
+            self.assertEqual(self.app.canvas.record.id, '2')
+            self.app.current_index = 3
+            self.app._load_current_image()
+            self.app._reject_image()
+            self.assertEqual(self.app.canvas.record.id, '4')
+            self.assertEqual(self.app.image_page, 1)
+            self.assertEqual(self.app.image_list.rows[self.app.image_list.curselection()[0]]['key'], '4')
+        finally:
+            self.app.image_page_size = 50
+
+    def test_reject_keeps_visible_image_for_all_filter_and_preserves_labels(self):
+        self.app.current_index = 2
+        self.app._load_current_image()
+        attributes = deepcopy(self.app.canvas.record.attributes)
+        self.app._reject_image()
+        self.assertEqual(self.app.canvas.record.id, '2')
+        self.assertEqual(self.app.canvas.record.attributes, attributes)
+        self.assertEqual(len(self.app.project.images), 5)
+        self.assertEqual(self.app.restore_image_button.cget('state'), 'normal')
+
+    def test_reject_generic_project_selects_neighbor_without_removing_image(self):
+        generic = deepcopy(self.bottle)
+        for index in range(4):
+            record = ImageRecord(id=f'g{index}', file_name=f'g{index}.png', width=64, height=64,
+                                 review_status='draft')
+            Image.new('RGB', (64, 64), 'blue').save(self.store.image_path(generic, record))
+            generic.images.append(record)
+        self.app._change_project_context(generic)
+        self.app.image_filter.set('Bản nháp')
+        self.app._change_image_filter()
+        self.app.current_index = 2
+        self.app._load_current_image()
+        self.app._reject_image()
+        self.assertEqual(self.app.canvas.record.id, 'g3')
+        self.assertEqual(len(generic.images), 4)
+
     def test_filter_and_tool_context_survive_round_trip_without_bottle_leak(self):
         self.filter_yellow()
         hydro = self.app.project

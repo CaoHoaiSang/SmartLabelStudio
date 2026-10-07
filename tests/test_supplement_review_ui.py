@@ -245,6 +245,45 @@ class SupplementReviewUiTests(unittest.TestCase):
         self.assertEqual(self.view.selected['id'], 's0')
         self.assertEqual(len(self.app.project.images), 1)
 
+    def test_reject_middle_draft_supplement_selects_next_across_pages(self):
+        self.app.image_page_size = 5
+        self.app.image_filter.set('Bản nháp')
+        self.app._change_image_filter()
+        self.filter_attribute('yellow_leaf', 'present')
+        self.view.show_row(self.view.filtered[4])
+        self.app._reject_image()
+        self.complete_save()
+        self.assertEqual(self.view.selected['id'], 's5')
+        self.view.show_row(next(r for r in self.view.filtered if r['id'] == 's10'))
+        self.app._reject_image()
+        self.complete_save()
+        self.assertEqual(self.view.selected['id'], 's11')
+        self.assertEqual(self.view.page, 1)
+        self.assertEqual(self.app.image_list.rows[self.app.image_list.curselection()[0]]['key'], 'supplement:s11')
+        self.assertEqual(self.app.image_filter.get(), 'Bản nháp')
+        self.assertEqual(len(self.app.project.images), 1)
+
+    def test_reject_last_draft_supplement_selects_previous(self):
+        self.app.image_filter.set('Bản nháp')
+        self.app._change_image_filter()
+        self.view.show_row(self.view.filtered[-1])
+        self.app._reject_image()
+        self.complete_save()
+        self.assertEqual(self.view.selected['id'], 's25')
+
+    def test_reject_only_matching_supplement_clears_preview(self):
+        self.view.show_row(self.view.rows[12])
+        self.choose('wilt', 'present')
+        self.app.image_filter.set('Bản nháp')
+        self.filter_attribute('wilt', 'present')
+        self.assertEqual([r['id'] for r in self.view.filtered], ['s12'])
+        self.app._reject_image()
+        self.complete_save()
+        self.assertIsNone(self.view.selected)
+        self.assertIsNone(self.app.canvas.record)
+        self.assertEqual(self.app.reject_image_button.cget('state'), 'disabled')
+        self.assertEqual(self.app.image_filter.get(), 'Bản nháp')
+
     def test_permanent_delete_requires_confirmation_and_removes_only_supplement(self):
         row = self.view.rows[0]
         path = manifest_path(self.store, self.hydro).parent / row['file']

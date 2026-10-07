@@ -487,7 +487,14 @@ class SupplementReviewView:
         self.rows = self.data["images"]
         self.refresh_list(render=False)
         candidates = self.rows if self.keep_edited_row else self.filtered
-        self.show_row(next((r for r in candidates if r["id"] == self.next_id), self.filtered[0] if self.filtered else None))
+        target = next((r for r in candidates if r["id"] == self.next_id), None)
+        if target is None:
+            neighbor_id = image_filters.adjacent_visible_image_id(
+                [row["id"] for row in self.rows],
+                [row["id"] for row in self.filtered], self.next_id,
+            )
+            target = next((row for row in self.filtered if row["id"] == neighbor_id), None)
+        self.show_row(target)
         if self.keep_edited_row:
             self.app._label_feedback("Đã lưu nhãn. Duyệt lại ảnh sau khi sửa." if self.selected in self.filtered else
                 "Đã lưu. Ảnh này không còn thuộc bộ lọc; bạn có thể sửa tiếp hoặc chọn Ảnh sau.")
