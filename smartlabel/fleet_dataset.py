@@ -21,11 +21,11 @@ MAX_WIRE = 64 * 1024
 ERRORS = {
     'lineage_revoked': 'Có đợt đã rút hoặc quyền nguồn đã đổi; snapshot vô hiệu.',
     'lineage_snapshot_not_ready': 'Snapshot chưa sẵn sàng hoặc đã bị thu hồi.',
-    'lineage_confirmation_changed': 'Project, nhãn hoặc phân tập đã đổi; hãy xem trước lại.',
-    'lineage_snapshot_changed': 'Project, nhãn hoặc phân tập đã đổi; hãy tạo snapshot mới.',
+    'lineage_confirmation_changed': 'Ảnh, nhãn, nguồn hoặc phân tập đã đổi; hãy xem trước lại.',
+    'lineage_snapshot_changed': 'Ảnh, nhãn, nguồn hoặc phân tập đã đổi; hãy tạo snapshot mới.',
     'lineage_locked_split_changed': 'Nhóm đã được khóa ở phân tập khác; giữ nguyên nhóm holdout.',
     'lineage_phone_train_only': 'Ảnh điện thoại chỉ được vào TRAIN.',
-    'lineage_duplicate_image': 'Có ảnh trùng byte hoặc pixel với nguồn đã chọn hoặc Giàn.',
+    'lineage_duplicate_image': 'Có ảnh trùng byte hoặc pixel với nguồn đã chọn, Giàn hoặc Bổ trợ.',
     'lineage_source_unqualified': 'Có ảnh chưa đủ điều kiện nguồn; kiểm lại phần duyệt nhãn.',
     'lineage_ancestor_missing': 'Snapshot thiếu nguồn tổ tiên của checkpoint; chưa được fine-tune.',
     'lineage_ancestor_revoked': 'Nguồn tổ tiên đã bị rút; không được dùng checkpoint cho lượt mới.',
@@ -33,6 +33,17 @@ ERRORS = {
     'lineage_train_class_missing': 'TRAIN cần ảnh đã duyệt cho cả hai nhãn của thuộc tính.',
     'lineage_registration_uncertain': 'Chưa đối soát được lượt đăng ký; không tự chạy lại.',
     'lineage_copy_already_started': 'Lượt này đã bắt đầu; không tự tạo lại bản sao.',
+    'lineage_supplement_invalid': 'Bổ trợ có bản ghi chưa hợp lệ; kiểm ảnh đã bật, đã duyệt, đúng giống cây và chỉ TRAIN.',
+    'lineage_supplement_changed': 'Ảnh hoặc bản kê Bổ trợ đã đổi; hãy xem trước và tạo snapshot mới.',
+    'lineage_supplement_schema_changed': 'Ý nghĩa nhãn Bổ trợ khác dự án; cần duyệt lại.',
+    'lineage_supplement_presence': 'Nhãn hiện diện cây của Bổ trợ mâu thuẫn; cần duyệt lại.',
+    'lineage_supplement_parent_missing': 'Không tìm thấy ảnh gốc của Bổ trợ trong Giàn.',
+    'lineage_supplement_parent_holdout': 'Ảnh gốc thuộc VAL/TEST; tắt biến thể Bổ trợ hoặc điều chỉnh nhóm có chủ đích.',
+    'lineage_supplement_parent_invalid': 'Ảnh gốc đã đổi hoặc thiếu nguồn tổng hợp; cần xác minh và duyệt lại.',
+    'lineage_supplement_attribution': 'Ảnh Bổ trợ từ nguồn ngoài cần đủ tác giả, giấy phép và thông tin trích nguồn.',
+    'lineage_supplement_path': 'Bổ trợ cần ảnh PNG/JPEG trong kho Bổ trợ của dự án.',
+    'lineage_supplement_fleet_parent': 'Biến thể từ ảnh khách chưa được đưa vào kho Bổ trợ riêng; phải giữ quản lý nguồn Fleet.',
+    'lineage_label_excluded': 'Có nhãn đang bị loại khỏi train trong cấu hình thuộc tính; kiểm lại lựa chọn.',
     'lineage_train_already_started': 'Lượt train này đã bắt đầu; không chạy lại bằng receipt cũ.',
 }
 
@@ -255,13 +266,21 @@ class FleetDatasetClient:
             if row['state'] not in {'starting', 'building', 'complete'}: raise FleetIntakeError('Bundle có trạng thái chưa xác định.')
         return value
 
-    def preview(self, contribution_ids, splits=None):
-        value = _fields(self._call('preview', {'contributionIds': contribution_ids, 'splits': splits or {}}),
-                        ['schemaVersion', 'snapshot', 'splitRevision', 'summary'])
-        if value['schemaVersion'] != 'FleetDatasetPreviewV1': raise FleetIntakeError('Bản xem trước không hợp lệ.')
+    def preview(self, contribution_ids, splits=None, *, include_supplements=False):
+        if type(include_supplements) is not bool:
+            raise FleetIntakeError('Lựa chọn Bổ trợ không hợp lệ.')
+        payload = {'contributionIds': contribution_ids, 'splits': splits or {}}
+        extra = ['includeSupplements'] if include_supplements else []
+        if include_supplements: payload['includeSupplements'] = True
+        value = _fields(self._call('preview', payload), ['schemaVersion', 'snapshot', 'splitRevision', 'summary'] + extra)
+        if include_supplements and value['includeSupplements'] is not True:
+            raise FleetIntakeError('Receiver chưa xác nhận lựa chọn Bổ trợ.')
+        if value['schemaVersion'] != ('FleetDatasetPreviewV2' if include_supplements else 'FleetDatasetPreviewV1'): raise FleetIntakeError('Bản xem trước không hợp lệ.')
         contract.validate('snapshot', value['snapshot']); self._binding(value['snapshot']['projectBinding'])
         _hash(value['splitRevision'])
-        _fields(value['summary'], ['imageCount', 'excludedCount', 'legacyCount', 'sources', 'splits', 'groups'])
+        _fields(value['summary'], ['imageCount', 'excludedCount', 'legacyCount', 'sources', 'splits', 'groups'] + (['supplementCount'] if include_supplements else []))
+        if include_supplements and (type(value['summary']['supplementCount']) is not int or not 0 <= value['summary']['supplementCount'] <= 2000):
+            raise FleetIntakeError('Số ảnh Bổ trợ không hợp lệ.')
         items = value['snapshot']['items']; summary = value['summary']
         if summary['imageCount'] != len(items) or any(type(summary[k]) is not int or summary[k] < 0 for k in ('imageCount','excludedCount','legacyCount')):
             raise FleetIntakeError('Số ảnh không khớp snapshot.')
@@ -277,6 +296,7 @@ class FleetDatasetClient:
         snapshot = contract.validate('snapshot', preview['snapshot'])
         self._binding(snapshot['projectBinding'])
         payload = {'operationId': operation_id or str(uuid4()), 'snapshot': snapshot, 'splitRevision': _hash(preview['splitRevision'])}
+        if preview.get('includeSupplements') is True: payload['includeSupplements'] = True
         value = self._snapshot_receipt(self._write('register_snapshot', payload), snapshot)
         self._clear_pending()
         return value

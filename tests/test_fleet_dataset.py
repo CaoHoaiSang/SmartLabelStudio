@@ -199,3 +199,39 @@ class ManagedDatasetTests(unittest.TestCase):
                         snapshots=[],copies=rows[offset:offset+32],runs=[],bundles=[])
         with patch.object(self.client,'_call',side_effect=page) as call:
             self.assertEqual(self.client.catalog()['copies'],rows);self.assertEqual(call.call_count,3)
+
+    def supplement_preview(self):
+        from smartlabel import fleet_dataset_contract as contract
+        item = dict(contributionId=str(uuid4()), assetId=str(uuid4()), importId='2'*64, imageSha256='a'*64,
+                    pixelFingerprint='b'*64, reviewRevision='c'*64, labelSha256='d'*64, groupId='e'*64,
+                    split='train', sourceKind='hydro_slot')
+        snapshot = dict(schemaVersion='FleetDatasetSnapshotV1', projectBinding=self.binding,
+                        projectContextSha256='f'*64, items=[item], snapshotDigest=contract.digest([item]))
+        return dict(schemaVersion='FleetDatasetPreviewV2', snapshot=snapshot, splitRevision='1'*64, includeSupplements=True,
+                    summary=dict(imageCount=1, excludedCount=0, legacyCount=3, supplementCount=2,
+                                 sources=dict(hydro_slot=1, phone_supplement=0), splits=dict(train=1, val=0, test=0),
+                                 groups=[{key:item[key] for key in ('groupId','split','sourceKind')}]))
+
+    def test_supplement_selection_is_explicit_and_preserved_in_pending_registration(self):
+        value = self.supplement_preview()
+        with patch.object(self.client, '_call', return_value=value) as call:
+            result = self.client.preview([value['snapshot']['items'][0]['contributionId']], include_supplements=True)
+            self.assertIs(call.call_args.args[1]['includeSupplements'], True)
+            self.assertEqual(result['summary']['supplementCount'], 2)
+        (self.root/'fleet_datasets').mkdir()
+        with patch.object(self.client, '_call', side_effect=FleetIntakeError('lost reply')):
+            with self.assertRaises(FleetIntakeError): self.client.register(result)
+        reopened = FleetDatasetClient(self.root, self.project.id, port=19991)
+        self.assertIs(reopened.pending['payload']['includeSupplements'], True)
+        self.assertEqual(reopened.pending['payload']['snapshot'], value['snapshot'])
+
+    def test_supplement_preview_does_not_fall_back_on_missing_old_or_malformed_response(self):
+        for mutate in [lambda v:v.pop('includeSupplements'), lambda v:v.update(includeSupplements=False),
+                       lambda v:v.update(schemaVersion='FleetDatasetPreviewV1'), lambda v:v['summary'].pop('supplementCount'),
+                       lambda v:v['summary'].update(supplementCount=True), lambda v:v['summary'].update(supplementCount=2001)]:
+            value = self.supplement_preview(); mutate(value)
+            with patch.object(self.client, '_call', return_value=value):
+                with self.assertRaises(FleetIntakeError): self.client.preview([], include_supplements=True)
+        with patch.object(self.client, '_call') as call:
+            with self.assertRaises(FleetIntakeError): self.client.preview([], include_supplements='true')
+            call.assert_not_called()

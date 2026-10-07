@@ -476,3 +476,83 @@ không đóng server khi setup lỗi; tách test/Mongo và thêm cleanup khi set
 Không nới guard, skip test hoặc tăng timeout. Log các lượt được giữ ở audit
 `D:/Fleet_Release_Audits/p4-dataset-runtime-20261007/`.
 CI exact HEAD và pin Fleet cuối được ghi riêng trong bảng bàn giao, không suy từ local.
+
+
+## Gộp Giàn + Fleet + Bổ trợ — 07/10/2026
+
+Tác vụ `feature/fleet-mixed-supplements-20261007`, base Fleet `c6cf2f5`,
+SmartLabel `d022c43`. Chủ đã duyệt bổ sung Bổ trợ và đợt backup/rollout/nghiệm
+thu tổng hợp tiếp theo. Phát triển tại worktree riêng; không sửa workspace thật.
+
+- Snapshot UI có lựa chọn **Gộp Bổ trợ đã bật và duyệt — chỉ TRAIN**, mặc định bật.
+  Đổi lựa chọn xóa xác nhận và loại phản hồi xem trước cũ. Gộp Giàn vẫn là lựa chọn
+  riêng khi export/train; Bổ trợ được cố định từ bước xác nhận snapshot.
+- Receiver đọc trực tiếp manifest có sẵn, kiểm review, crop, training identity,
+  ý nghĩa hiện diện/điều kiện, provenance/giấy phép và SHA. Quy tắc đối chiếu bằng
+  cùng fixture với `training_supplements.validated_samples` Python; không thêm
+  Python subprocess hoặc dependency cho receiver. Bản kê không bị sửa ngầm.
+- Synthetic cần ảnh gốc Giàn đã duyệt, đúng SHA và nhóm TRAIN đã lưu; gốc VAL/TEST
+  bị chặn. Cả ba nguồn được kiểm trùng byte và pixel, kể cả PNG mã hóa lại. Đường
+  thoát thư mục/junction, thiếu nguồn, nhãn bị `train_exclude` đều chặn.
+- Native preview V2 mang `includeSupplements`; V1 không tự thêm Bổ trợ. Client
+  mới từ chối response thiếu lựa chọn/count; pending journal giữ nguyên lựa chọn
+  qua restart/reconcile. Contract cloud và 45 vector P4-A không đổi.
+- `FleetDatasetLocalContextV2` khóa SHA project, split, **nội dung ảnh Giàn**,
+  manifest Bổ trợ, nhãn và ảnh Bổ trợ. Manifest nguyên văn lưu tại snapshot local;
+  cloud chỉ nhận digest. Sửa ảnh/nhãn/nguồn/bật-tắt sau xác nhận phải tạo snapshot
+  mới. Kiểm lại trước copy/train/gia hạn/bundle; không dựa mtime.
+- Bổ trợ chỉ được chép vào TRAIN trong inventory managed có custody trước ghi
+  byte. Khách rút nguồn khiến toàn bộ copy hỗn hợp bị dọn, kể cả sau phục hồi copy
+  cũ; Giàn và Bổ trợ gốc không bị xóa. Run/bundle giữ lineage includes_fleet.
+- Không tạo biến thể từ ảnh khách vào kho Bổ trợ riêng. Manifest/ảnh gốc có dấu
+  nguồn Fleet bị chặn vì kho đó chưa có custody cho bản gốc phái sinh. Mọi dữ liệu
+  Fleet tiếp tục đi qua kho managed; không được đổi cờ để đi đường train cũ.
+
+### Kiểm chứng và giới hạn
+
+Bài `dataset-supplements.test.js` chạy API, receiver, Mongo cô lập và Python thật:
+3 nguồn, count/lớp/split, quyền thu hồi/xóa/phục hồi; 16 biến thể sai đối chiếu hai
+validator; thiếu quyền lựa chọn, trường lạ, source/label drift, race, trùng pixel,
+symlink và parent holdout. Regression thay byte Giàn sau snapshot: fail trên base,
+pass sau sửa; log giữ trong audit `mixed-supplements-20261007`.
+SmartLabel thêm kiểm lựa chọn Bổ trợ trong durable pending, response cũ/hỏng và
+việc vô hiệu hóa xác nhận khi đổi lựa chọn trong lúc đang xử lý.
+
+Giới hạn kế thừa P4: chỉ classification, một thiết bị, TRAIN/VAL đủ hai nhãn,
+không resume/DDP; snapshot tối đa80 ảnh Fleet/20 nguồn; tổng export tối đa2000 ảnh.
+Manifest Bổ trợ tối đa1MiB/2000 bản ghi, ảnh PNG/JPEG tối đa10MiB; unknown native
+fields/JSON duplicate keys bị từ chối. TEST không dùng thay VAL. Snapshot cũ chưa
+khóa ảnh local bị chặn khi context khác, cần tạo lại; không sửa ledger cũ để mở.
+Gói có ảnh khách vẫn shadow tại máy; **chưa mở candidate/ký/upload/Hydro**.
+Không coi một epoch ảnh tổng hợp là accuracy, nghiệm thu cây thật hoặc Nano.
+
+### Phát hành được duyệt
+
+Chỉ dùng commit đã push, CI đúng HEAD đạt và artifact đã băm. Backup DB Windows
+qua CLI sẵn có, verify + restore riêng; bảo toàn receiver registry/tombstone và
+workspace SmartLabel. Cloud không migration hoặc restore DB. Nạp Fleet backend
+và receiver đồng bộ trước SmartLabel; giữ intake OFF, nghiệm thu trên ảnh tổng
+hợp/DB cô lập ở CAOSANGPC. Dùng cửa sổ đóng bình thường của SmartLabel để lưu
+công việc trước đổi source, không kill ứng dụng đang có nhãn chưa lưu.
+
+Nếu đã có custody thật, dừng admission/child trước rollback, giữ receiver cleanup
+đến khi các copy đã xóa/đối soát. Không quay về code không biết custody, xóa registry,
+restore DB cũ hoặc làm sống lại dữ liệu đã rút. Trạng thái nạp thực, SHA/CI đầy đủ
+và receipt backup/acceptance ghi trong bàn giao ngoài repo; mục này là contract
+và quy trình, không tự coi rollout đã xong.
+
+Nguồn chính thức đối chiếu07/10/2026: [staged production và promote không rebuild](https://vercel.com/docs/deployments/promoting-a-deployment),
+[Vercel Hobby](https://vercel.com/docs/plans/hobby), [Cron Hobby](https://vercel.com/docs/cron-jobs/usage-and-pricing).
+Giữ Hobby cá nhân/phi thương mại, giới hạn cron ngày một lần, không đổi plan,
+billing, add-on, auto-upgrade hoặc cron hiện có; không thêm Blob upload trong nghiệm thu này.
+
+Checkout Windows: thêm `.gitattributes` SmartLabel giữ nguyên byte bộ fixture P2.
+Bốn candidate đã ghim bị CRLF của Git làm lệch SHA trên worktree mới; khôi phục
+byte từ Git blob và giữ nguyên hash/validator. Bài vector hiện có tái hiện lỗi
+trước sửa và đạt sau sửa; không đổi nội dung contract hoặc kỳ vọng bài test.
+
+Kiểm local cuối đợt gộp: SmartLabel Windows **560/560, không skip**;
+Fleet UI109, backend receiver regression và browser10 suite đạt trước bước pin cuối.
+Các ca Bổ trợ riêng **8/8** đạt, gồm chặn admission trước8MiB sổ local và vẫn
+xóa bản sao cũ khi thu hồi. Giữ log lần lỗi foreground zoom và CRLF; không nới test.
+CI/rollout/nghiệm thu epoch thật xác nhận riêng bằng receipt đúng SHA trong bàn giao.

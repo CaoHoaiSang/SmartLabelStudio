@@ -1,6 +1,8 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 26/09/2026
 
-## P4 B–E — 07/10/2026
+Cập nhật07/10/2026: luồng snapshot managed đã bổ sung Bổ trợ TRAIN để gộp cùng Fleet và Giàn, khóa hash cả ba nguồn và thu hồi toàn bộ copy hỗn hợp. Xem [báo cáo](FLEET_DATASET_CUSTODY.md). Rollout có receipt riêng; includes_fleet delivery vẫn đóng.
+
+## Lịch sử P4 B–E trước đợt gộp Bổ trợ — 07/10/2026
 
 Đã triển khai snapshot immutable, gate online một lần, custody trước copy, receiver
 xóa khi rút kể cả SmartLabel đóng, managed classification và lineage run/bundle.

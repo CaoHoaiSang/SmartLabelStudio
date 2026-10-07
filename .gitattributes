@@ -1,3 +1,6 @@
 
 # Contract artifact digests must survive Windows checkouts.
 /contracts/fleet-dataset-custody/*.json text eol=lf
+
+# Signed fixture manifests pin exact bytes, including original line endings.
+/tests/fixtures/fleet-model-releases/** -text

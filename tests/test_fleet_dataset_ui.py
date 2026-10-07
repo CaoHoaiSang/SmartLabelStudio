@@ -116,3 +116,17 @@ class FleetDatasetUiTests(unittest.TestCase):
             self.view.train()
             materialize.assert_not_called()
         self.assertIsNone(self.app.fleet_dataset_job)
+
+    def test_changing_supplement_choice_invalidates_confirmation_and_late_preview(self):
+        self.assertTrue(self.view.supplements.get())
+        self.view.preview_value = {'synthetic':'preview'}
+        self.view.confirm.configure(state='normal')
+        release=Event();observed=[]
+        try:
+            self.view._launch(lambda action:release.wait(3),observed.append)
+            self.view.supplements.set(False);self.view.invalidate()
+            self.assertIsNone(self.view.preview_value)
+            self.assertEqual(self.view.confirm.cget('state'),'disabled')
+        finally:release.set()
+        self.pump(lambda:self.app.fleet_dataset_job is None)
+        self.assertEqual(observed,[])

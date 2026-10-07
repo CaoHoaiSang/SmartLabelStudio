@@ -73,6 +73,9 @@ class FleetDatasetView(StudioToplevel):
             if not rows: wrapped_label(self.source_rows, 'Chưa có đợt trong vùng chờ; nhận và duyệt ảnh trước.').pack(fill='x')
         except Exception as exc:
             wrapped_label(self.source_rows, str(exc)).pack(fill='x')
+        self.supplements = tk.BooleanVar(self, True)
+        ctk.CTkCheckBox(source, text='Gộp Bổ trợ đã bật và duyệt — chỉ TRAIN',
+                        variable=self.supplements, command=self.invalidate).pack(anchor='w', pady=6)
         self.groups = ctk.CTkFrame(source, fg_color='transparent'); self.groups.pack(fill='x', pady=8)
         ctk.CTkButton(source, text='Xem trước và kiểm quyền', height=36, command=self.preview).pack(anchor='w')
         self.summary = wrapped_label(source, 'Chưa kiểm quyền. Mở cửa sổ không tự tạo snapshot.', color=MUTED)
@@ -91,7 +94,7 @@ class FleetDatasetView(StudioToplevel):
         self.attribute.pack(fill='x', pady=6)
         self.legacy = tk.BooleanVar(self, True)
         ctk.CTkCheckBox(use, text='Gộp ảnh Giàn đã duyệt theo phân tập đã lưu', variable=self.legacy).pack(anchor='w', pady=6)
-        wrapped_label(use, 'Ảnh Bổ trợ riêng chưa được gộp trong luồng này.', color=MUTED).pack(fill='x')
+        wrapped_label(use, 'Bổ trợ theo lựa chọn lúc tạo snapshot; sửa ảnh, nhãn hoặc nguồn thì cần tạo snapshot mới.', color=MUTED).pack(fill='x')
         self.model = StudioEntry(use, height=34); self.model.insert(0, 'yolo11n-cls.pt'); self.model.pack(fill='x', pady=6)
         wrapped_label(use, 'Model khởi tạo; có thể chọn đường dẫn checkpoint có lineage.', color=MUTED).pack(fill='x')
         params = ctk.CTkFrame(use, fg_color='transparent'); params.pack(fill='x')
@@ -161,12 +164,13 @@ class FleetDatasetView(StudioToplevel):
     def preview(self):
         ids = [key for key, var in self.selections.items() if var.get()]
         splits = {key: var.get().lower() for key, var in self.split_vars.items()}
+        include_supplements = bool(self.supplements.get())
         # Save the current in-memory edits once, on this explicit user action.
         if self.app.project is not self.project or self.app._project_job_busy(): return
         self.app.store.save(self.project)
         def work(action):
             action.check(); self.client.bind(); action.check()
-            return self.client.preview(ids, splits)
+            return self.client.preview(ids, splits, include_supplements=include_supplements)
         def done(value):
             self.preview_value = value
             for widget in self.groups.winfo_children(): widget.destroy()
@@ -181,7 +185,8 @@ class FleetDatasetView(StudioToplevel):
             self.summary.configure(text=f"Đã kiểm lúc {datetime.now():%H:%M:%S} · {summary['imageCount']} ảnh · "
                 f"Hydro {summary['sources']['hydro_slot']}, điện thoại {summary['sources']['phone_supplement']}\n"
                 f"TRAIN {summary['splits']['train']} · VAL {summary['splits']['val']} · TEST {summary['splits']['test']} · "
-                f"{summary['excludedCount']} ảnh chưa duyệt/từ chối bị loại.")
+                f"{summary['excludedCount']} ảnh chưa duyệt/từ chối bị loại.\n"
+                f"Giàn đã duyệt: {summary['legacyCount']} · Bổ trợ TRAIN: {summary.get('supplementCount', 0)}.")
             self.confirm.configure(state='normal'); self.message.configure(text='Kiểm lại nguồn và phân tập trước khi tạo snapshot.')
         self._launch(work, done)
 
