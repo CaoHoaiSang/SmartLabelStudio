@@ -299,3 +299,17 @@ dùng quota Blob/Atlas, thêm cron hoặc thay gói; giới hạn ở trên là 
 dụng đề nghị, không là cam kết tài nguyên provider. Ràng buộc miễn phí cá
 nhân/phi thương mại vẫn theo [Vercel Hobby](https://vercel.com/docs/plans/hobby);
 không bật billing, paid trial, auto-upgrade hay overage.
+
+
+### Sửa mô phỏng thao tác tab sau CI đầu
+
+CI SmartLabel37576329665 tại4c0b608 lỗi duy nhất
+`test_edit_defers_hidden_statistics_until_overview_is_opened` (P4 mới đạt).
+Probe CTk độc lập: programmatic set(B)→set(A) nhanh không phát Map của A;
+bấm hai nút tab thật phát đúng1Map. CTkTabview.set ẩn tab cũ sau100ms,
+trong khi đường click ẩn ngay; test cũ dùng đường programmatic khác người dùng.
+Test nay invoke nút GÁN NHÃN/DỰ ÁN thật và kiểm tab đã chọn. Giữ nguyên
+assert_not_called, dirty=true, assert_called_once và dirty=false; không tăng
+thời gian chờ, bỏ test hay đổi source sản phẩm. Probe/log đầu giữ trong audit.
+Full/CI của bản sửa được ghi riêng trong bảng bàn giao, không dùng kết quả
+CI lỗi ban đầu thay cho kết luận đạt.

@@ -189,14 +189,18 @@ class HydroReviewUiTests(unittest.TestCase):
     def test_edit_defers_hidden_statistics_until_overview_is_opened(self):
         app = self.app
         app.deiconify()
-        app.tabs.set('GÁN NHÃN')
+        # Exercise the user's click path. CTkTabview.set() delays hiding the
+        # previous tab by 100 ms, so a rapid set/back need not emit <Map>.
+        app.tabs._segmented_button._buttons_dict['GÁN NHÃN'].invoke()
         app.update()
+        self.assertEqual(app.tabs.get(), 'GÁN NHÃN')
         with patch.object(app, '_refresh_project_statistics', wraps=app._refresh_project_statistics) as refresh:
             app._attribute_changed('yellow_leaf', 'present')
             refresh.assert_not_called()
             self.assertTrue(app.project_statistics_dirty)
-            app.tabs.set('DỰ ÁN')
+            app.tabs._segmented_button._buttons_dict['DỰ ÁN'].invoke()
             app.update()
+            self.assertEqual(app.tabs.get(), 'DỰ ÁN')
             refresh.assert_called_once()
             self.assertFalse(app.project_statistics_dirty)
         app.withdraw()
