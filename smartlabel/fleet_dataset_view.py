@@ -108,8 +108,12 @@ class FleetDatasetView(StudioToplevel):
         ctk.CTkButton(actions, text='Export có quản lý', height=36, command=self.export).pack(side='left', padx=(0, 8))
         ctk.CTkButton(actions, text='Train thuộc tính', height=36, command=self.train).pack(side='left')
         bundle = dialog_section(body, '03 · Gói model tại máy',
-            'Dùng các run hoàn tất cùng snapshot. Gói có lineage chỉ được chuẩn bị shadow tại máy; chưa mở candidate/phát hành Hydro.')
-        ctk.CTkButton(bundle, text='Chuẩn bị gói shadow…', height=36, command=self.bundle).pack(anchor='w')
+            'Dùng các run hoàn tất cùng snapshot. Gói giữ dấu nguồn và chính sách vận hành đã xác nhận. Chuẩn bị phát hành sẽ kiểm quyền lại; ký và phát hành thực hiện tại Fleet.')
+        ctk.CTkButton(bundle, text='Chuẩn bị gói Hydro…', height=36, command=self.bundle).pack(anchor='w')
+        self.bundle_menu = ctk.CTkOptionMenu(bundle, values=['Đọc danh sách gói trước'])
+        self.bundle_menu.pack(fill='x', pady=6)
+        self.bundle_options = {}
+        ctk.CTkButton(bundle, text='Chuẩn bị phát hành gói đã chọn', height=36, command=self.prepare_release).pack(anchor='w')
         self.message = wrapped_label(body, 'Mọi kết quả từ danh sách cũ đều phải được kiểm quyền lại trước khi dùng.')
         self.message.pack(fill='x', padx=12, pady=8)
         setup_dialog(self, app, 880, 820, close=self.close, modal=False)
@@ -209,6 +213,9 @@ class FleetDatasetView(StudioToplevel):
     def load_catalog(self):
         def done(value):
             self.catalog_value = value
+            self.bundle_options = {b['bundleId']: b['bundleId'] for b in value['bundles'] if b['state'] == 'complete'}
+            bundle_labels = list(self.bundle_options) or ['Chưa có gói hoàn tất']
+            self.bundle_menu.configure(values=bundle_labels); self.bundle_menu.set(bundle_labels[0])
             self.snapshot_options = {s['snapshotBindingDigest'][:12]: s['snapshotBindingDigest'] for s in value['snapshots'] if s['state'] == 'ready'}
             labels = list(self.snapshot_options) or ['Chưa có snapshot sẵn sàng']
             self.snapshot_menu.configure(values=labels); self.snapshot_menu.set(labels[0]); self.choose_snapshot(labels[0])
@@ -223,8 +230,10 @@ class FleetDatasetView(StudioToplevel):
                 self.snapshot_options[label] = value['snapshotBindingDigest']
                 self.snapshot_menu.configure(values=list(self.snapshot_options)); self.snapshot_menu.set(label)
                 self.message.configure(text='Đã đối soát snapshot của lượt trước; không tạo bản mới.')
+            elif value['schemaVersion'] == 'FleetReleaseCandidateReceiptV1':
+                self.message.configure(text='Đã đối soát candidate phát hành. Chưa ký hoặc upload model.')
             elif value['schemaVersion'] == 'FleetBundleFinishedV1':
-                self.message.configure(text='Đã đối soát gói shadow của lượt trước: ' + value['bundleId'] + '\nChưa mở phát hành Hydro.')
+                self.message.configure(text='Đã đối soát gói shadow của lượt trước: ' + value['bundleId'] + '\nĐọc danh sách gói để chọn Chuẩn bị phát hành.')
             else:
                 self.message.configure(text='Đã đối soát bản sao của lượt trước: ' + value['path'] + '\nKhông tự mở train từ receipt này.')
         self._launch(lambda action: (action.check(), self.client.reconcile())[1], done)
@@ -300,7 +309,15 @@ class FleetDatasetView(StudioToplevel):
             action.check()
             return build_fleet_hydro_package(self.client, project, list(choices.values()), config,
                 lambda line: action.events.put(('progress', line, None)), action.cancel)
-        self._launch(work, lambda result: self.message.configure(text='Đã tạo gói shadow và lineage tại: ' + str(result['archive']) + '\nChưa mở candidate hoặc phát hành xuống Hydro.'))
+        self._launch(work, lambda result: self.message.configure(text='Đã tạo gói Hydro và lineage tại: ' + str(result['archive']) + '\nĐọc danh sách gói để chọn Chuẩn bị phát hành.'))
+
+    def prepare_release(self):
+        bundle_id = self.bundle_options.get(self.bundle_menu.get())
+        if not bundle_id:
+            self.message.configure(text='Đọc danh sách và chọn một gói hoàn tất trước.'); return
+        self._launch(lambda action: (action.check(), self.client.prepare_release_candidate(bundle_id))[1],
+            lambda value: self.message.configure(text='Đã tạo và đăng ký candidate: ' + bundle_id +
+                '\nCó thể ký bằng công cụ Fleet. Quyền nguồn sẽ được kiểm lại trước ký, phát hành và cài đặt.'))
 
     def stop(self):
         action = getattr(self.app, 'fleet_dataset_job', None)

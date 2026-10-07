@@ -68,7 +68,7 @@ def validate_release_candidate(value):
     """Return an isolated candidate dict, rejecting unknown or incompatible fields."""
     if not isinstance(value, dict) or set(value) != FIELDS:
         raise ValueError("Ứng viên phát hành thiếu trường hoặc có trường không được phép.")
-    if (value["schema"] != SCHEMA or value["purpose"] != "hydro-model"
+    if (value["schema"] not in {SCHEMA, "HydroModelReleaseCandidateV2"} or value["purpose"] != "hydro-model"
             or not isinstance(value["bundleId"], str) or not BUNDLE_ID.fullmatch(value["bundleId"])
             or type(value["bundleZipBytes"]) is not int
             or not 1 <= value["bundleZipBytes"] <= MAX_BUNDLE_BYTES
@@ -88,8 +88,13 @@ def validate_release_candidate(value):
             or not _utc(value["createdAt"])):
         raise ValueError("Ứng viên phát hành không đúng hợp đồng HydroModelReleaseCandidateV1.")
     lineage = value["lineage"]
-    if not isinstance(lineage, dict) or set(lineage) != {"kind"} or lineage["kind"] != "legacy_only":
-        raise ValueError("Chỉ dữ liệu legacy_only được chuẩn bị phát hành trước khi hoàn tất cổng Fleet 4b3.")
+    if value["schema"] == "HydroModelReleaseCandidateV2":
+        from .fleet_release_lineage import validate_release_lineage
+        validate_release_lineage(lineage)
+        if value['bundleSchemaVersion'] != 3:
+            raise ValueError('Model có nguồn Fleet cần bundle V3.')
+    elif not isinstance(lineage, dict) or set(lineage) != {"kind"} or lineage["kind"] != "legacy_only":
+        raise ValueError('Candidate V1 chỉ chấp nhận lineage legacy_only; nguồn Fleet cần V2.')
     if ((value["bundleSchemaVersion"] == 3) != (value["labelSchemaSha256"] is not None)
             or (value["validationStatus"] == "validated_holdout")
             != (value["evaluationEvidenceSha256"] is not None)
@@ -152,17 +157,30 @@ def prepare_fleet_release_candidate(archive, project, store=None):
     require_legacy_project(project, store)
     from .fleet_boundaries import require_legacy_model
     require_legacy_model(archive, context=store.project_dir(project) if store is not None else None)
+    return _prepare_checked_candidate(archive)
+
+
+def _prepare_checked_candidate(archive, lineage=None):
+    from .fleet_boundaries import reject_fleet_metadata
     archive = Path(archive)
     if not archive.is_file() or archive.is_symlink() or archive.suffix.lower() != ".zip":
         raise ValueError("Không tìm thấy ZIP gói model hoặc ZIP là liên kết.")
     destination = archive.with_name(archive.stem + ".release_candidate.json")
-    if destination.exists() or destination.is_symlink():
+    if destination.is_symlink() or (destination.exists() and lineage is None):
         raise ValueError("Ứng viên phát hành đã tồn tại; không ghi đè.")
     before = archive.stat()
     if not 0 < before.st_size <= MAX_BUNDLE_BYTES:
         raise ValueError("ZIP gói model rỗng hoặc vượt 64 MiB.")
     bundle = _bundle_from_zip(archive)
-    reject_fleet_metadata(bundle)
+    if lineage is None:
+        reject_fleet_metadata(bundle)
+        if 'fleetLineage' in bundle:
+            raise ValueError('Gói Fleet phải đi qua luồng phát hành có quản lý.')
+    else:
+        from .fleet_release_lineage import validate_release_lineage
+        lineage = validate_release_lineage(lineage)
+        if bundle.get('fleetLineage') != lineage:
+            raise ValueError('Thông tin nguồn đã đổi; chưa tạo candidate.')
     contract = release_object_sha256(bundle)
     status = bundle.get("validationStatus")
     acceptance = bundle.get("operationalAcceptance")
@@ -212,19 +230,31 @@ def prepare_fleet_release_candidate(archive, project, store=None):
     if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
         raise ValueError("ZIP gói model đã đổi trong lúc kiểm tra.")
     candidate = validate_release_candidate({
-        "schema": SCHEMA, "purpose": "hydro-model", "bundleId": bundle.get("bundleId"),
+        "schema": "HydroModelReleaseCandidateV2" if lineage is not None else SCHEMA, "purpose": "hydro-model", "bundleId": bundle.get("bundleId"),
         "bundleZipSha256": digest.hexdigest(), "bundleZipBytes": after.st_size,
         "bundleContractSha256": contract, "bundleSchemaVersion": version,
         "pipeline": bundle.get("pipeline"), "cropCode": bundle.get("cropCode"),
         "runtimeTarget": bundle.get("runtimeTarget"), "deploymentMode": bundle.get("deploymentMode"),
         "validationStatus": status, "labelSchemaSha256": label_hash,
         "evaluationEvidenceSha256": evidence_hash, "datasetVersion": bundle.get("datasetVersion"),
-        "sourceCommit": bundle.get("sourceCommit"), "lineage": {"kind": "legacy_only"},
+        "sourceCommit": bundle.get("sourceCommit"), "lineage": lineage if lineage is not None else {"kind": "legacy_only"},
         "createdAt": bundle.get("createdAt"),
     })
-    temporary = destination.with_name(destination.name + ".tmp")
-    temporary.write_text(json.dumps(candidate, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    os.replace(temporary, destination)
+    if lineage is not None and destination.exists():
+        if load_release_candidate(destination) != candidate:
+            raise ValueError('Candidate đã có nhưng không khớp gói; không ghi đè.')
+        return verify_candidate_archive(candidate, archive)
+    from uuid import uuid4
+    temporary = destination.with_name(destination.name + "." + str(uuid4()) + ".tmp")
+    try:
+        with temporary.open('x', encoding='utf-8') as handle:
+            handle.write(json.dumps(candidate, ensure_ascii=False, indent=2) + "\n")
+            handle.flush(); os.fsync(handle.fileno())
+        # Atomic no-clobber publication on the same filesystem (Windows/Linux).
+        # A concurrent candidate writer must never be silently replaced.
+        os.link(temporary, destination)
+    finally:
+        temporary.unlink(missing_ok=True)
     try:
         return verify_candidate_archive(load_release_candidate(destination), archive)
     except Exception:
@@ -272,6 +302,11 @@ def _bundle_from_zip(archive):
 
 
 def _validate_bundle_archive(package, bundle, names):
+    if 'fleetLineage' in bundle:
+        from .fleet_release_lineage import validate_release_lineage
+        validate_release_lineage(bundle['fleetLineage'])
+        if bundle.get('schemaVersion') != 3:
+            raise ValueError('Gói Fleet cần bundle V3.')
     models = bundle.get("models")
     if not isinstance(models, dict) or not models:
         raise ValueError("bundle.json thiếu danh sách model.")

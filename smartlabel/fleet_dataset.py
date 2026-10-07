@@ -127,7 +127,7 @@ class FleetDatasetClient:
         if not path.exists(): return None
         if path.stat().st_size > MAX_WIRE: raise FleetIntakeError('Nhật ký đối soát vượt giới hạn.')
         value = _fields(_json(path.read_bytes()), ['action', 'payload'])
-        if value['action'] not in {'register_snapshot', 'materialize', 'bundle'} or not isinstance(value['payload'], dict):
+        if value['action'] not in {'register_snapshot', 'materialize', 'bundle', 'release_candidate'} or not isinstance(value['payload'], dict):
             raise FleetIntakeError('Nhật ký đối soát không hợp lệ.')
         _uuid(value['payload'].get('operationId' if value['action'] != 'bundle' else 'bundleId'))
         return value
@@ -208,6 +208,8 @@ class FleetDatasetClient:
             result = self._snapshot_receipt(result, held['payload']['snapshot'])
         elif held['action'] == 'materialize':
             result = self._copy_receipt(result, held['payload'])
+        elif held['action'] == 'release_candidate':
+            result = self._release_receipt(result, held['payload'])
         elif held['action'] == 'bundle':
             result = self._bundle_receipt(result, held['payload']['bundleId'])
         else:
@@ -395,10 +397,12 @@ class FleetDatasetClient:
 
     def begin_bundle(self, run_ids, config):
         bundle_id = str(uuid4()); start = monotonic()
-        value = _fields(self._write('bundle', {'bundleId': bundle_id, 'runIds': run_ids, 'configDigest': config_digest(config)}),
-                        ['schemaVersion', 'bundleId', 'path', 'gateTokenId', 'expiresInMs', 'models', 'trainCounts'])
-        if value['schemaVersion'] != 'FleetBundleStartedV1' or value['bundleId'] != bundle_id:
+        value = _fields(self._write('bundle', {'bundleId': bundle_id, 'runIds': run_ids, 'configDigest': config_digest(config), 'releaseLineage': True}),
+                        ['schemaVersion', 'bundleId', 'path', 'gateTokenId', 'expiresInMs', 'models', 'trainCounts', 'lineage'])
+        if value['schemaVersion'] != 'FleetBundleStartedV2' or value['bundleId'] != bundle_id:
             raise FleetIntakeError('Receipt bundle không hợp lệ.')
+        from .fleet_release_lineage import validate_release_lineage
+        validate_release_lineage(value['lineage'])
         _safe_path(value['path'], self.root / 'fleet_datasets' / 'bundles' / bundle_id)
         _uuid(value['gateTokenId'])
         if type(value['expiresInMs']) is not int or not 0 < value['expiresInMs'] <= 300000: raise FleetIntakeError('Gate bundle đã hết hạn.')
@@ -435,4 +439,33 @@ class FleetDatasetClient:
         if (sidecar.get('kind') != 'includes_fleet' or sidecar.get('deliveryAllowed') is not False
                 or sidecar.get('archiveSha256') != hashlib.sha256(archive.read_bytes()).hexdigest()):
             raise FleetIntakeError('Lineage bundle không khớp archive.')
+        return value
+
+    def prepare_release_candidate(self, bundle_id):
+        from .fleet_release_lineage import validate_release_lineage
+        from .hydro_release_candidate import _prepare_checked_candidate
+        _uuid(bundle_id)
+        # Read-only context before writing candidate metadata. Registration uses
+        # a new source check and the durable operation journal below.
+        self.bind()
+        context = _fields(self._call('candidate_context', {'bundleId': bundle_id}),
+                          ['schemaVersion', 'bundleId', 'archive', 'lineage'])
+        if context['schemaVersion'] != 'FleetReleaseCandidateContextV1' or context['bundleId'] != bundle_id:
+            raise FleetIntakeError('Gói phát hành không khớp lựa chọn.')
+        validate_release_lineage(context['lineage'])
+        archive = _safe_path(context['archive'], self.root / 'fleet_datasets' / 'bundles' / bundle_id / 'bundle.zip')
+        candidate = _prepare_checked_candidate(archive, context['lineage'])
+        payload = {'operationId': str(uuid4()), 'bundleId': bundle_id, 'candidate': candidate}
+        value = self._release_receipt(self._write('release_candidate', payload), payload)
+        self._clear_pending()
+        return value
+
+    def _release_receipt(self, result, payload):
+        from .fleet_release_lineage import candidate_digest
+        value = _fields(result, ['schemaVersion', 'operationId', 'candidateDigest', 'projectBinding', 'state'])
+        if (value['schemaVersion'] != 'FleetReleaseCandidateReceiptV1' or value['state'] != 'registered'
+                or value['operationId'] != payload['operationId']
+                or value['candidateDigest'] != candidate_digest(payload['candidate'])):
+            raise FleetIntakeError('Biên nhận phát hành không khớp candidate; cần đối soát.')
+        self._binding(value['projectBinding'])
         return value

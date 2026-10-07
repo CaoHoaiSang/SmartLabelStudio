@@ -130,3 +130,20 @@ class FleetDatasetUiTests(unittest.TestCase):
         finally:release.set()
         self.pump(lambda:self.app.fleet_dataset_job is None)
         self.assertEqual(observed,[])
+
+    def test_prepare_release_requires_explicit_selection_and_keeps_app_job_ownership(self):
+        from uuid import uuid4
+        from unittest.mock import Mock
+        bundle_id=str(uuid4());client=self.view.client
+        with patch.object(client,'prepare_release_candidate') as create:
+            self.view.prepare_release();create.assert_not_called()
+        self.view.bundle_options={bundle_id:bundle_id}
+        self.view.bundle_menu.configure(values=[bundle_id]);self.view.bundle_menu.set(bundle_id)
+        released=Event()
+        def prepare(ident):
+            self.assertEqual(ident,bundle_id);released.wait(3)
+            return {'schemaVersion':'FleetReleaseCandidateReceiptV1'}
+        with patch.object(client,'prepare_release_candidate',side_effect=prepare):
+            self.view.prepare_release();self.assertTrue(self.app._project_job_busy())
+            released.set();self.pump(lambda:self.app.fleet_dataset_job is None)
+        self.assertIn('Đã tạo và đăng ký candidate',self.view.message.cget('text'))

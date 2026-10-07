@@ -1,0 +1,349 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hydro.local/contracts/hydro-model-release-v2.schema.json",
+  "title": "HydroModelReleaseV2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "releaseId",
+    "purpose",
+    "bundleId",
+    "bundleZipSha256",
+    "bundleZipBytes",
+    "bundleContractSha256",
+    "bundleSchemaVersion",
+    "pipeline",
+    "cropCode",
+    "runtimeTarget",
+    "deploymentMode",
+    "validationStatus",
+    "labelSchemaSha256",
+    "evaluationEvidenceSha256",
+    "datasetVersion",
+    "sourceCommit",
+    "lineage",
+    "notesVi",
+    "createdAt",
+    "signedAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "HydroModelReleaseV2"
+    },
+    "releaseId": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$"
+    },
+    "purpose": {
+      "const": "hydro-model"
+    },
+    "bundleId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "bundleZipSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "bundleZipBytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 67108864
+    },
+    "bundleContractSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "bundleSchemaVersion": {
+      "const": 3
+    },
+    "pipeline": {
+      "const": "fixed_slot_multilabel_v3"
+    },
+    "cropCode": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,63}$"
+    },
+    "runtimeTarget": {
+      "type": "string",
+      "enum": [
+        "windows_onnxruntime_cpu",
+        "jetson_nano_tensorrt_fp16"
+      ]
+    },
+    "deploymentMode": {
+      "type": "string",
+      "enum": [
+        "shadow",
+        "operational"
+      ]
+    },
+    "validationStatus": {
+      "type": "string",
+      "enum": [
+        "pilot_unvalidated",
+        "validated_holdout",
+        "operational_unvalidated"
+      ]
+    },
+    "labelSchemaSha256": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/sha256"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "evaluationEvidenceSha256": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/sha256"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "datasetVersion": {
+      "$ref": "#/$defs/text128"
+    },
+    "sourceCommit": {
+      "$ref": "#/$defs/text128"
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "kind",
+        "snapshotDigest",
+        "snapshotBindingDigest",
+        "runLineagesDigest",
+        "contributionIdsDigest",
+        "itemCount"
+      ],
+      "properties": {
+        "schema": {
+          "const": "HydroModelLineageV1"
+        },
+        "kind": {
+          "const": "includes_fleet"
+        },
+        "snapshotDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "snapshotBindingDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "runLineagesDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "contributionIdsDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "itemCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 80
+        }
+      }
+    },
+    "notesVi": {
+      "type": "string",
+      "maxLength": 500,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
+    },
+    "createdAt": {
+      "$ref": "#/$defs/utc"
+    },
+    "signedAt": {
+      "$ref": "#/$defs/utc"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "bundleSchemaVersion": {
+            "const": 3
+          }
+        },
+        "required": [
+          "bundleSchemaVersion"
+        ]
+      },
+      "then": {
+        "properties": {
+          "labelSchemaSha256": {
+            "$ref": "#/$defs/sha256"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "labelSchemaSha256": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "validationStatus": {
+            "const": "validated_holdout"
+          }
+        },
+        "required": [
+          "validationStatus"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evaluationEvidenceSha256": {
+            "$ref": "#/$defs/sha256"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "evaluationEvidenceSha256": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "deploymentMode": {
+            "const": "shadow"
+          }
+        },
+        "required": [
+          "deploymentMode"
+        ]
+      },
+      "then": {
+        "properties": {
+          "validationStatus": {
+            "const": "pilot_unvalidated"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "validationStatus": {
+            "enum": [
+              "validated_holdout",
+              "operational_unvalidated"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "bundleSchemaVersion": {
+            "const": 1
+          }
+        },
+        "required": [
+          "bundleSchemaVersion"
+        ]
+      },
+      "then": {
+        "properties": {
+          "pipeline": {
+            "const": "fixed_slot_multilabel_v1"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "bundleSchemaVersion": {
+            "const": 2
+          }
+        },
+        "required": [
+          "bundleSchemaVersion"
+        ]
+      },
+      "then": {
+        "properties": {
+          "pipeline": {
+            "const": "fixed_slot_multilabel_v2"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "bundleSchemaVersion": {
+            "const": 3
+          }
+        },
+        "required": [
+          "bundleSchemaVersion"
+        ]
+      },
+      "then": {
+        "properties": {
+          "pipeline": {
+            "const": "fixed_slot_multilabel_v3"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "validationStatus": {
+            "const": "operational_unvalidated"
+          }
+        },
+        "required": [
+          "validationStatus"
+        ]
+      },
+      "then": {
+        "properties": {
+          "bundleSchemaVersion": {
+            "const": 3
+          },
+          "deploymentMode": {
+            "const": "operational"
+          },
+          "evaluationEvidenceSha256": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "text128": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?(Z|\\+00:00)$"
+    }
+  }
+}

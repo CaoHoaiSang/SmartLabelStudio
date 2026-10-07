@@ -1271,6 +1271,7 @@ def _write_hydro_model_bundle(
     release_evidence: dict | None = None,
     operational_acceptance: dict | None = None,
     managed_label_distribution: dict | None = None,
+    managed_release_lineage: dict | None = None,
 ) -> Path:
     output = Path(output_dir).resolve()
     crop_code, _crop_display_name = validate_crop_identity(
@@ -1280,7 +1281,7 @@ def _write_hydro_model_bundle(
     if output.exists():
         raise FileExistsError(f"bundle output already exists: {output}")
     attrs = {a["id"]: a for a in model_attributes(project)}
-    extended = "labelSchema" in project.metadata
+    extended = "labelSchema" in project.metadata or managed_release_lineage is not None
     if set(models) != set(attrs) or set(thresholds) != set(attrs):
         raise ValueError("bundle requires independent presence/yellow/wilt models and thresholds")
     if not dataset_version or not source_commit or not camera_profile_ids or not geometry_profile_ids:
@@ -1328,7 +1329,7 @@ def _write_hydro_model_bundle(
         else:
             # Private managed writer only: the public legacy API has no override.
             # Counts come from the credential-owning receiver's completed runs.
-            if (deployment_mode != "shadow" or set(managed_label_distribution) != set(attrs)
+            if ((deployment_mode != "shadow" and not (unvalidated and managed_release_lineage is not None)) or set(managed_label_distribution) != set(attrs)
                     or not isinstance(managed_label_distribution[key], dict)
                     or set(managed_label_distribution[key]) != {"present", "absent"}
                     or any(type(n) is not int or not 1 <= n <= 2000 for n in managed_label_distribution[key].values())):
@@ -1400,6 +1401,11 @@ def _write_hydro_model_bundle(
             manifest["evaluationEvidence"] = release_evidence
         if runtime_target == "jetson_nano_tensorrt_fp16":
             manifest["minimumTensorRTVersion"] = "8.2"
+        if managed_release_lineage is not None:
+            from .fleet_release_lineage import validate_release_lineage
+            if bundle_version != 3 or managed_label_distribution is None:
+                raise ValueError('Nguồn Fleet cần bundle V3 có số liệu train do receiver xác nhận.')
+            manifest['fleetLineage'] = validate_release_lineage(managed_release_lineage)
         if unvalidated:
             manifest["operationalAcceptance"] = {**operational_acceptance, "bundleContractSha256": contract_hash(manifest)}
         (temporary / "bundle.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
