@@ -1,6 +1,6 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 26/09/2026
 
-> 07/10/2026: nhánh `feature/fleet-lineage-model-delivery-20261007` đang được kiểm thử cho luồng phát hành model có nguồn Fleet. Xem [hợp đồng, cách dùng và giới hạn](FLEET_MANAGED_MODEL_DELIVERY.md). Trạng thái CI/triển khai nằm trong báo cáo đó.
+> 07/10/2026: nhánh `feature/fleet-lineage-model-delivery-20261007` bổ sung luồng phát hành model có nguồn Fleet. Xem [hợp đồng, cách dùng và giới hạn](FLEET_MANAGED_MODEL_DELIVERY.md). Trạng thái CI/triển khai nằm trong báo cáo đó.
 
 Cập nhật07/10/2026: luồng snapshot managed đã bổ sung Bổ trợ TRAIN để gộp cùng Fleet và Giàn, khóa hash cả ba nguồn và thu hồi toàn bộ copy hỗn hợp. Xem [báo cáo](FLEET_DATASET_CUSTODY.md). Rollout có receipt riêng; includes_fleet delivery vẫn đóng.
 

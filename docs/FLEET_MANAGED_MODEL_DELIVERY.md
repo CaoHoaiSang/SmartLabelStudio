@@ -65,9 +65,10 @@ cho candidate V2. Không đặt khóa riêng hoặc ZIP thật vào Git. Không 
 
 ## Xác minh và phát hành phần mềm
 
-Đang hoàn tất kiểm thử Windows và CI của đúng HEAD. Audit tập trung:
+Kết quả kiểm thử Windows và CI của đúng HEAD được lưu trong audit tập trung:
 `D:/Fleet_Release_Audits/lineage-model-delivery-20261007/`.
-Các kết quả cuối, commit, CI và receipt triển khai được bổ sung sau khi kiểm xong.
+Xem các tệp `*-result.json`, `ci-results.json` và receipt triển khai trong audit để
+đối chiếu bản thực tế. Chỉ cập nhật phần mềm khi kiểm bắt buộc và CI của đúng HEAD đạt.
 Chưa dùng khóa/model/Blob production cho kiểm thử V2, chưa bật intake và chưa đổi
 model thiết bị. Không merge main, force push hoặc hạ nhánh Hydro `thao`.
 
