@@ -150,6 +150,8 @@ def prepare_fleet_release_candidate(archive, project, store=None):
     """Write release_candidate.json beside a finished ZIP. This is an explicit action."""
     from .fleet_boundaries import reject_fleet_metadata, require_legacy_project
     require_legacy_project(project, store)
+    from .fleet_boundaries import require_legacy_model
+    require_legacy_model(archive, context=store.project_dir(project) if store is not None else None)
     archive = Path(archive)
     if not archive.is_file() or archive.is_symlink() or archive.suffix.lower() != ".zip":
         raise ValueError("Không tìm thấy ZIP gói model hoặc ZIP là liên kết.")

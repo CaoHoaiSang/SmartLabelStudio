@@ -1,11 +1,14 @@
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 26/09/2026
 
-## P4 Phase A — 07/10/2026
+## P4 B–E — 07/10/2026
 
-Contract snapshot/custody có parser thuần và fixture Python/Node dùng chung.
-Chưa có gate online, API/copy/train/withdrawal pipeline; các guard legacy và
-lineage=legacy_only vẫn giữ. [Contract, giới hạn và câu hỏi review](FLEET_DATASET_CUSTODY.md).
-Dừng để duyệt Phase A trước B–E, chưa nạp vận hành.
+Đã triển khai snapshot immutable, gate online một lần, custody trước copy, receiver
+xóa khi rút kể cả SmartLabel đóng, managed classification và lineage run/bundle.
+Dataset/Train có luồng **Snapshot dữ liệu khách**, đối soát lượt mất phản hồi;
+project legacy giữ exporter/train cũ. [Contract, test và giới hạn](FLEET_DATASET_CUSTODY.md).
+Có code và test cô lập; chưa deploy/ảnh khách/train Ultralytics thật. Gói managed
+chỉ shadow tại máy, candidate/phát hành includes_fleet còn đóng chờ verifier Hydro
+ở tác vụ riêng. Không dùng QA dataset để tuyên bố độ chính xác. Dừng sau E.
 
 ## Điều hướng ảnh sau khi từ chối — 07/10/2026
 

@@ -1,5 +1,19 @@
 # Khóa đường dataset/train cũ đối với Fleet — 21/09/2026
 
+## Runtime P4 B–E — 07/10/2026
+
+Đường managed mới nằm trong `fleet_dataset.py`, `fleet_training.py`,
+`fleet_hydro_export.py` và receiver; chỉ hoạt động với snapshot/custody/gate online.
+Generic export/version/train/candidate vẫn từ chối Fleet. `require_legacy_model`
+kiểm đường dẫn/sidecar và fingerprint PT/ZIP/ONNX đã biết ở các project cùng workspace
+(tối đa 1.000 project, 5.000 hash/index); index lỗi không coi là legacy.
+Không nhận dạng được mọi bản sao đã đổi byte/tách khỏi workspace.
+Snapshot không sửa images/split cũ. Trạng thái trainAllowed của staging vẫn false;
+receipt/gate không tạo quyền toàn project. Includes_fleet delivery vẫn bị chặn.
+[Thiết kế, test và rollout chưa chạy](FLEET_DATASET_CUSTODY.md).
+
+## Lịch sử guard trước P4
+
 Đợt nối tiếp kiểm tra nguồn/preflight. Chưa mở admission hoặc train ảnh Fleet.
 Các dự án cũ không liên quan tiếp tục xuất/train cục bộ như trước; chỉ có vùng
 chờ Fleet trong thư mục project không làm khóa toàn bộ project.

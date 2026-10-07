@@ -1,5 +1,7 @@
 # P4 Phase A — contract snapshot và custody, 07/10/2026
 
+> Cập nhật B–E ngày 07/10/2026: xem mục **P4 B–E** cuối tài liệu. Phần Phase A là lịch sử đã được duyệt.
+
 **Contract đề nghị duyệt; chưa mở dataset/train Fleet.** Base SmartLabel
 `1a382dbf79a90156d3b690e1d9fe09b54296d790`, Fleet
 `dc12afe97c03e8ec3c97ee932b0f18ac350a62f4`. Hai nhánh
@@ -313,3 +315,164 @@ assert_not_called, dirty=true, assert_called_once và dirty=false; không tăng
 thời gian chờ, bỏ test hay đổi source sản phẩm. Probe/log đầu giữ trong audit.
 Full/CI của bản sửa được ghi riêng trong bảng bàn giao, không dùng kết quả
 CI lỗi ban đầu thay cho kết luận đạt.
+
+
+## P4 B–E — triển khai sau duyệt contract, 07/10/2026
+
+**[Có code] [qua test cô lập]; chưa nạp vận hành, chưa nghiệm thu ảnh khách hoặc train thật.**
+Base B–E: Fleet `5b690f6a06d3d8226129ed20cc2577773c063f19`, SmartLabel
+`20e45db119f89917bcca9acf651cf5c417f2dc1d`. Cùng nhánh
+`feature/fleet-dataset-custody-20261007`. Chủ đã duyệt contract A và triển khai B–E.
+Các mục Phase A phía trên là hồ sơ thiết kế/lịch sử; trạng thái runtime hiện hành là mục này.
+
+### Authority và thay đổi so với đề xuất A
+
+- API chỉ nhận worker credential. Phiên công ty/khách không thay credential worker.
+  Snapshot phải tiêu thụ gate snapshot trước khi dùng export/train. Gate RS256 sống
+  tối đa 300 giây, gắn operationId, worker/storage/project, đầy đủ nguồn, digest và
+  subjectDigest. Replay chỉ trả receipt `fresh:false`; receiver không thực thi lại.
+- **Một CAS Mongo chung `_id:pilot-v1`**, thay đề xuất chia ledger theo binding.
+  Thu hồi một nguồn có thể ảnh hưởng nhiều binding; tất cả đăng ký, tiêu thụ,
+  custody, đổi chủ và vô hiệu worker cần chung một thứ tự ghi. Chạy với Mongo
+  standalone, không cần transaction/lock RAM/timer trong Function.
+- Giới hạn pilot toàn ledger: 80 snapshot, 128 copy, 200 operation đang issued,
+  2.000 operation lưu tổng, admission JSON 8 MiB. Trần này là giới hạn ứng dụng,
+  không phải quota provider. Hết trần khóa thao tác mới; fence/ACK xóa vẫn xử lý.
+  Overflow khi ghi fence đóng admission vĩnh viễn, giữ nghĩa vụ cleanup đã đăng ký.
+  Chưa có thao tác UI để mở lại ledger; không xóa tombstone/ledger để lấy thêm quota.
+- Gate đọc lại accepted/imported, purpose training, retention, import complete,
+  custodian, manifest/receipt, current owner và dataOwnership. `ownerEpoch` đổi
+  riêng do tạm ngưng truy cập không coi là đổi chủ. Ownership update/replacement/
+  deletion qua FleetDevice được fence trước thay đổi; direct DB/bulk ngoài ứng dụng
+  không nằm trong cam kết này. Không hướng dẫn vận hành ghi trực tiếp DB.
+- Withdraw fence trước state transition; settlement đợi cloud deletion, ACK cũ,
+  từng copy và từng snapshot binding. Model đã published có lineage liên quan
+  được đánh dấu `needsRetrain`; không tự thu hồi model đã phát hành.
+
+### Receiver, snapshot, bản sao và run
+
+`receiver/src/datasetLineage.js`, `datasetSources.js`, `datasetTraining.js` sử dụng
+cùng parser `backend/src/contributions/datasetContract.js`; đóng gói receiver phải
+bao gồm module backend này, không chép riêng thư mục receiver ra ngoài cây repo.
+Registry nằm ngoài project trong storage receiver. `fleet_datasets/` trong project
+chứa marker/binding, snapshot tham chiếu, copies, runs, bundles và model-index.
+Không đưa các vùng này vào Git. Restore toàn bộ cả registry và tombstone phải giữ
+bằng chứng mới nhất; restore project đơn lẻ vẫn được đối chiếu với registry receiver.
+
+Snapshot đóng băng project bytes, nhãn từng ảnh, review revision, split revision,
+byte hash và pixel fingerprint. Nguồn Hydro phải qualified, slot-only, review hợp lệ.
+Ảnh điện thoại chỉ TRAIN. Trùng byte/pixel với nguồn khác/Giàn bị chặn; nhóm holdout
+không được đổi tập. Không ghi project.images hoặc split assignment legacy.
+
+Mỗi export/train tạo một copyId mới: lưu intent local → Fleet custody → consume
+một lần → chép file trong whitelist → kiểm lại quyền và ảnh → copy ready.
+Thu hồi giữa chừng xóa output dở. Mất mạng không mở đường offline.
+Native API giữ Host/Origin/X-Fleet-Client và cấm browser context, strict JSON 64 KiB.
+Catalog chỉ đọc, phân trang 32 dòng mỗi loại; không tự copy/train khi mở cửa sổ.
+
+Receiver độc lập SmartLabel xử lý tombstone, purges đúng inventory/marker, từ chối
+junction/link/file ngoài whitelist. Chỉ ACK sau reader train đã thoát; PID còn sống
+thì giữ withdrawal_pending. Bản sao khôi phục trong root đã đăng ký/project_trash
+bị dọn lại theo tombstone. Không tìm/xóa bản người dùng tự chép ra ngoài vùng quản lý.
+
+Train mới hỗ trợ classification, một thiết bị, không resume/DDP. TRAIN và VAL phải
+đủ hai nhãn; không dùng TEST làm VAL hoặc tự tách ảnh. Có thể gộp ảnh **Giàn** đã
+review theo split đã lưu; bộ **Bổ trợ riêng** chưa được hợp nhất trong luồng này.
+Checkpoint cha phải có lineage đầy đủ; snapshot mới chứa mọi ảnh/import/hash tổ tiên.
+Chưa có phép hợp nhất lineage khác binding vào bundle: các run bundle phải cùng snapshot.
+
+Child worker bắt đầu sau lease online; watchdog gia hạn 20 giây, không kéo dài qua
+hạn monotonic. Offline/revoke làm child tự thoát; parent chỉ hoàn tất sau child exit,
+receiver kiểm lại quyền và ghi FleetRunLineageV1/hash checkpoint. Các callback, cache,
+plots, workers và experiment tracker/sync được cấu hình để giữ dữ liệu trong vùng
+managed. Cấu hình người dùng/ứng dụng khác không bị sửa. Chưa chạy epoch Ultralytics thật.
+Model weights/runs vẫn chiếm đĩa local; trần copy ảnh không thay quota toàn bộ training
+artifacts. Cần nghiệm thu dung lượng/hiệu năng trước pilot thật.
+
+### UI, đối soát và gói model
+
+SmartLabel có cửa sổ không modal **Snapshot dữ liệu khách** trong Dataset/Train:
+chọn nguồn → xem trước nhóm/split → tạo snapshot → export/train tường minh.
+Worker nền do app sở hữu; đóng view không mất khóa job/project; callback cũ không
+thay lựa chọn mới. Dừng/đóng app đợi child đóng trước hoàn tất tác vụ.
+Fleet inbox detail chỉ hiển thị số snapshot/model và cần train lại từ server;
+missing → chưa có thông tin, không suy luận từ imported.
+
+`client-pending.json` lưu exact ID/body trước dispatch snapshot/copy/bundle. Mất
+phản hồi kể cả 2xx sai schema giữ pending qua mở lại app; không tạo lượt mới ngầm.
+**Đối soát lượt trước** đọc journal receiver và authority online; chỉ retry cùng
+ID/body theo bấm tường minh nếu chưa bắt đầu. Receipt không phải quyền train lại.
+**Đóng lượt đã bị chặn / chưa bắt đầu** chỉ xóa intent client sau đối chiếu terminal
+hoặc chưa bắt đầu; không xóa output, không đổi quyền. Unknown/interrupted registration
+vẫn khóa; chưa có công cụ tự sửa journal dở. Run không tự resume; catalog giữ lịch sử.
+Gói có kết quả final chưa rõ được giữ để đối soát, không rollback kết quả có thể đã
+commit ở receiver. Không tuyên bố gói hoàn tất chỉ vì ZIP tồn tại.
+
+Bundle chỉ chuẩn bị shadow tại máy. Gate kiểm toàn bộ run/ancestor trước conversion
+và kiểm mới trên hash ZIP cuối. Label distribution lấy từ các bản sao TRAIN
+đã được receiver xác nhận, không lấy nhầm số ảnh Giàn legacy; vẫn bắt buộc đủ hai nhãn. `FleetBundleLineageV1` ở sidecar ngoài ZIP; giữ format
+Hydro cũ. Generic importer/export/version/train, converter, candidate vẫn chặn managed
+paths, manifest và checkpoint/ZIP/ONNX có fingerprint đã biết trong workspace.
+Chưa thể nhận dạng mọi artifact đã đổi byte hoặc tách hoàn toàn khỏi workspace.
+
+**Candidate/sign/upload/offer `includes_fleet` vẫn đóng.** Parser release V1 tiếp tục
+legacy_only, không mở cờ bypass. Phần chấp nhận manifest/verifier Hydro là tác vụ riêng
+đã nêu khi duyệt A. Cờ needsRetrain hiện kiểm bằng release fixture có lineage server,
+không phải bằng một release Fleet thật có ảnh khách.
+
+### Kiểm thử, phạm vi và vận hành
+
+Bộ P4 chạy Fleet API thật + MongoMemoryServer riêng + receiver thật + adapter Python
+SmartLabel thật; ảnh tổng hợp và child train stub chỉ trong test. Bao gồm đăng ký/copy,
+thu hồi khi Python đóng, backup restore, thu hồi lúc child còn đọc, lease dừng child,
+chặn bundle mới, pending/receipt, đổi chủ, replay và CAS giữa nhiều process.
+Bộ browser thêm detail lineage tại 1366/768/390, bàn phím và zoom thật 200%; ảnh fixture
+ở `runtime/dataset-lineage-browser/`, không commit runtime. Full regression và CI từng
+HEAD được ghi trong bảng bàn giao; pending/failed CI không được coi hoàn tất.
+
+Không sửa Hydro, Nano/ESP, service, intake, production DB, provider quota hay key.
+Không thêm dependency hoặc nâng framework. Không chạy train thật/ảnh thật, không tạo
+accuracy claim; `validated_holdout` vẫn chỉ QA dataset. Không bật billing, resource trả phí hoặc auto-upgrade; không gọi Blob/Atlas
+production trong test. CI dùng workflow hiện có, không đổi gói dịch vụ. Trần provider
+đã có trong runbook triển khai vẫn là gate riêng, không suy ra từ quota local này.
+
+Rollout dự kiến sau reviewer: chốt exact SHA hai repo, backup/restore rehearsal đúng
+runbook, triển khai Fleet và receiver đồng bộ trước SmartLabel; nghiệm thu ảnh tổng hợp
+với intake OFF, rồi mới đề nghị một pilot riêng. **Chưa chạy các bước rollout này.**
+Rollback khi đã có custody: dừng lượt mới, dừng child, giữ receiver có khả năng cleanup,
+đợi mọi nghĩa vụ xóa/đối soát; giữ registry/tombstone. Không hạ backend/receiver về bản
+không biết custody khi còn copy. Không đổi DB hoặc xóa ledger để rollback.
+
+Nguồn kỹ thuật chính thức, đối chiếu 07/10/2026:
+[Mongo atomic single-document/CAS](https://www.mongodb.com/docs/manual/core/write-operations-atomicity/),
+[Mongo BSON tối đa 16 MiB](https://www.mongodb.com/docs/manual/reference/limits/),
+[Ultralytics train configuration](https://docs.ultralytics.com/usage/cfg/),
+[Ultralytics settings](https://docs.ultralytics.com/usage/settings/),
+[callbacks](https://docs.ultralytics.com/reference/utils/callbacks/base/),
+[Python subprocess](https://docs.python.org/3.10/library/subprocess.html).
+Đây là lý do chọn ledger có trần, tiến trình child riêng và settings riêng; không thay
+bằng chứng nghiệm thu dữ liệu/model thật. Dừng sau E; AI_KL memory để reviewer cập nhật.
+
+### Kết quả local SmartLabel B–E
+
+Windows desktop Admin, Node 24 / Python 3.10, project tổng hợp:
+
+| Bộ kiểm | Kết quả |
+|---|---|
+| Full `python -m unittest discover -s tests -v` cuối | 557/557, 405,740 giây, 0 skip |
+| Client/lease/containment/pending | 15/15 |
+| Managed bundle và giữ khóa candidate | 4/4 |
+| Export Hydro legacy | 20/20 |
+| UI snapshot | 7/7 trong full, gồm close/cancel/context/bounds |
+| UI Fleet / backend / receiver trước pin cuối | 109/109, 242/242, 34/34 |
+| Browser Fleet | 10 suite, zoom thật 200%, 390/768/1366, bàn phím |
+| Lint, build isolation, build, audit production Fleet root/receiver | Đạt; audit 0/0 lỗ hổng |
+
+Vòng full đầu có 555 test và 2 error ở bundle managed: writer cũ đếm ảnh Giàn,
+không thấy nhãn snapshot. Sửa dữ liệu đầu vào private writer bằng counts từ
+receiver, giữ kiểm đủ hai nhãn và test thiếu nhãn; full cuối đã đạt.
+Fixture receiver đầu từng treo do tạo hai worker trong cùng DB của một test rồi
+không đóng server khi setup lỗi; tách test/Mongo và thêm cleanup khi setup lỗi.
+Không nới guard, skip test hoặc tăng timeout. Log các lượt được giữ ở audit
+`D:/Fleet_Release_Audits/p4-dataset-runtime-20261007/`.
+CI exact HEAD và pin Fleet cuối được ghi riêng trong bảng bàn giao, không suy từ local.

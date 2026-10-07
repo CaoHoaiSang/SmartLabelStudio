@@ -1,7 +1,7 @@
 """Fail closed for Fleet material in legacy dataset/train entry points.
 
-This is containment while managed snapshot/withdrawal support is incomplete,
-not a replacement for that future online gate. Unrelated legacy data stays local.
+Managed datasets use the separate receiver-owned snapshot/gate workflow.
+These generic entry points never grant access to Fleet pixels or models. Unrelated legacy data stays local.
 """
 import json
 import os
@@ -42,6 +42,8 @@ def reject_fleet_metadata(value):
 
 def require_legacy_project(project, store=None):
     reject_fleet_metadata(project.metadata)
+    for model in getattr(project, 'attribute_models', {}).values():
+        require_legacy_model(model, context=store.project_dir(project) if store is not None else None)
     files = []
     for record in project.images:
         reject_fleet_metadata(record.metadata)
@@ -128,3 +130,60 @@ def require_legacy_training_data(data):
                         raise FleetIntakeError("Danh sách ảnh dataset không hợp lệ.")
                     reject_generic_fleet_sources(_dataset_paths(root / entry))
                     reject_benchmark_sources(_dataset_paths(root / entry))
+
+
+def require_legacy_model(model, *, context=None):
+    """Recognize managed paths and retained sidecars before generic weight loading."""
+    if not model:
+        return
+    file = Path(model)
+    reject_generic_fleet_sources([file])
+    for candidate in (file.absolute(), file.resolve()):
+        for parent in (candidate.parent, *candidate.parents):
+            if (parent / 'fleet_lineage.json').exists():
+                raise FleetIntakeError(MESSAGE)
+    for sidecar in (file.with_suffix(file.suffix + '.fleet_lineage.json'), file.with_suffix('.fleet_lineage.json')):
+        if sidecar.exists():
+            raise FleetIntakeError(MESSAGE)
+
+    # Retained fingerprints also recognize a renamed/copied checkpoint or ZIP in
+    # this workspace. This is containment of known artifacts, not forensic
+    # recovery of arbitrary edited copies outside managed storage.
+    roots = set()
+    for candidate in (file.absolute(), Path(context).absolute() if context else file.absolute()):
+        for parent in (candidate, *candidate.parents):
+            if parent.name == 'projects':
+                roots.add(parent)
+    if not file.is_file():
+        return
+    indexes = []
+    for root in roots:
+        projects = list(root.iterdir())
+        if len(projects) > 1000:
+            raise FleetIntakeError('Workspace vượt giới hạn kiểm tra nguồn model.')
+        for project in projects:
+            managed = project / 'fleet_datasets'
+            if not managed.exists(): continue
+            for item in (project, managed):
+                if item.is_symlink() or (hasattr(item, 'is_junction') and item.is_junction()):
+                    raise FleetIntakeError('Không kiểm được nguồn model qua liên kết.')
+            index = managed / 'model-index.json'
+            if not index.is_file() or index.is_symlink() or index.stat().st_size > 1024 * 1024:
+                raise FleetIntakeError('Thiếu bằng chứng nguồn model; chưa dùng đường legacy.')
+            try:
+                value = json.loads(index.read_text(encoding='utf-8'))
+                import re
+                if (set(value) != {'schemaVersion', 'sha256'} or value['schemaVersion'] != 'FleetModelIndexV1'
+                        or not isinstance(value['sha256'], list) or len(value['sha256']) > 5000
+                        or any(not isinstance(h, str) or not re.fullmatch(r'[a-f0-9]{64}', h) for h in value['sha256'])):
+                    raise ValueError()
+                indexes.extend(value['sha256'])
+            except (OSError, ValueError, TypeError):
+                raise FleetIntakeError('Bằng chứng nguồn model không hợp lệ.') from None
+    if indexes:
+        import hashlib
+        digest = hashlib.sha256()
+        with file.open('rb') as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b''): digest.update(chunk)
+        if digest.hexdigest() in indexes:
+            raise FleetIntakeError(MESSAGE)

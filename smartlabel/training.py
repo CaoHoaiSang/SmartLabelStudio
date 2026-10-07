@@ -25,6 +25,7 @@ class TrainingConfig:
     patience: int = 15
     device: str = "auto"
     validate: bool = True
+    fleet_dataset: dict | None = None
 
 
 class TrainingJob:
@@ -49,7 +50,13 @@ class TrainingJob:
                 return
             self.on_line("KHỞI ĐỘNG TRAIN · Đang kiểm tra thiết bị CPU/CUDA…")
             from .fleet_boundaries import require_legacy_training_data
-            require_legacy_training_data(self.config.data)
+            if self.config.fleet_dataset is not None:
+                from .fleet_training import validate_managed_config
+                validate_managed_config(dict(self.config.__dict__))
+            else:
+                from .fleet_boundaries import require_legacy_model
+                require_legacy_training_data(self.config.data)
+                require_legacy_model(self.config.model, context=self.config.project_dir)
             device = best_ultralytics_device(self.config.device)
             if self.cancel_event.is_set():
                 self.on_line("ĐÃ DỪNG · Chưa mở tiến trình huấn luyện.")
@@ -78,6 +85,14 @@ class TrainingJob:
                 for line in output:
                     self.on_line(line.rstrip())
             code = self.process.wait()
+            if self.config.fleet_dataset is not None:
+                from .fleet_dataset import FleetDatasetClient
+                context = self.config.fleet_dataset
+                result = FleetDatasetClient.for_training(context).finish_training(context, code)
+                if code == 0 and result['state'] != 'complete':
+                    raise RuntimeError('Receiver chưa xác nhận lineage; run chưa được dùng tạo gói.')
+                if result['state'] == 'complete':
+                    self.on_line('ĐÃ GHI LINEAGE · ' + result['runId'])
         except Exception as exc:
             self.on_line(f"LỖI: {exc}")
             code = 1

@@ -14,8 +14,12 @@ def main() -> int:
         print("Thiếu cấu hình train", flush=True)
         return 2
     config = json.loads(sys.argv[1])
-    from .fleet_boundaries import require_legacy_training_data
+    if config.get('fleet_dataset') is not None:
+        from .fleet_training import run_managed_training
+        return run_managed_training(config)
+    from .fleet_boundaries import require_legacy_training_data, require_legacy_model
     require_legacy_training_data(config.get("data"))  # Also covers an older, already-running desktop launcher.
+    require_legacy_model(config.get("model"), context=config.get("project_dir"))
     print("Đang nạp thư viện huấn luyện Ultralytics…", flush=True)
     from ultralytics import YOLO
 

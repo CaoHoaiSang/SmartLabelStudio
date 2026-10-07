@@ -27,6 +27,11 @@ class DatasetManager:
     def __init__(self, store: ProjectStore):
         self.store = store
 
+    def fleet_dataset(self, project, *, port=17864):
+        """Explicit adapter; constructing it does not bind, export or grant rights."""
+        from .fleet_dataset import FleetDatasetClient
+        return FleetDatasetClient(self.store.project_dir(project), project.id, port=port)
+
     def summary(self, project: Project) -> dict[str, Any]:
         statuses = Counter(image.review_status for image in project.images)
         class_counts: Counter[int] = Counter()

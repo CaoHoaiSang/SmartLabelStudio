@@ -1181,6 +1181,13 @@ def hydro_dataset_qa(project: Project, store: ProjectStore, split_assignment: di
 
 
 def export_jetson_onnx(model_path: str | Path, output: str | Path, input_size: int = 224, opset: int = 12) -> Path:
+    from .fleet_boundaries import require_legacy_model
+    require_legacy_model(model_path)
+    return _export_jetson_onnx(model_path, output, input_size, opset)
+
+
+def _export_jetson_onnx(model_path, output, input_size=224, opset=12):
+    """Conversion primitive; callers own legacy containment or online Fleet gate."""
     source = Path(model_path).resolve()
     target = Path(output).resolve()
     if not source.is_file() or source.suffix.lower() != ".pt":
@@ -1238,6 +1245,33 @@ def write_hydro_model_bundle(
 ) -> Path:
     from .fleet_boundaries import require_legacy_project
     require_legacy_project(project)
+    from .fleet_boundaries import require_legacy_model
+    for source in models.values():
+        require_legacy_model(source)
+    return _write_hydro_model_bundle(project, output_dir, models, thresholds,
+        dataset_version=dataset_version, source_commit=source_commit,
+        camera_profile_ids=camera_profile_ids, geometry_profile_ids=geometry_profile_ids,
+        input_size=input_size, runtime_target=runtime_target, deployment_mode=deployment_mode,
+        release_evidence=release_evidence, operational_acceptance=operational_acceptance)
+
+
+def _write_hydro_model_bundle(
+    project: Project,
+    output_dir: str | Path,
+    models: dict[str, str | Path],
+    thresholds: dict[str, dict[str, float]],
+    *,
+    dataset_version: str,
+    source_commit: str,
+    camera_profile_ids: list[str],
+    geometry_profile_ids: list[str],
+    input_size: int = 224,
+    runtime_target: str = "jetson_nano_tensorrt_fp16",
+    deployment_mode: str = "shadow",
+    release_evidence: dict | None = None,
+    operational_acceptance: dict | None = None,
+    managed_label_distribution: dict | None = None,
+) -> Path:
     output = Path(output_dir).resolve()
     crop_code, _crop_display_name = validate_crop_identity(
         str(project.metadata.get("cropCode") or ""),
@@ -1285,11 +1319,21 @@ def write_hydro_model_bundle(
                 raise ValueError("Bằng chứng không khớp ONNX/schema/ngưỡng đang đóng gói.")
     label_distribution = {}
     for key in model_keys(project):
-        counts = Counter(
-            {"positive": "present", "negative": "absent"}.get(meaning_for(attrs[key], record.attributes.get(key)), "excluded")
-            for record in project.images
-            if record.review_status == "reviewed"
-        )
+        if managed_label_distribution is None:
+            counts = Counter(
+                {"positive": "present", "negative": "absent"}.get(meaning_for(attrs[key], record.attributes.get(key)), "excluded")
+                for record in project.images
+                if record.review_status == "reviewed"
+            )
+        else:
+            # Private managed writer only: the public legacy API has no override.
+            # Counts come from the credential-owning receiver's completed runs.
+            if (deployment_mode != "shadow" or set(managed_label_distribution) != set(attrs)
+                    or not isinstance(managed_label_distribution[key], dict)
+                    or set(managed_label_distribution[key]) != {"present", "absent"}
+                    or any(type(n) is not int or not 1 <= n <= 2000 for n in managed_label_distribution[key].values())):
+                raise ValueError("managed bundle requires verified binary training counts")
+            counts = Counter(managed_label_distribution[key])
         if counts["present"] < 1 or counts["absent"] < 1:
             raise ValueError(f"{key} requires reviewed present and absent samples before bundle export")
         label_distribution[key] = {"absent": counts["absent"], "present": counts["present"]}

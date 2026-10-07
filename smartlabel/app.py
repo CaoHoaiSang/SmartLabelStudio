@@ -697,6 +697,17 @@ class SmartLabelApp(ctk.CTk):
         except Exception as exc:
             messagebox.showerror("Import CaptureManifestV1 lỗi", str(exc))
 
+    def _open_fleet_dataset(self) -> None:
+        if self._project_job_busy() or not is_hydroponic_project(self.project):
+            messagebox.showinfo('Chưa mở snapshot', 'Mở project Hydro và đợi tác vụ hiện tại hoàn tất.', parent=self)
+            return
+        if not self.supplement_view.allow_leave():
+            return
+        from .fleet_dataset_view import FleetDatasetView
+        old = getattr(self, 'fleet_dataset_view', None)
+        if old is not None and old.winfo_exists(): old.close()
+        self.fleet_dataset_view = FleetDatasetView(self, self.project)
+
     def _open_fleet_intake(self) -> None:
         if self._project_job_busy() or not is_hydroponic_project(self.project):
             messagebox.showinfo("Chưa thể nhận Fleet", "Mở project Hydro và đợi tác vụ hiện tại hoàn tất.", parent=self)
@@ -971,7 +982,7 @@ class SmartLabelApp(ctk.CTk):
     def _project_job_busy(self) -> bool:
         # Keep ownership through completion callbacks, not just while the
         # subprocess is alive. Those callbacks register models on self.project.
-        return bool(self.import_in_progress or self.supplement_review_running or self.auto_label_running or self.evaluation_running
+        return bool(getattr(self, 'fleet_dataset_job', None) or self.import_in_progress or self.supplement_review_running or self.auto_label_running or self.evaluation_running
                 or self.training_preparation_running or self.running_training_task or self.batch_training_active
                 or self.running_rknn_task or self.rknn_batch_active or self.hydro_export_running)
 
@@ -3465,6 +3476,7 @@ class SmartLabelApp(ctk.CTk):
         tab = self.tabs.tab("DATASET")
         controls = self._card(tab, "EXPORT DATASET · ẢNH + TỌA ĐỘ NHÃN")
         controls.pack(side="left", fill="y", padx=(8, 5), pady=8)
+        self._button(controls, 'Snapshot dữ liệu khách', self._open_fleet_dataset, width=260).pack(padx=14, pady=6)
         ctk.CTkLabel(
             controls,
             text="Nút Train đã tự export dataset. Trang này dùng\nđể kiểm tra hoặc export thủ công khi cần.",
@@ -3842,6 +3854,7 @@ class SmartLabelApp(ctk.CTk):
         settings_card.pack(side="left", fill="y", padx=(8, 5), pady=8)
         settings = ctk.CTkScrollableFrame(settings_card, width=350, fg_color="transparent", corner_radius=0)
         settings.pack(fill="both", expand=True, padx=4, pady=(0, 8))
+        self._button(settings, 'Snapshot dữ liệu khách', self._open_fleet_dataset, width=300).pack(padx=14, pady=6)
         ctk.CTkLabel(settings, text="Task train", text_color=COLORS["muted"]).pack(anchor="w", padx=14, pady=(7, 1))
         self.train_task_menu = ctk.CTkOptionMenu(
             settings,
@@ -5865,6 +5878,10 @@ class SmartLabelApp(ctk.CTk):
                 self.after(100, self._drain_events)
 
     def _on_close(self) -> None:
+        if getattr(self, 'fleet_dataset_job', None):
+            self.fleet_dataset_job.stop()
+            messagebox.showinfo('Đang dừng snapshot/train', 'Đợi tác vụ đóng tiến trình và ghi trạng thái rồi đóng ứng dụng.', parent=self)
+            return
         if self.training_preparation_running:
             self._stop_training()
             messagebox.showinfo("Đang dừng chuẩn bị train",

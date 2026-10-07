@@ -1,5 +1,7 @@
 # DeltaX Smart Label Studio
 
+P4 B–E ngày 07/10/2026: [snapshot, custody và lineage có quản lý](docs/FLEET_DATASET_CUSTODY.md) đã có code/test cô lập. Chưa nạp P4, chưa train ảnh khách thật; candidate/phát hành includes_fleet vẫn đóng.
+
 Ứng dụng Windows độc lập để gán nhãn ảnh với sự hỗ trợ của AI. Dự án không điều khiển Robot và không thay đổi các chương trình Vision/Studio hiện có.
 
 ## Chức năng đã triển khai
