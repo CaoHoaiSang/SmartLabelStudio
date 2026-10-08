@@ -1,3 +1,9 @@
+## Managed train: tuần tự hóa gia hạn quyền — 08/10/2026
+
+Tránh watchdog và worker gửi chồng yêu cầu kiểm nguồn; chờ request đang chạy
+kết thúc trước khi báo lineage. Giữ fail-closed và hạn lease cũ. Xem
+[Fleet training lease](FLEET_TRAINING_LEASE_20261008.md).
+
 # Trạng thái tích hợp HydroFlow và SmartLabel — cập nhật 26/09/2026
 
 > 07/10/2026: nhánh `feature/fleet-lineage-model-delivery-20261007` bổ sung luồng phát hành model có nguồn Fleet. Xem [hợp đồng, cách dùng và giới hạn](FLEET_MANAGED_MODEL_DELIVERY.md). Trạng thái CI/triển khai nằm trong báo cáo đó.

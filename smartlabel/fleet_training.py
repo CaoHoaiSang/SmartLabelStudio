@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import hashlib
 from pathlib import Path
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 from time import monotonic
 
 from .fleet_dataset import FleetDatasetClient, _safe_path
@@ -17,6 +17,7 @@ class TrainingLease:
         self.gate_id = receipt['gateTokenId']
         self.deadline = receipt['deadline']
         self.stop_event = Event()
+        self.renew_lock = Lock()
         self.fatal = fatal or self._terminate_current_process
         self.thread = None
 
@@ -32,12 +33,17 @@ class TrainingLease:
             raise FleetIntakeError('Lease train đã hết hạn; không tiếp tục dùng ảnh.')
 
     def renew(self):
-        self.check()
-        receipt = self.client.renew_training(self.context)
-        if receipt['gateTokenId'] != self.gate_id:
-            raise FleetIntakeError('Lease đổi lượt train; đang dừng.')
-        self.check()  # A late renewal cannot bridge an expired local lease.
-        self.deadline = receipt['deadline']
+        # Main-thread checkpoints and the watchdog share one native receiver.
+        # A full source proof may exceed the watchdog's 20-second interval.
+        with self.renew_lock:
+            if self.stop_event.is_set():
+                return
+            self.check()
+            receipt = self.client.renew_training(self.context)
+            if receipt['gateTokenId'] != self.gate_id:
+                raise FleetIntakeError('Lease đổi lượt train; đang dừng.')
+            self.check()  # A late renewal cannot bridge an expired local lease.
+            self.deadline = receipt['deadline']
 
     def _watch(self):
         while not self.stop_event.wait(min(20, max(.05, self.deadline - monotonic() - 2))):
@@ -55,9 +61,12 @@ class TrainingLease:
 
     def __exit__(self, *_):
         self.stop_event.set()
-        # Network timeout is bounded; process exit also stops this daemon. Do
-        # not report a completed run until the parent has observed child exit.
-        self.thread.join(timeout=1)
+        # Drain the one in-flight request (transport timeout: 60 s) before the
+        # worker exits. Otherwise the parent's finish_train hits receiver_busy.
+        self.thread.join(timeout=65)
+        if self.thread.is_alive():
+            self.fatal()
+            raise FleetIntakeError('Chưa kết thúc lượt kiểm quyền; không báo train hoàn tất.')
 
 
 def validate_managed_config(config):
