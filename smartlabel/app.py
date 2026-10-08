@@ -20,6 +20,7 @@ from .ui_layout import StudioEntry
 from .dropdown import StudioOptionMenu
 
 from .annotation_canvas import AnnotationCanvas
+from .annotation_geometry import contains
 from .attribute_labels import HYDRO_VALUE_LABELS
 from .hydro_labels import model_attributes, model_keys, display_values as hydro_display_values, enforce_presence
 from .auto_label import Sam2Adapter, auto_label_project, mask_to_geometry
@@ -281,6 +282,7 @@ class SmartLabelApp(ctk.CTk):
         self.sam_click_busy = False
         self.sam_checkpoint = tk.StringVar(value=self.app_settings.get("sam_checkpoint", ""))
         self.annotation_geometry = tk.StringVar(value=self.app_settings.get("annotation_geometry", "RECT"))
+        self.orientation_snap = tk.BooleanVar(value=self.app_settings.get("orientation_snap", True))
         # This is a project training-mode switch, not a cosmetic preference.
         # Off: train the normal localization task. On: label/train attributes
         # as a second-stage Classification dataset.
@@ -311,6 +313,7 @@ class SmartLabelApp(ctk.CTk):
             "sam_checkpoint": self.sam_checkpoint.get(),
             "sam_config": self.sam_config.get(),
             "annotation_geometry": self.annotation_geometry.get(),
+            "orientation_snap": self.orientation_snap.get(),
         })
         self.settings_path.write_text(json.dumps(self.app_settings, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -1494,9 +1497,13 @@ class SmartLabelApp(ctk.CTk):
         self.geometry_selector.pack(side="left", padx=4, pady=6)
         self.to_obb_button = self._button(geometry_bar, "SEG/RECT → OBB", self._convert_selected_to_obb, width=145, color="#48657a", tooltip="Tạo OBB quay sát vật từ polygon SEG; nếu chưa có SEG thì dùng RECT.")
         self.to_obb_button.pack(side="left", padx=5, pady=4)
-        self.orientation_button = self._button(geometry_bar, "Đặt hướng ORI", self._start_orientation, width=125, color="#8a6631", tooltip="Chọn vật rồi bấm điểm chỉ hướng đầu/nắp; tâm mũi tên lấy từ tâm RECT.")
+        self.orientation_button = self._button(geometry_bar, "Đặt hướng ORI", self._start_orientation, width=125, color="#8a6631", tooltip="Chọn vật rồi bấm phía đầu/nắp. Giữ khung OBB hiện có; tâm mũi tên lấy từ tâm khung.")
         self.orientation_button.pack(side="left", padx=5, pady=4)
-        ctk.CTkLabel(geometry_bar, text="OBB: góc 180° · ORI: hướng đầu–đuôi 360°", text_color="#7890a3", font=("Segoe UI", 10)).pack(side="left", padx=8)
+        self.orientation_snap_switch = ctk.CTkSwitch(
+            geometry_bar, text="Bám trục khung", variable=self.orientation_snap,
+            command=self._orientation_snap_changed, width=145, font=("Segoe UI", 11))
+        self.orientation_snap_switch.pack(side="left", padx=8, pady=6)
+        ToolTip(self.orientation_snap_switch, "ORI 360°: bám cạnh gần nhất của OBB, vẫn chọn được đầu/đuôi và hai trục. Tắt để đặt hướng tự do. Kéo chấm vàng để sửa hướng; kéo chấm trắng ngoài khung để xoay OBB (Shift: nấc 15°).")
 
         toolbar = ctk.CTkFrame(tab, height=48, corner_radius=10, fg_color=COLORS["panel2"])
         toolbar.pack(fill="x", padx=8, pady=(3, 5))
@@ -1600,6 +1607,7 @@ class SmartLabelApp(ctk.CTk):
         self.current_image_label.pack(side="left", fill="x", expand=True)
         self.canvas = AnnotationCanvas(center, self._annotation_changed, self._annotation_selected, self._sam_prompt_added, self._view_changed)
         self.canvas.set_geometry_mode(self.annotation_geometry.get().lower())
+        self.canvas.orientation_snap = self.orientation_snap.get()
         self.canvas.pack(fill="both", expand=True, padx=5, pady=5)
         zoom_panel = ctk.CTkFrame(center, corner_radius=12, fg_color="#122331", border_width=1, border_color="#31516a")
         zoom_panel.place(relx=1.0, rely=1.0, x=-18, y=-18, anchor="se")
@@ -1765,10 +1773,26 @@ class SmartLabelApp(ctk.CTk):
         if not self._selected_annotation():
             messagebox.showinfo("Chưa chọn vật", "Hãy chọn một RECT/SEG/OBB trước, sau đó đặt hướng ORI.")
             return
-        self.geometry_selector.set("ORI")
-        self._geometry_changed("ORI")
+        # ORI is additional semantic data, not a conversion of the object's box.
+        # Cancel stale SAM work before entering manual direction/edit mode.
+        self._pause_sam_for_editing()
+        if self.annotation_geometry.get() not in {"OBB", "ORI"}:
+            self.geometry_selector.set("ORI")
+            self._geometry_changed("ORI")
+        self.canvas.orientation_snap = self.orientation_snap.get()
         self.canvas.set_mode("orientation")
-        self._set_status("ORI: bấm điểm chỉ về phía đầu/nắp của vật")
+        self._set_status("ORI: bấm phía đầu/nắp · giữ khung OBB · bám trục khung nếu bật")
+
+    def _orientation_snap_changed(self) -> None:
+        self.canvas.orientation_snap = self.orientation_snap.get()
+        self._save_app_settings()
+
+    def _pause_sam_for_editing(self) -> None:
+        self.sam_click_enabled.set(False)
+        self.sam_click_request_version += 1
+        self.sam_click_busy = False
+        self.sam_request_versions.clear()
+        self.canvas.clear_prompts()
 
     def _convert_selected_to_obb(self) -> None:
         ann = self._selected_annotation()
@@ -1789,12 +1813,15 @@ class SmartLabelApp(ctk.CTk):
         ann.confidence = None
         ann.approved = False
         self._annotation_changed()
+        self._pause_sam_for_editing()
         self.geometry_selector.set("OBB")
         self._geometry_changed("OBB")
         self.canvas.redraw()
         self._annotation_selected(ann.id)
 
     def _set_tool(self, tool: str) -> None:
+        if tool not in {"sam_click", "sam_positive", "sam_negative"}:
+            self._pause_sam_for_editing()
         self.canvas.set_mode(tool)
         self._set_status(f"Công cụ: {tool}")
 
@@ -3108,7 +3135,8 @@ class SmartLabelApp(ctk.CTk):
             if len(ann.bbox) != 4:
                 continue
             bx, by, width, height = ann.bbox
-            if bx <= x <= bx + width and by <= y <= by + height:
+            inside = contains(ann.obb, x, y) if len(ann.obb) == 4 else bx <= x <= bx + width and by <= y <= by + height
+            if inside:
                 candidates.append((width * height, ann))
         return min(candidates, key=lambda item: item[0])[1] if candidates else None
 
@@ -3126,11 +3154,12 @@ class SmartLabelApp(ctk.CTk):
 
         existing = self._annotation_at_point(x, y)
         if existing is not None:
-            self.canvas.clear_prompts()
+            self._pause_sam_for_editing()
+            self.canvas.set_mode("select")
             self.canvas.selected_id = existing.id
             self._annotation_selected(existing.id)
             self.canvas.redraw()
-            self._set_status("Vật này đã có nhãn · đã chọn nhãn để tránh tạo trùng")
+            self._set_status("Đã chọn nhãn có sẵn · SAM OFF để kéo/sửa khung, xoay OBB hoặc đặt ORI")
             return
 
         checkpoint_value = self.sam_checkpoint.get().strip()
@@ -5735,6 +5764,7 @@ class SmartLabelApp(ctk.CTk):
                                 # must be supplied by one additional user click.
                                 ann.kind = "polygon"
                                 ann.points = geometry_data["points"]
+                                ann.obb = geometry_data["obb"]
                             record.annotations.append(ann)
                             record.review_status = "draft"
                             self.canvas.clear_prompts()

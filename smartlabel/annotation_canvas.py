@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import tkinter as tk
+import math
 from typing import Callable
 
 from PIL import Image, ImageTk
 
 from .models import Annotation, ImageRecord, Project
+from .annotation_geometry import FIELDS, contains, direction, edit_obb, frame, translate
 
 
 class AnnotationCanvas(tk.Canvas):
@@ -27,6 +29,7 @@ class AnnotationCanvas(tk.Canvas):
         self.mode = "select"
         self.read_only = False
         self.geometry_mode = "rect"
+        self.orientation_snap = True
         self.active_class_id: int | None = None
         self.default_attributes: dict[str, str] = {}
         self.selected_id: str | None = None
@@ -107,6 +110,7 @@ class AnnotationCanvas(tk.Canvas):
     def undo(self) -> None:
         if self.read_only:
             return
+        self.cancel_action()
         if not self.record or not self.history:
             return
         self.future.append([ann.to_dict() for ann in self.record.annotations])
@@ -115,6 +119,7 @@ class AnnotationCanvas(tk.Canvas):
     def redo(self) -> None:
         if self.read_only:
             return
+        self.cancel_action()
         if not self.record or not self.future:
             return
         self.history.append([ann.to_dict() for ann in self.record.annotations])
@@ -207,7 +212,7 @@ class AnnotationCanvas(tk.Canvas):
             coords = [coord for point in ann.points for coord in self.to_canvas(*point)]
             self.create_polygon(*coords, outline=color, fill="", width=width, tags=("annotation", ann.id))
             geometry_drawn = "seg"
-        elif self.geometry_mode == "obb" and len(ann.obb) == 4:
+        elif self.geometry_mode in {"obb", "ori"} and len(ann.obb) == 4:
             coords = [coord for point in ann.obb for coord in self.to_canvas(*point)]
             self.create_polygon(*coords, outline=color, fill="", width=width, tags=("annotation", ann.id))
             geometry_drawn = "obb"
@@ -217,13 +222,13 @@ class AnnotationCanvas(tk.Canvas):
             x2, y2 = self.to_canvas(x + w, y + h)
             dash = () if self.geometry_mode in {"rect", "ori"} else (5, 3)
             self.create_rectangle(x1, y1, x2, y2, outline=color, width=width, dash=dash, tags=("annotation", ann.id))
-        if self.geometry_mode == "ori" and len(ann.orientation) == 2:
+        if self.geometry_mode in {"obb", "ori"} and len(ann.orientation) == 2:
             (cx, cy), (tx, ty) = ann.orientation
             c1 = self.to_canvas(cx, cy)
             c2 = self.to_canvas(tx, ty)
             self.create_line(*c1, *c2, fill=color, width=width + 1, arrow="last", arrowshape=(14, 17, 6), tags=("annotation", ann.id))
             self.create_oval(c1[0] - 5, c1[1] - 5, c1[0] + 5, c1[1] + 5, fill="#091119", outline=color, width=2, tags=("annotation", ann.id))
-            geometry_drawn = "ori"
+            geometry_drawn = "obb + ori" if geometry_drawn == "obb" else "ori"
         if len(ann.bbox) == 4:
             x, y, _w, _h = ann.bbox
             x1, y1 = self.to_canvas(x, y)
@@ -232,13 +237,42 @@ class AnnotationCanvas(tk.Canvas):
                 label += f"  {ann.confidence:.2f}"
             label += f" · {geometry_drawn.upper()}"
             self.create_text(x1 + 5, max(y1 - 5, self.offset_y + 12), text=label, fill=color, anchor="sw", font=("Segoe UI Semibold", 10), tags=("annotation", ann.id))
-        if selected and self.geometry_mode == "rect" and len(ann.bbox) == 4:
+        if selected and self.geometry_mode in {"rect", "obb", "ori"} and len(ann.bbox) == 4 and not self.read_only:
             x, y, w, h = ann.bbox
             x1, y1 = self.to_canvas(x, y)
             x2, y2 = self.to_canvas(x + w, y + h)
-            self.create_rectangle(x1 - 3, y1 - 3, x2 + 3, y2 + 3, outline="#eefaff", width=1, dash=(5, 3), tags=("focus", ann.id))
-            for _name, hx, hy in self._rect_handles(ann):
-                self.create_rectangle(hx - 4, hy - 4, hx + 4, hy + 4, fill="#eefaff", outline=color, width=2, tags=("focus", ann.id))
+            oriented = self.geometry_mode in {"obb", "ori"} and len(ann.obb) == 4
+            handles = self._obb_handles(ann) if oriented else self._rect_handles(ann)
+            if not oriented:
+                self.create_rectangle(x1 - 3, y1 - 3, x2 + 3, y2 + 3, outline="#eefaff", width=1, dash=(5, 3), tags=("focus", ann.id))
+            for name, hx, hy in handles:
+                if name == "rotate":
+                    a, b = ann.obb[0], ann.obb[1]
+                    self.create_line(*self.to_canvas((a[0]+b[0])/2, (a[1]+b[1])/2), hx, hy, fill="#eefaff", tags=("focus", ann.id))
+                    self.create_oval(hx-5, hy-5, hx+5, hy+5, fill="#eefaff", outline=color, width=2, tags=("focus", "rotate", ann.id))
+                else:
+                    self.create_rectangle(hx - 4, hy - 4, hx + 4, hy + 4, fill="#eefaff", outline=color, width=2, tags=("focus", ann.id))
+            if self.geometry_mode in {"obb", "ori"} and len(ann.orientation) == 2:
+                hx, hy = self.to_canvas(*ann.orientation[1])
+                self.create_oval(hx-6, hy-6, hx+6, hy+6, fill="#ffc75e", outline=color, width=2, tags=("focus", "direction_tip", ann.id))
+
+    def _obb_handles(self, ann: Annotation) -> list[tuple[str, float, float]]:
+        oriented = frame(ann.obb)
+        if not oriented:
+            return []
+        handles = []
+        for i, (corner, edge) in enumerate((("nw", "n"), ("ne", "e"), ("se", "s"), ("sw", "w"))):
+            a, b = ann.obb[i], ann.obb[(i+1) % 4]
+            handles.append((corner, *self.to_canvas(*a)))
+            handles.append((edge, *self.to_canvas((a[0]+b[0])/2, (a[1]+b[1])/2)))
+        cx, cy, _, _, _, _, _, _ = oriented
+        a, b = ann.obb[0], ann.obb[1]
+        mx, my = (a[0]+b[0])/2, (a[1]+b[1])/2
+        length = math.hypot(mx-cx, my-cy)
+        if length > 1e-6:
+            offset = 28 / self.scale
+            handles.append(("rotate", *self.to_canvas(mx+offset*(mx-cx)/length, my+offset*(my-cy)/length)))
+        return handles
 
     def _rect_handles(self, ann: Annotation) -> list[tuple[str, float, float]]:
         if len(ann.bbox) != 4:
@@ -254,21 +288,27 @@ class AnnotationCanvas(tk.Canvas):
         ]
 
     def _handle_at(self, canvas_x: float, canvas_y: float) -> str | None:
-        if self.geometry_mode != "rect" or not self.record or not self.selected_id:
+        if self.geometry_mode not in {"rect", "obb", "ori"} or not self.record or not self.selected_id:
             return None
         ann = next((item for item in self.record.annotations if item.id == self.selected_id), None)
         if not ann:
             return None
-        for name, hx, hy in self._rect_handles(ann):
+        if self.geometry_mode in {"obb", "ori"} and len(ann.orientation) == 2:
+            hx, hy = self.to_canvas(*ann.orientation[1])
+            if abs(canvas_x-hx) <= 9 and abs(canvas_y-hy) <= 9:
+                return "direction"
+        handles = self._obb_handles(ann) if self.geometry_mode in {"obb", "ori"} and len(ann.obb) == 4 else self._rect_handles(ann)
+        for name, hx, hy in handles:
             if abs(canvas_x - hx) <= 9 and abs(canvas_y - hy) <= 9:
                 return name
         return None
 
-    def to_image(self, canvas_x: float, canvas_y: float) -> tuple[float, float]:
+    def to_image(self, canvas_x: float, canvas_y: float, *, clamp: bool = True) -> tuple[float, float]:
         if not self.image:
             return 0.0, 0.0
-        x = min(max((canvas_x - self.offset_x) / self.scale, 0), self.image.width)
-        y = min(max((canvas_y - self.offset_y) / self.scale, 0), self.image.height)
+        x, y = (canvas_x - self.offset_x) / self.scale, (canvas_y - self.offset_y) / self.scale
+        if clamp:
+            x, y = min(max(x, 0), self.image.width), min(max(y, 0), self.image.height)
         return x, y
 
     def to_canvas(self, x: float, y: float) -> tuple[float, float]:
@@ -282,13 +322,15 @@ class AnnotationCanvas(tk.Canvas):
             self._pan_press(event)
             return
         if self.mode == "select":
+            if self.space_pressed:
+                self._pan_press(event)
+                return
             handle = self._handle_at(event.x, event.y)
             if handle and self.selected_id:
                 ann = next((item for item in self.record.annotations if item.id == self.selected_id), None)
                 if ann:
-                    self.checkpoint()
                     self.edit_state = {
-                        "id": ann.id, "handle": handle, "start": self.to_image(event.x, event.y),
+                        "id": ann.id, "handle": handle, "start": self.to_image(event.x, event.y, clamp=handle != "rotate"),
                         "bbox": list(ann.bbox), "points": [list(p) for p in ann.points],
                         "obb": [list(p) for p in ann.obb], "orientation": [list(p) for p in ann.orientation],
                         "moved": False,
@@ -301,15 +343,15 @@ class AnnotationCanvas(tk.Canvas):
                 if len(ann.bbox) != 4:
                     continue
                 x, y, w, h = ann.bbox
-                if x <= image_x <= x + w and y <= image_y <= y + h:
+                inside = contains(ann.obb, image_x, image_y) if self.geometry_mode in {"obb", "ori"} and len(ann.obb) == 4 else x <= image_x <= x + w and y <= image_y <= y + h
+                if inside:
                     candidates.append((w * h, ann.id))
             selected = min(candidates)[1] if candidates else None
             if selected is None or self.space_pressed:
                 self._pan_press(event)
-            elif self.geometry_mode == "rect":
+            elif self.geometry_mode in {"rect", "obb", "ori"}:
                 ann = next((item for item in self.record.annotations if item.id == selected), None)
                 if ann:
-                    self.checkpoint()
                     self.edit_state = {
                         "id": ann.id, "handle": "move", "start": (image_x, image_y),
                         "bbox": list(ann.bbox), "points": [list(p) for p in ann.points],
@@ -340,22 +382,31 @@ class AnnotationCanvas(tk.Canvas):
         elif self.mode == "orientation":
             ann = next((item for item in self.record.annotations if item.id == self.selected_id), None)
             if ann and len(ann.bbox) == 4:
-                x, y, w, h = ann.bbox
-                center = [x + w / 2, y + h / 2]
-                tip = list(self.to_image(event.x, event.y))
+                value = direction(ann.bbox, ann.obb, self.to_image(event.x, event.y),
+                                  self.image.size, self.orientation_snap)
+                if value is None or value == ann.orientation:
+                    return
                 self.checkpoint()
-                ann.orientation = [center, tip]
+                ann.orientation = value
                 ann.source = "manual"
                 ann.confidence = None
                 ann.approved = False
                 self.record.review_status = "draft"
+                self.mode = "select"
+                self.configure(cursor="arrow")
                 self.on_change()
                 self.on_select(ann.id)
                 self.redraw()
 
     def _drag(self, event) -> None:
+        if self.read_only and self.edit_state:
+            self.cancel_action()
+            return
         if self.edit_state:
-            self._drag_rect_edit(event)
+            if self.edit_state["handle"] in {"move", "direction", "rotate"} or self.geometry_mode in {"obb", "ori"} and len(self.edit_state["obb"]) == 4:
+                self._drag_geometry_edit(event)
+            else:
+                self._drag_rect_edit(event)
             return
         if self.pan_start:
             self._pan_drag(event)
@@ -434,7 +485,12 @@ class AnnotationCanvas(tk.Canvas):
                 y2 = max(current_y, y1 + 3)
             x1, x2 = min(max(x1, 0), self.image.width), min(max(x2, 0), self.image.width)
             y1, y2 = min(max(y1, 0), self.image.height), min(max(y2, 0), self.image.height)
-        ann.bbox = [x1, y1, max(3, x2 - x1), max(3, y2 - y1)]
+        new_bbox = [x1, y1, max(3, x2 - x1), max(3, y2 - y1)]
+        if new_bbox == ann.bbox:
+            return
+        if not self.edit_state["moved"]:
+            self._checkpoint_edit()
+        ann.bbox = new_bbox
         old_x, old_y, old_w, old_h = self.edit_state["bbox"]
         new_x, new_y, new_w, new_h = ann.bbox
         def transform(points):
@@ -447,6 +503,42 @@ class AnnotationCanvas(tk.Canvas):
         ann.orientation = transform(self.edit_state["orientation"])
         self.edit_state["moved"] = True
         self.redraw()
+
+    def _drag_geometry_edit(self, event) -> None:
+        state = self.edit_state
+        if not state or not self.record or not self.image:
+            return
+        ann = next((item for item in self.record.annotations if item.id == state["id"]), None)
+        if ann is None:
+            return
+        point = self.to_image(event.x, event.y, clamp=state["handle"] != "rotate")
+        if not state["moved"] and math.dist(point, state["start"]) < 1e-6:
+            return
+        if state["handle"] == "move":
+            value = translate(state, point[0]-state["start"][0], point[1]-state["start"][1], self.image.size)
+        elif state["handle"] == "direction":
+            tip = direction(state["bbox"], state["obb"], point, self.image.size, self.orientation_snap)
+            if tip is None:
+                return
+            value = {name: state[name] for name in FIELDS}
+            value["orientation"] = tip
+        else:
+            value = edit_obb(state, state["handle"], state["start"], point, self.image.size,
+                             snap_rotation=bool(getattr(event, "state", 0) & 1))
+        if value is None or all(getattr(ann, name) == value[name] for name in FIELDS):
+            return
+        if not state["moved"]:
+            self._checkpoint_edit()
+        for name in FIELDS:
+            setattr(ann, name, value[name])
+        state["moved"] = True
+        self.redraw()
+
+    def _checkpoint_edit(self) -> None:
+        # A cancelled drag must preserve even a full 50-entry history and redo.
+        self.edit_state["history_before"] = list(self.history)
+        self.edit_state["future_before"] = list(self.future)
+        self.checkpoint()
 
     def _space_down(self, _event=None) -> None:
         self.space_pressed = True
@@ -517,6 +609,7 @@ class AnnotationCanvas(tk.Canvas):
             return
         if not self.record or not self.selected_id:
             return
+        self.cancel_action()
         self.checkpoint()
         self.record.annotations = [ann for ann in self.record.annotations if ann.id != self.selected_id]
         self.selected_id = None
@@ -525,6 +618,13 @@ class AnnotationCanvas(tk.Canvas):
         self.redraw()
 
     def cancel_action(self) -> None:
+        if self.edit_state and self.edit_state.get("moved") and self.record:
+            ann = next((item for item in self.record.annotations if item.id == self.edit_state["id"]), None)
+            if ann:
+                for name in FIELDS:
+                    setattr(ann, name, self.edit_state[name])
+                self.history = self.edit_state["history_before"]
+                self.future = self.edit_state["future_before"]
         self.drag_start = None
         self.edit_state = None
         self.polygon_points.clear()

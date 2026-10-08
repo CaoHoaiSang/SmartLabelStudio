@@ -1,3 +1,13 @@
+## Gán nhãn OBB + ORI — 08/10/2026
+
+Đặt hướng trên OBB giữ nguyên khung, chuyển SAM OFF và chặn kết quả đến trễ.
+ORI vẽ OBB đã có thay vì bbox RECT; thêm kéo khung/góc/cạnh, xoay OBB và
+kéo đầu mũi tên. Bám trục khung mặc định bật, chọn đủ bốn chiều của hai trục;
+tắt để đặt tự do. Shift+xoay bám nấc15°. Giữ schema/exporter, project thật,
+Hydro/Fleet và luồng train. Dùng project tạm để test, chưa nghiệm thu mask
+trên gói mì thật. Lưu việc/mở lại Studio để nạp source.
+[Cách dùng, nguyên nhân và phạm vi](OBB_ORI_EDITING.md).
+
 ## Managed train: tuần tự hóa gia hạn quyền — 08/10/2026
 
 Tránh watchdog và worker gửi chồng yêu cầu kiểm nguồn; chờ request đang chạy
