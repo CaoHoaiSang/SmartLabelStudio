@@ -120,13 +120,13 @@ class ObbOriCanvasTests(unittest.TestCase):
     def test_direction_tip_drag_snaps_parallel_without_changing_box(self):
         self.canvas.geometry_mode = "ori"
         before = copy.deepcopy(self.ann.obb)
-        self.drag(self.ann.orientation[1], (500, 330))
+        self.drag(self.canvas._direction_handle(self.ann), (500, 330))
         self.assertEqual(self.ann.obb, before)
         tip = self.ann.orientation[1]
         u = [before[1][i]-before[0][i] for i in (0, 1)]
         self.assertAlmostEqual((tip[0]-400)*u[1]-(tip[1]-300)*u[0], 0, places=5)
 
-    def test_direction_can_be_reversed_and_free_mode_keeps_clicked_tip(self):
+    def test_direction_can_be_reversed_and_free_mode_keeps_clicked_angle(self):
         self.canvas.mode = "orientation"
         self.canvas._press(SimpleNamespace(x=300, y=270, state=0))
         self.assertLess(self.ann.orientation[1][0], 400)
@@ -134,7 +134,101 @@ class ObbOriCanvasTests(unittest.TestCase):
         self.canvas.orientation_snap = False
         self.canvas.mode = "orientation"
         self.canvas._press(SimpleNamespace(x=490, y=320, state=0))
-        self.assertEqual(self.ann.orientation, [[400, 300], [490, 320]])
+        center, tip = self.ann.orientation
+        self.assertEqual(center, [400, 300])
+        self.assertAlmostEqual((tip[0]-400)*20-(tip[1]-300)*90, 0)
+        self.assertNotEqual(tip, [490, 320])
+        expected = direction(self.ann.bbox, self.ann.obb, (1300, 500), (800, 600), False)
+        self.assert_points_close(self.ann.orientation, expected)
+
+    def test_existing_arbitrary_length_is_not_changed_by_viewing(self):
+        before = self.ann.to_dict()
+        for mode in ("ori", "rect", "obb", "seg"):
+            self.canvas.set_geometry_mode(mode)
+        self.assertEqual(self.ann.to_dict(), before)
+        self.assertFalse(self.changes)
+        self.assertFalse(self.canvas.history)
+
+    def test_replacing_legacy_direction_normalizes_and_undo_restores_old_length(self):
+        before = self.ann.to_dict()
+        self.canvas.set_mode("orientation")
+        self.canvas._press(SimpleNamespace(x=401, y=301, state=0))
+        normalized = self.ann.to_dict()
+        expected = [(self.ann.obb[1][i]+self.ann.obb[2][i])/2 for i in (0, 1)]
+        self.assert_points_close([self.ann.orientation[1]], [expected])
+        self.assertEqual(len(self.changes), 1)
+        self.assertFalse(self.ann.approved)
+        self.canvas.undo()
+        self.assertEqual(self.record.annotations[0].to_dict(), before)
+        self.canvas.redo()
+        self.assertEqual(self.record.annotations[0].to_dict(), normalized)
+
+    def test_same_direction_near_far_click_is_noop_and_leaves_select_mode(self):
+        for snap in (True, False):
+            self.canvas.orientation_snap = snap
+            self.canvas.set_mode("orientation")
+            self.canvas._press(SimpleNamespace(x=403, y=301, state=0))
+            before = self.ann.to_dict()
+            changes, history = len(self.changes), len(self.canvas.history)
+            self.canvas.set_mode("orientation")
+            self.canvas._press(SimpleNamespace(x=700, y=400, state=0))
+            self.assertEqual(self.ann.to_dict(), before)
+            self.assertEqual(len(self.changes), changes)
+            self.assertEqual(len(self.canvas.history), history)
+            self.assertEqual(self.canvas.mode, "select")
+
+    def test_outside_image_click_and_drag_choose_unclamped_free_angle(self):
+        self.canvas.orientation_snap = False
+        self.canvas.set_mode("orientation")
+        self.canvas._press(SimpleNamespace(x=1400, y=800, state=0))
+        self.assert_points_close(self.ann.orientation,
+                                 direction(self.ann.bbox, self.ann.obb, (1400, 800), (800, 600), False))
+        self.drag(self.canvas._direction_handle(self.ann), (-600, -200))
+        self.assert_points_close(self.ann.orientation,
+                                 direction(self.ann.bbox, self.ann.obb, (-600, -200), (800, 600), False))
+
+    def test_normalized_tip_does_not_hide_resize_or_rotate_handles_at_any_zoom(self):
+        # Include all edge midpoints and the exact corner in free mode.
+        for target in ((600, 393), (200, 207), (350, 407), (450, 193), self.ann.obb[2]):
+            self.ann.orientation = direction(self.ann.bbox, self.ann.obb, target,
+                                             (800, 600), target != self.ann.obb[2])
+            for scale in (.15, .25, 1, 4):
+                self.canvas.scale = scale
+                self.canvas.offset_x, self.canvas.offset_y = 30, 50
+                self.canvas.redraw()
+                for name, x, y in self.canvas._obb_handles(self.ann):
+                    self.assertEqual(self.canvas._handle_at(x, y), name)
+                x, y = self.canvas._direction_handle(self.ann)
+                self.assertEqual(self.canvas._handle_at(x, y), "direction")
+
+    def test_normalized_rect_tip_does_not_hide_resize_handles(self):
+        self.ann.obb = []
+        self.ann.bbox = [100, 100, 80, 60]
+        self.canvas.geometry_mode = "ori"
+        self.ann.orientation = direction(self.ann.bbox, [], (200, 130), (800, 600))
+        for name, x, y in self.canvas._rect_handles(self.ann):
+            self.assertEqual(self.canvas._handle_at(x, y), name)
+        self.assertEqual(self.canvas._handle_at(*self.canvas._direction_handle(self.ann)), "direction")
+
+    def test_radial_drag_of_normalized_arrow_does_not_create_edit(self):
+        self.canvas.orientation_snap = False
+        self.ann.orientation = direction(self.ann.bbox, self.ann.obb, (500, 330), (800, 600), False)
+        before = self.ann.to_dict()
+        self.drag(self.canvas._direction_handle(self.ann), (700, 390))
+        self.assertEqual(self.ann.to_dict(), before)
+        self.assertFalse(self.changes)
+        self.assertFalse(self.canvas.history)
+
+    def test_cancel_direction_drag_restores_legacy_arrow_without_saving(self):
+        before = self.ann.to_dict()
+        x, y = self.canvas._direction_handle(self.ann)
+        self.canvas._press(SimpleNamespace(x=x, y=y, state=0))
+        self.canvas._drag(SimpleNamespace(x=300, y=300, state=0))
+        self.assertNotEqual(self.ann.to_dict(), before)
+        self.canvas.cancel_action()
+        self.assertEqual(self.ann.to_dict(), before)
+        self.assertFalse(self.changes)
+        self.assertFalse(self.canvas.history)
 
     def test_obb_hit_test_ignores_empty_envelope_corner(self):
         x, y, _, _ = self.ann.bbox
@@ -359,9 +453,16 @@ class ObbOriAppTests(unittest.TestCase):
         self.assertEqual(loaded.orientation, ann.orientation)
         self.assertEqual(len(DatasetManager._to_yolo_task(loaded, 800, 600, "obb").split()), 9)
         self.assertEqual(len(DatasetManager._to_yolo_task(loaded, 800, 600, "pose").split()), 11)
+        expected_tip = [(before[1][i]+before[2][i])/2 for i in (0, 1)]
+        for value, wanted in zip(loaded.orientation[1], expected_tip):
+            self.assertAlmostEqual(value, wanted)
+        pose = DatasetManager._to_yolo_task(loaded, 800, 600, "pose").split()
+        self.assertAlmostEqual(float(pose[8]), expected_tip[0]/800, places=6)
+        self.assertAlmostEqual(float(pose[9]), expected_tip[1]/600, places=6)
 
     def test_snap_preference_is_applied_and_persisted_without_geometry_changes(self):
         import json
+        self.ann.orientation = [[400, 300], [420, 315]]  # Old arbitrary length.
         before = self.ann.to_dict()
         self.app.orientation_snap.set(False)
         self.app._orientation_snap_changed()
@@ -396,7 +497,7 @@ class OrientedGeometryMathTests(unittest.TestCase):
         self.assertIsNone(direction([100, 100, 80, 60], [], (140, 130), (800, 600)))
 
     def test_direction_clipping_preserves_axis_at_image_boundary(self):
-        box = rotated_box(cx=60, cy=60, width=40, height=20, angle=25)
+        box = rotated_box(cx=10, cy=10, width=40, height=20, angle=25)
         center, tip = direction(envelope(box), box, (-100, -20), (800, 600))
         self.assertAlmostEqual((tip[0]-center[0])*math.sin(math.radians(25))
                                -(tip[1]-center[1])*math.cos(math.radians(25)), 0)

@@ -25,11 +25,24 @@ Chuyển sang thao tác tay chưa vô hiệu hóa kết quả SAM điểm đang 
    trong bốn chiều của hai trục OBB. Hai chiều ngược nhau khác nhau, vì ORI
    mang hướng 360°, còn góc OBB không tự phân biệt đầu–đuôi. Nếu cần hướng
    không song song cạnh, tắt công tắc này. RECT không có OBB thì dùng trục X/Y.
-6. Đặt hướng xong tự trở lại công cụ Chọn. Kéo **chấm vàng ở đầu mũi tên**
+   **Bấm chỉ chọn hướng, không chọn độ dài**: khi bám trục, mũi tên từ tâm
+   tới giữa cạnh ở phía đã chọn. Khi tắt bám trục, giữ góc tự do và đầu mũi
+   tên ở giao điểm của tia hướng với mép khung. Bấm gần/xa theo cùng hướng
+   cho cùng nhãn; bấm chính tâm không đủ xác định hướng nên không tạo nhãn.
+6. Đặt hướng xong tự trở lại công cụ Chọn. Kéo **chấm vàng trên mũi tên**
    để sửa hướng; khung OBB không thay đổi. Có thể bật/tắt bám trục khi sửa.
+   Chấm vàng nằm hơi lùi vào trong so với đầu mũi tên, để không đè lên tay
+   nắm trắng chỉnh cạnh/góc. Đây là tay nắm hiển thị, không phải keypoint
+   xuất nhãn; keypoint đầu hướng vẫn ở mép khung. Khi zoom nhỏ và vùng bắt
+   chuột chồng nhau, chọn tay nắm có tâm gần chuột nhất.
 7. Khi di chuyển, xoay hoặc đổi kích thước khung OBB, các hình học đi kèm
    (SEG, bbox và ORI) biến đổi theo cùng vật. Bbox được tính lại bao ngoài
    OBB khi chỉnh kích thước/xoay. Sửa nhãn chuyển về nháp, cần duyệt lại.
+
+Không ép mọi vật có mũi tên cùng số pixel: vật to/nhỏ có khung khác nhau.
+Quy tắc thống nhất là **tâm → mép khung**. Nếu OBB do SAM tạo vượt ảnh,
+đầu hướng được giới hạn ở biên ảnh trên cùng tia, không bẻ góc. Khi chỉnh
+khung sau đó, ORI đi theo phép biến đổi hình học hiện có của khung.
 
 Chọn lại RECT/SEG/OBB/ORI chỉ đổi cách xem, không xóa dữ liệu đã lưu. ORI
 hiển thị khung OBB nếu vật đã có OBB; nhãn RECT thuần vẫn dùng khung RECT.
@@ -44,6 +57,11 @@ Không đổi schema Project/Annotation, class, hợp đồng model, exporter OB
 dữ liệu/project thật hoặc quyền Fleet/Hydro. Không train hoặc tải model mới.
 Lựa chọn bám trục được lưu trong settings của app; mặc định mới không tự
 đổi hướng của các nhãn cũ, chỉ áp dụng khi người dùng đặt/kéo hướng.
+Chuẩn hóa độ dài cũng không chạy khi mở project, xem ảnh, đổi chế độ hay
+bật/tắt bám trục. Nhãn cũ giữ nguyên hai điểm đã lưu; đặt/kéo hướng lại mới
+áp dụng quy tắc mép khung và chuyển về nháp. Undo phục hồi cả độ dài cũ.
+Di chuyển/resize/xoay nhãn cũ vẫn biến đổi ORI theo khung như trước, không
+tự nâng nhãn cũ thành nhãn đã chuẩn hóa. Không sửa hàng loạt dữ liệu cũ.
 
 Kết quả SAM điểm/refine đến sau khi bắt đầu thao tác tay không được áp
 dụng. Chạy SAM ON trên vật chưa có nhãn vẫn giữ luồng tạo nhiều vật liên
@@ -61,8 +79,17 @@ RECT cũ, lưu rồi đọc lại và xuất đúng định dạng OBB/Pose hi�
 Trạng thái full Windows và GitHub Actions được ghi riêng trong báo cáo
 bàn giao; không coi fixture SAM là kiểm chất lượng mask trên gói mì thật.
 Nhóm cuối 33/33 ca mới đạt tại Windows; lượt full đầu 600/600 đạt trong
-489,289 giây. Sau bổ sung bảo toàn redo/lịch sử khi hủy kéo, đang chạy lại
-full cuối và CI đúng commit; không dùng lượt full trước thay bằng chứng này.
+489,289 giây. Lượt cuối bản OBB/ORI trước chuẩn hóa độ dài: 603/603 Windows
+đạt trong432,550 giây; GitHub Actions37766486899 đúng903f8ad success,
+601đạt/2skip tùy chọn (cả hai đạt ở Windows).
+
+Bổ sung chuẩn hóa độ dài trên nhánh
+`fix/smartlabel-ori-normalized-length-20261008`: 8 bài hình học mới và
+41 bài OBB/ORI canvas/app đạt (49 tổng). Có kiểm bốn chiều trên nhiều góc/
+tỷ lệ khung, góc tự do, giao góc/cạnh, RECT, biên ảnh, resize/xoay, tay nắm
+ở nhiều mức zoom, không đổi nhãn cũ, undo/redo/hủy, không thêm lịch sử khi
+chỉ đổi khoảng cách bấm, lưu/đọc và keypoint Pose thực xuất. Lượt full và
+CI của bản chuẩn hóa được ghi riêng trong báo cáo bàn giao sau khi hoàn tất.
 Windows dùng bộ vector LF đã được giữ trong audit 07/10 để tránh CRLF của
 checkout làm sai checksum; giữ nguyên parser/checksum/assertion và Git config.
 Phiên app đã mở phải lưu việc và mở lại để Python nạp source mới; không

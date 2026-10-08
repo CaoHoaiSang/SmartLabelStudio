@@ -1497,13 +1497,13 @@ class SmartLabelApp(ctk.CTk):
         self.geometry_selector.pack(side="left", padx=4, pady=6)
         self.to_obb_button = self._button(geometry_bar, "SEG/RECT → OBB", self._convert_selected_to_obb, width=145, color="#48657a", tooltip="Tạo OBB quay sát vật từ polygon SEG; nếu chưa có SEG thì dùng RECT.")
         self.to_obb_button.pack(side="left", padx=5, pady=4)
-        self.orientation_button = self._button(geometry_bar, "Đặt hướng ORI", self._start_orientation, width=125, color="#8a6631", tooltip="Chọn vật rồi bấm phía đầu/nắp. Giữ khung OBB hiện có; tâm mũi tên lấy từ tâm khung.")
+        self.orientation_button = self._button(geometry_bar, "Đặt hướng ORI", self._start_orientation, width=125, color="#8a6631", tooltip="Chọn vật rồi bấm phía đầu/nắp. Bấm chỉ chọn hướng; mũi tên tự kéo từ tâm tới mép khung, không phụ thuộc bấm gần hay xa.")
         self.orientation_button.pack(side="left", padx=5, pady=4)
         self.orientation_snap_switch = ctk.CTkSwitch(
             geometry_bar, text="Bám trục khung", variable=self.orientation_snap,
             command=self._orientation_snap_changed, width=145, font=("Segoe UI", 11))
         self.orientation_snap_switch.pack(side="left", padx=8, pady=6)
-        ToolTip(self.orientation_snap_switch, "ORI 360°: bám cạnh gần nhất của OBB, vẫn chọn được đầu/đuôi và hai trục. Tắt để đặt hướng tự do. Kéo chấm vàng để sửa hướng; kéo chấm trắng ngoài khung để xoay OBB (Shift: nấc 15°).")
+        ToolTip(self.orientation_snap_switch, "ORI 360°: bật để hướng song song trục OBB, đầu mũi tên ở giữa cạnh. Tắt để chọn góc tự do, đầu mũi tên vẫn tới mép khung. Kéo chấm vàng trên mũi tên để sửa hướng; chấm trắng ngoài khung để xoay OBB (Shift: nấc 15°).")
 
         toolbar = ctk.CTkFrame(tab, height=48, corner_radius=10, fg_color=COLORS["panel2"])
         toolbar.pack(fill="x", padx=8, pady=(3, 5))
@@ -1781,7 +1781,7 @@ class SmartLabelApp(ctk.CTk):
             self._geometry_changed("ORI")
         self.canvas.orientation_snap = self.orientation_snap.get()
         self.canvas.set_mode("orientation")
-        self._set_status("ORI: bấm phía đầu/nắp · giữ khung OBB · bám trục khung nếu bật")
+        self._set_status("ORI: bấm chỉ chọn hướng · mũi tên tự dài tới mép khung · bám trục nếu bật")
 
     def _orientation_snap_changed(self) -> None:
         self.canvas.orientation_snap = self.orientation_snap.get()

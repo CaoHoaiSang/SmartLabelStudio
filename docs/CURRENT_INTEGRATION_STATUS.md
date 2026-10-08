@@ -1,3 +1,12 @@
+## Chuẩn hóa chiều dài ORI theo khung — 08/10/2026
+
+Bấm/kéo ORI chỉ chọn góc, không chọn độ dài. Bám trục: tâm → giữa cạnh;
+tắt bám trục: tâm → giao tia với mép khung, giữ góc tự do. Chấm vàng kéo
+hướng lùi vào trong mũi tên để không che tay nắm resize trắng. Không tự đổi
+nhãn cũ khi xem/mở project/đổi settings, không đổi schema hoặc exporter.
+Lượt full/CI và nạp source ghi riêng trong báo cáo bàn giao.
+[Quy tắc, cách dùng và kiểm chứng](OBB_ORI_EDITING.md).
+
 ## Gán nhãn OBB + ORI — 08/10/2026
 
 Đặt hướng trên OBB giữ nguyên khung, chuyển SAM OFF và chặn kết quả đến trễ.

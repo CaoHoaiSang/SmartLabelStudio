@@ -31,21 +31,55 @@ def contains(corners, x, y):
 
 
 def direction(bbox, corners, point, image_size, snap=True):
+    """Choose an angle; place its tip on the box, independent of click radius.
+
+    Existing labels are not migrated: this rule only runs on ORI placement or
+    direction-handle editing. The existing affine box edits carry both points.
+    """
+    if (len(bbox) != 4 or len(point) != 2 or len(image_size) != 2
+            or any(not math.isfinite(v) for v in (*bbox, *point, *image_size))
+            or any(not math.isfinite(v) for p in corners for v in p)
+            or min(bbox[2:]) <= 0 or min(image_size) <= 0):
+        return None
     oriented = frame(corners)
     if oriented:
         cx, cy, ux, uy, vx, vy, _, _ = oriented
     else:
+        if corners:
+            return None
         x, y, w, h = bbox
         cx, cy, ux, uy, vx, vy = x+w/2, y+h/2, 1, 0, 0, 1
+        corners = [[x, y], [x+w, y], [x+w, y+h], [x, y+h]]
+    if not (0 <= cx <= image_size[0] and 0 <= cy <= image_size[1]):
+        return None
     dx, dy = point[0]-cx, point[1]-cy
     length = math.hypot(dx, dy)
-    if length < 1e-6:
+    if not math.isfinite(length) or length < 1e-6:
         return None
     if snap:
-        axis = max(((ux, uy), (-ux, -uy), (vx, vy), (-vx, -vy)),
-                   key=lambda axis: dx*axis[0] + dy*axis[1])
-        dx, dy = length*axis[0], length*axis[1]
+        dx, dy = max(((ux, uy), (-ux, -uy), (vx, vy), (-vx, -vy)),
+                     key=lambda axis: dx*axis[0] + dy*axis[1])
+    else:
+        dx, dy = dx/length, dy/length
+
+    # Ray/segment intersection also handles reversed corner order and old boxes
+    # skewed by RECT affine resizing. Do not assume perpendicular local axes.
+    distances = []
+    for a, b in zip(corners, corners[1:] + corners[:1]):
+        ex, ey = b[0]-a[0], b[1]-a[1]
+        denominator = dx*ey-dy*ex
+        if abs(denominator) < 1e-9:
+            continue
+        ax, ay = a[0]-cx, a[1]-cy
+        distance = (ax*ey-ay*ex)/denominator
+        segment = (ax*dy-ay*dx)/denominator
+        if distance > 1e-6 and -1e-9 <= segment <= 1+1e-9:
+            distances.append(distance)
+    if not distances:
+        return None
+    dx, dy = dx*min(distances), dy*min(distances)
     # Clip the whole ray, never individual coordinates (would change its angle).
+    # SAM can produce an OBB whose corners extend beyond the image.
     fraction = 1.0
     for center, delta, limit in ((cx, dx, image_size[0]), (cy, dy, image_size[1])):
         if delta > 0:

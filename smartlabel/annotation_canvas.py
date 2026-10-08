@@ -253,7 +253,7 @@ class AnnotationCanvas(tk.Canvas):
                 else:
                     self.create_rectangle(hx - 4, hy - 4, hx + 4, hy + 4, fill="#eefaff", outline=color, width=2, tags=("focus", ann.id))
             if self.geometry_mode in {"obb", "ori"} and len(ann.orientation) == 2:
-                hx, hy = self.to_canvas(*ann.orientation[1])
+                hx, hy = self._direction_handle(ann)
                 self.create_oval(hx-6, hy-6, hx+6, hy+6, fill="#ffc75e", outline=color, width=2, tags=("focus", "direction_tip", ann.id))
 
     def _obb_handles(self, ann: Annotation) -> list[tuple[str, float, float]]:
@@ -287,21 +287,29 @@ class AnnotationCanvas(tk.Canvas):
             ("sw", x1, y2), ("w", x1, my),
         ]
 
+    def _direction_handle(self, ann) -> tuple[float, float]:
+        # The normalized tip lies on a box edge/corner. Place the yellow grab
+        # point just inside the arrow so it cannot hide the box resize handle.
+        cx, cy = self.to_canvas(*ann.orientation[0])
+        tx, ty = self.to_canvas(*ann.orientation[1])
+        length = math.hypot(tx-cx, ty-cy)
+        fraction = 1-min(18/length, 1/3) if length > 1e-6 else 0
+        return cx+(tx-cx)*fraction, cy+(ty-cy)*fraction
+
     def _handle_at(self, canvas_x: float, canvas_y: float) -> str | None:
         if self.geometry_mode not in {"rect", "obb", "ori"} or not self.record or not self.selected_id:
             return None
         ann = next((item for item in self.record.annotations if item.id == self.selected_id), None)
         if not ann:
             return None
-        if self.geometry_mode in {"obb", "ori"} and len(ann.orientation) == 2:
-            hx, hy = self.to_canvas(*ann.orientation[1])
-            if abs(canvas_x-hx) <= 9 and abs(canvas_y-hy) <= 9:
-                return "direction"
         handles = self._obb_handles(ann) if self.geometry_mode in {"obb", "ori"} and len(ann.obb) == 4 else self._rect_handles(ann)
-        for name, hx, hy in handles:
-            if abs(canvas_x - hx) <= 9 and abs(canvas_y - hy) <= 9:
-                return name
-        return None
+        if self.geometry_mode in {"obb", "ori"} and len(ann.orientation) == 2:
+            handles = [("direction", *self._direction_handle(ann)), *handles]
+        # At small zoom, hit areas can overlap. Choose the closest visible dot.
+        candidates = [(math.hypot(canvas_x-hx, canvas_y-hy), name)
+                      for name, hx, hy in handles
+                      if abs(canvas_x-hx) <= 9 and abs(canvas_y-hy) <= 9]
+        return min(candidates)[1] if candidates else None
 
     def to_image(self, canvas_x: float, canvas_y: float, *, clamp: bool = True) -> tuple[float, float]:
         if not self.image:
@@ -330,7 +338,7 @@ class AnnotationCanvas(tk.Canvas):
                 ann = next((item for item in self.record.annotations if item.id == self.selected_id), None)
                 if ann:
                     self.edit_state = {
-                        "id": ann.id, "handle": handle, "start": self.to_image(event.x, event.y, clamp=handle != "rotate"),
+                        "id": ann.id, "handle": handle, "start": self.to_image(event.x, event.y, clamp=handle not in {"rotate", "direction"}),
                         "bbox": list(ann.bbox), "points": [list(p) for p in ann.points],
                         "obb": [list(p) for p in ann.obb], "orientation": [list(p) for p in ann.orientation],
                         "moved": False,
@@ -382,9 +390,12 @@ class AnnotationCanvas(tk.Canvas):
         elif self.mode == "orientation":
             ann = next((item for item in self.record.annotations if item.id == self.selected_id), None)
             if ann and len(ann.bbox) == 4:
-                value = direction(ann.bbox, ann.obb, self.to_image(event.x, event.y),
+                value = direction(ann.bbox, ann.obb, self.to_image(event.x, event.y, clamp=False),
                                   self.image.size, self.orientation_snap)
-                if value is None or value == ann.orientation:
+                if value is None:
+                    return
+                if len(ann.orientation) == 2 and all(math.dist(a, b) < 1e-6 for a, b in zip(value, ann.orientation)):
+                    self.set_mode("select")
                     return
                 self.checkpoint()
                 ann.orientation = value
@@ -511,7 +522,7 @@ class AnnotationCanvas(tk.Canvas):
         ann = next((item for item in self.record.annotations if item.id == state["id"]), None)
         if ann is None:
             return
-        point = self.to_image(event.x, event.y, clamp=state["handle"] != "rotate")
+        point = self.to_image(event.x, event.y, clamp=state["handle"] not in {"rotate", "direction"})
         if not state["moved"] and math.dist(point, state["start"]) < 1e-6:
             return
         if state["handle"] == "move":
@@ -519,6 +530,8 @@ class AnnotationCanvas(tk.Canvas):
         elif state["handle"] == "direction":
             tip = direction(state["bbox"], state["obb"], point, self.image.size, self.orientation_snap)
             if tip is None:
+                return
+            if len(ann.orientation) == 2 and all(math.dist(a, b) < 1e-6 for a, b in zip(tip, ann.orientation)):
                 return
             value = {name: state[name] for name in FIELDS}
             value["orientation"] = tip
