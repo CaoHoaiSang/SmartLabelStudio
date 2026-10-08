@@ -223,10 +223,11 @@ class AnnotationCanvas(tk.Canvas):
             dash = () if self.geometry_mode in {"rect", "ori"} else (5, 3)
             self.create_rectangle(x1, y1, x2, y2, outline=color, width=width, dash=dash, tags=("annotation", ann.id))
         if self.geometry_mode in {"obb", "ori"} and len(ann.orientation) == 2:
-            (cx, cy), (tx, ty) = ann.orientation
-            c1 = self.to_canvas(cx, cy)
-            c2 = self.to_canvas(tx, ty)
-            self.create_line(*c1, *c2, fill=color, width=width + 1, arrow="last", arrowshape=(14, 17, 6), tags=("annotation", ann.id))
+            c1, c2 = self._direction_display(ann)
+            # Short arrows at low zoom must not have a head longer than the line.
+            head_scale = min(1, math.dist(c1, c2)/40)
+            self.create_line(*c1, *c2, fill=color, width=width + 1, arrow="last",
+                             arrowshape=tuple(v*head_scale for v in (14, 17, 6)), tags=("annotation", ann.id))
             self.create_oval(c1[0] - 5, c1[1] - 5, c1[0] + 5, c1[1] + 5, fill="#091119", outline=color, width=2, tags=("annotation", ann.id))
             geometry_drawn = "obb + ori" if geometry_drawn == "obb" else "ori"
         if len(ann.bbox) == 4:
@@ -287,11 +288,18 @@ class AnnotationCanvas(tk.Canvas):
             ("sw", x1, y2), ("w", x1, my),
         ]
 
-    def _direction_handle(self, ann) -> tuple[float, float]:
-        # The normalized tip lies on a box edge/corner. Place the yellow grab
-        # point just inside the arrow so it cannot hide the box resize handle.
+    def _direction_display(self, ann: Annotation) -> tuple[tuple[float, float], tuple[float, float]]:
+        """Leave a small screen-space gap; never change stored/exported points."""
         cx, cy = self.to_canvas(*ann.orientation[0])
         tx, ty = self.to_canvas(*ann.orientation[1])
+        length = math.hypot(tx-cx, ty-cy)
+        fraction = 1-min(8/length, 1/4) if length > 1e-6 else 0
+        return (cx, cy), (cx+(tx-cx)*fraction, cy+(ty-cy)*fraction)
+
+    def _direction_handle(self, ann: Annotation) -> tuple[float, float]:
+        # Keep the yellow grab point behind the displayed arrowhead and separate
+        # from box handles. Hit-testing uses this same screen-space location.
+        (cx, cy), (tx, ty) = self._direction_display(ann)
         length = math.hypot(tx-cx, ty-cy)
         fraction = 1-min(18/length, 1/3) if length > 1e-6 else 0
         return cx+(tx-cx)*fraction, cy+(ty-cy)*fraction

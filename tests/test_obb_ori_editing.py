@@ -75,6 +75,93 @@ class ObbOriCanvasTests(unittest.TestCase):
                             if self.canvas.type(i) == "line"))
         self.assertEqual(len(self.canvas._obb_handles(self.ann)), 9)
 
+    def test_arrow_display_has_small_gap_at_every_zoom_without_changing_labels(self):
+        self.ann.orientation = direction(self.ann.bbox, self.ann.obb, (500, 330), (800, 600))
+        before = self.ann.to_dict()
+        for scale in (.1, .25, 1, 4):
+            self.canvas.scale = scale
+            self.canvas.offset_x, self.canvas.offset_y = 15, 40
+            for mode in ("ori", "obb"):
+                self.canvas.set_geometry_mode(mode)
+                start, end = self.canvas._direction_display(self.ann)
+                stored_start, stored_end = [self.canvas.to_canvas(*p) for p in self.ann.orientation]
+                self.assert_points_close([start], [stored_start])
+                self.assertAlmostEqual(math.dist(end, stored_end), min(8, math.dist(stored_start, stored_end)/4))
+                dx, dy = stored_end[0]-start[0], stored_end[1]-start[1]
+                self.assertAlmostEqual((end[0]-start[0])*dy-(end[1]-start[1])*dx, 0)
+                arrow = next(i for i in self.canvas.find_withtag(self.ann.id)
+                             if self.canvas.type(i) == "line" and self.canvas.itemcget(i, "arrow") == "last")
+                self.assert_points_close([self.canvas.coords(arrow)[:2], self.canvas.coords(arrow)[2:]], [start, end])
+                self.assertEqual(self.ann.to_dict(), before)
+        self.assertFalse(self.canvas.history)
+        self.assertFalse(self.changes)
+
+    def test_yellow_handle_matches_display_and_hit_test(self):
+        self.ann.orientation = direction(self.ann.bbox, self.ann.obb, (500, 330), (800, 600))
+        self.canvas.redraw()
+        handle = self.canvas._direction_handle(self.ann)
+        dot = next(i for i in self.canvas.find_withtag("direction_tip"))
+        x1, y1, x2, y2 = self.canvas.coords(dot)
+        self.assert_points_close([handle], [[(x1+x2)/2, (y1+y2)/2]])
+        self.assertEqual(self.canvas._handle_at(*handle), "direction")
+        start, end = self.canvas._direction_display(self.ann)
+        self.assertGreater(math.dist(start, handle), 0)
+        self.assertAlmostEqual(math.dist(handle, end), 18)
+
+    def test_short_and_zero_legacy_arrows_do_not_reverse_or_overflow_head(self):
+        for length in (0, .5, 2, 20, 100):
+            self.ann.orientation = [[400, 300], [400+length, 300]]
+            before = self.ann.to_dict()
+            self.canvas.redraw()
+            start, end = self.canvas._direction_display(self.ann)
+            self.assertGreaterEqual(end[0], start[0])
+            self.assertLessEqual(end[0], 400+length)
+            self.assertAlmostEqual(math.dist(start, end), length-min(8, length/4))
+            handle = self.canvas._direction_handle(self.ann)
+            self.assertLessEqual(start[0], handle[0])
+            self.assertLessEqual(handle[0], end[0])
+            arrow = next(i for i in self.canvas.find_withtag(self.ann.id)
+                         if self.canvas.type(i) == "line" and self.canvas.itemcget(i, "arrow") == "last")
+            head = [float(v) for v in self.canvas.itemcget(arrow, "arrowshape").split()]
+            self.assertLessEqual(max(head), math.dist(start, end))
+            self.assertEqual(self.ann.to_dict(), before)
+
+    def test_rect_view_hides_direction_without_deleting_it(self):
+        before = self.ann.to_dict()
+        self.canvas.set_geometry_mode("rect")
+        self.assertFalse(self.canvas.find_withtag("direction_tip"))
+        self.assertFalse(any(self.canvas.itemcget(i, "arrow") == "last"
+                             for i in self.canvas.find_withtag(self.ann.id)
+                             if self.canvas.type(i) == "line"))
+        self.assertEqual(self.ann.to_dict(), before)
+        self.canvas.set_geometry_mode("ori")
+        self.assertTrue(self.canvas.find_withtag("direction_tip"))
+        self.assertEqual(self.ann.to_dict(), before)
+
+    def test_ori_without_direction_or_obb_uses_rect_and_does_not_create_direction(self):
+        self.ann.orientation = []
+        self.ann.obb = []
+        before = self.ann.to_dict()
+        self.canvas.set_geometry_mode("ori")
+        self.assertFalse(self.canvas.find_withtag("direction_tip"))
+        rectangles = [self.canvas.coords(i) for i in self.canvas.find_withtag(self.ann.id)
+                      if self.canvas.type(i) == "rectangle"]
+        x, y, w, h = self.ann.bbox
+        self.assertIn([x, y, x+w, y+h], rectangles)
+        self.assertEqual(self.ann.to_dict(), before)
+
+    def test_display_gap_never_changes_pose_export_coordinates(self):
+        from smartlabel.dataset_manager import DatasetManager
+        self.ann.orientation = direction(self.ann.bbox, self.ann.obb, (500, 330), (800, 600))
+        before = DatasetManager._to_yolo_task(self.ann, 800, 600, "pose")
+        for scale in (.1, 1, 4):
+            self.canvas.scale = scale
+            self.canvas.redraw()
+            self.assertEqual(DatasetManager._to_yolo_task(self.ann, 800, 600, "pose"), before)
+        values = before.split()
+        self.assertAlmostEqual(float(values[8]), self.ann.orientation[1][0]/800, places=6)
+        self.assertAlmostEqual(float(values[9]), self.ann.orientation[1][1]/600, places=6)
+
     def test_move_translates_all_geometry_and_revokes_approval(self):
         before = copy.deepcopy(self.ann)
         self.drag((400, 300), (425, 315))

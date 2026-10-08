@@ -1,3 +1,12 @@
+## Khoảng hở mũi tên ORI — 08/10/2026
+
+Đầu mũi tên hiển thị lùi8px màn hình (tối đa1/4 chiều dài nếu ngắn) để
+không chạm cạnh khung. Thu đầu tam giác nếu zoom thấp; tay nắm vàng khớp
+vị trí hiển thị. Không đổi điểm hướng lưu/export/train, nhãn cũ hoặc schema.
+ORI thêm hướng360° trên OBB/RECT; RECT chỉ xem bbox thẳng và ẩn hướng,
+không xóa dữ liệu hướng khi đổi view. Local/CI ghi trong báo cáo bàn giao.
+[Chi tiết](OBB_ORI_EDITING.md).
+
 ## Chuẩn hóa chiều dài ORI theo khung — 08/10/2026
 
 Bấm/kéo ORI chỉ chọn góc, không chọn độ dài. Bám trục: tâm → giữa cạnh;

@@ -44,6 +44,24 @@ Quy tắc thống nhất là **tâm → mép khung**. Nếu OBB do SAM tạo vư
 đầu hướng được giới hạn ở biên ảnh trên cùng tia, không bẻ góc. Khi chỉnh
 khung sau đó, ORI đi theo phép biến đổi hình học hiện có của khung.
 
+### Khoảng hở hiển thị và khác biệt ORI / RECT
+
+Đầu mũi tên **hiển thị** lùi 8 pixel màn hình so với điểm đầu hướng được
+lưu, tối đa1/4 chiều dài mũi tên nếu khung nhỏ/zoom thấp. Giữ cùng tia,
+không đổi góc; khoảng hở không tăng theo zoom. Đầu tam giác thu nhỏ trên
+mũi tên ngắn để không dài hơn thân. Chấm vàng lùi tiếp phía sau đầu hiển
+thị và bắt chuột đúng tâm chấm vẽ. Không chỉnh tọa độ/project/settings,
+trạng thái duyệt, lịch sử undo hoặc keypoint xuất/train chỉ vì vẽ khoảng hở.
+
+- RECT: xem/chỉnh bbox chữ nhật thẳng theo trục ảnh, không vẽ hướng.
+- ORI: xem/chỉnh hướng360° bằng hai điểm tâm/đầu hướng. Nhãn có OBB thì
+  vẽ khung xoay đó và cho chỉnh/xoay khung; không có OBB thì dùng bbox RECT.
+- Chưa đặt hướng thì ORI chỉ có khung, có thể nhìn giống RECT; chọn ORI
+  không tự tạo dữ liệu hướng. SAM+ORI tạo hình học rồi yêu cầu một lần
+  bấm chọn đầu/đuôi. Đổi sang RECT chỉ ẩn hướng/OBB khi xem, không xóa chúng.
+- OBB/Pose/Detection xuất theo task đã chọn; chế độ xem không tự chuyển
+  model/task. Với gói mì cần khung xoay và đầu/đuôi, giữ OBB và đặt thêm ORI.
+
 Chọn lại RECT/SEG/OBB/ORI chỉ đổi cách xem, không xóa dữ liệu đã lưu. ORI
 hiển thị khung OBB nếu vật đã có OBB; nhãn RECT thuần vẫn dùng khung RECT.
 OBB có ORI hiển thị cả khung và mũi tên. Ctrl+Z/Ctrl+Y áp dụng cho chỉnh
@@ -94,3 +112,8 @@ Windows dùng bộ vector LF đã được giữ trong audit 07/10 để tránh 
 checkout làm sai checksum; giữ nguyên parser/checksum/assertion và Git config.
 Phiên app đã mở phải lưu việc và mở lại để Python nạp source mới; không
 cưỡng bức đóng phiên đang gán nhãn.
+
+Bản khoảng hở hiển thị bổ sung6bài canvas: khoảng hở nhiều zoom, chấm vàng
+khớp hit-test, mũi tên rất ngắn/zero legacy, RECT ẩn nhưng giữ hướng, ORI
+chưa có hướng và không đổi keypoint xuất. Kết quả local/CI cuối cùng ghi
+trong báo cáo bàn giao, không dùng CI của bản chuẩn hóa làm chứng cho bản này.
