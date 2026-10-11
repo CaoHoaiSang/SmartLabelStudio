@@ -5,6 +5,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     YOLO_CONFIG_DIR=/tmp/Ultralytics
 
+COPY constraints.txt /opt/deltax/constraints.txt
+ENV PIP_CONSTRAINT=/opt/deltax/constraints.txt
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libglib2.0-0 libgl1 libgomp1 libsm6 libxext6 libxrender1 \
     && rm -rf /var/lib/apt/lists/*
@@ -23,7 +26,7 @@ RUN pip install --no-cache-dir /tmp/rknn_toolkit2-2.2.0-cp310-cp310-manylinux_2_
         "scipy>=1.9.3" "tqdm>=4.64.1" "opencv-python-headless>=4.5.5.64" \
         "fast-histogram>=0.11" "numpy<=1.26.4" onnx==1.14.1 \
         onnxruntime==1.16.0 ultralytics==8.4.6
-RUN pip install --no-cache-dir "onnxslim>=0.1.71"
+RUN pip install --no-cache-dir onnxslim==0.1.71 && pip check
 
 COPY export_rknn.py /opt/deltax/export_rknn.py
 ENTRYPOINT ["python", "/opt/deltax/export_rknn.py"]

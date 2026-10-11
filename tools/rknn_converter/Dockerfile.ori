@@ -1,6 +1,6 @@
-FROM deltax-rknn-converter:2.2.0-v3
+FROM deltax-rknn-converter:2.2.0-v4
 COPY ori_runtime /opt/deltax/ori_runtime
-RUN pip install --no-cache-dir -r /opt/deltax/ori_runtime/requirements.txt
+RUN pip install --no-cache-dir -r /opt/deltax/ori_runtime/requirements.txt && pip check
 COPY export_ori.py /opt/deltax/export_ori.py
 ENV PYTHONPATH=/opt/deltax/ori_runtime YOLO_AUTOINSTALL=false
 ENTRYPOINT ["python", "/opt/deltax/export_ori.py"]

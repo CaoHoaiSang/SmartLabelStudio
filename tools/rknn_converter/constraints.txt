@@ -1,0 +1,11 @@
+# RKNN Toolkit 2.2.0 ABI and converter versions. Apply to every pip layer,
+# including the ORI child image, so later installs cannot replace NumPy 1.x.
+numpy==1.26.4
+torch==2.1.0+cpu
+torchvision==0.16.0+cpu
+protobuf==3.20.3
+onnx==1.14.1
+onnxruntime==1.16.0
+opencv-python==4.10.0.84
+opencv-python-headless==4.10.0.84
+onnxslim==0.1.71
