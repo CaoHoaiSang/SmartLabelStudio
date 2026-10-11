@@ -42,6 +42,23 @@ def label(angle=0, frame_angle=0):
 
 
 class OriDatasetTests(unittest.TestCase):
+    def test_epoch_checkpoint_metadata_survives_cancellation_and_refreshes_after_stripping(self):
+        from smartlabel.ori_worker import stamp_checkpoints
+        with TemporaryDirectory() as temp:
+            weights = Path(temp) / "weights"
+            weights.mkdir()
+            checkpoint = weights / "best.pt"
+            checkpoint.write_bytes(b"completed epoch")
+            trainer = SimpleNamespace(save_dir=temp)
+            stamp_checkpoints(trainer)
+            info = json.loads(checkpoint.with_suffix(".ori.json").read_text())
+            self.assertEqual(info["model_sha256"], hashlib.sha256(checkpoint.read_bytes()).hexdigest())
+            self.assertFalse((weights / "last.ori.json").exists())
+            checkpoint.write_bytes(b"stripped final model")
+            stamp_checkpoints(trainer)
+            self.assertNotEqual(info["model_sha256"], json.loads(checkpoint.with_suffix(".ori.json").read_text())["model_sha256"])
+            self.assertFalse(list(weights.glob("*.tmp")))
+
     def test_non_square_image_preserves_independent_corners_and_pixel_heading(self):
         ann = label(32, 32)
         values = [float(x) for x in annotation_to_ori(ann, 200, 120).split()]
@@ -92,6 +109,41 @@ class OriDatasetTests(unittest.TestCase):
 
 
 class StudioContractTests(unittest.TestCase):
+    def test_metadata_rejection_happens_before_opening_npu_and_legacy_still_loads(self):
+        from enum import Enum
+        from typing import Type, List
+        class Task(Enum):
+            DET = 0
+            SEG = 1
+            OBB = 2
+            ORI = 3
+        opened = []
+        class Predictor:
+            def __init__(self, **kwargs):
+                opened.append(kwargs)
+        tree = ast.parse((BUNDLE / "files" / "3.py").read_text(encoding="utf-8"))
+        cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "YOLORKNN")
+        namespace = {"Task":Task, "BaseYoloModel":object, "Path":Path, "hashlib":hashlib, "json":json, "Type":Type,"List":List,
+            **{name:Predictor for name in ("BaseRKNNYoloPredictor","DetRKNNPredictor","SegRKNNPredictor","OBBRKNNPredictor","OriRKNNPredictor")}}
+        exec(compile(ast.Module(body=[cls],type_ignores=[]),"Studio YOLORKNN","exec"),namespace)
+        with TemporaryDirectory() as temp:
+            model = Path(temp) / "ori.rknn"
+            model.write_bytes(b"synthetic model fixture")
+            manifest = {"task":"ori","target":"rk3588","compiler":"rknn-toolkit2==2.2.0", "output_layout":"deltax_orienty_5_heads_v1",
+                "output_shapes":[[1,65,s,s] for s in (80,40,20)]+[[1,1,8400]]*2,"imgsz":[640,640],"heading":"image_x_clockwise_degrees",
+                "names":{"0":"part"}, "model_sha256":hashlib.sha256(model.read_bytes()).hexdigest()}
+            for change in ({"model_sha256":"wrong"}, {"names":{"0":"other"}}, {"task":"pose"}, {"imgsz":[320,320]}):
+                model.with_suffix(".json").write_text(json.dumps({**manifest,**change}))
+                with self.assertRaises(ValueError):
+                    namespace["YOLORKNN"](Task.ORI,str(model),["part"])
+                self.assertEqual(opened,[])
+            model.with_suffix(".json").write_text(json.dumps(manifest))
+            namespace["YOLORKNN"](Task.ORI,str(model),["part"])
+            self.assertEqual(len(opened),1)
+            model.with_suffix(".json").unlink()
+            namespace["YOLORKNN"](Task.ORI,str(model),["part"])
+            self.assertEqual(len(opened),2)
+
     def test_all_four_directions_and_wrap_choose_nearest_frame_axis(self):
         snap = load_function("4.py", "regularize_orientBoxes", {"np": np, "PI": math.pi, "TWO_PI": 2 * math.pi})
         frames = np.repeat([[100., 60., 80., 32., math.radians(120)]], 4, axis=0)

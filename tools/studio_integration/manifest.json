@@ -22,7 +22,7 @@
     {
       "path": "deltax_pp_sw/ultralytics_rknn-new/YOLORKNN/model/yoloRKNN.py",
       "before_sha256": "92a044be0b1f99af537a5e5ef5544b51b7d4a02901115a2601e9bf87b427b373",
-      "after_sha256": "7333319fdddacbdcc7eb97a2daad173571765c04ad0e6e23f455d4dc9443d241",
+      "after_sha256": "2079d7f859faa6a2408cfee456e78f2989c30b0729a6523d6732e535994ad935",
       "payload": "files/3.py"
     },
     {

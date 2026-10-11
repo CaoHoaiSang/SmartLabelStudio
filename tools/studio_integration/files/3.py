@@ -19,6 +19,8 @@ class YOLORKNN(BaseYoloModel):
         metadata_path = Path(rknn_model_path).with_suffix(".json")
         if task == Task.ORI and metadata_path.is_file():
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            if metadata.get("task") not in {None, "ori", "orienty"}:
+                raise ValueError("Selected ORI task does not match model metadata task")
             if metadata.get("task") == "ori" or metadata.get("output_layout") == "deltax_orienty_5_heads_v1":
                 expected = [[1, 64 + len(names), side, side] for side in (80, 40, 20)] + [[1, 1, 8400], [1, 1, 8400]]
                 metadata_names = metadata.get("names", {})

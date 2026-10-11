@@ -11,6 +11,22 @@ ROOT = Path(__file__).resolve().parents[1]
 FORK = ROOT / "tools" / "ori_runtime"
 
 
+def stamp_checkpoints(trainer):
+    """Keep completed epoch checkpoints usable after a cancelled training job."""
+    for name in ("best.pt", "last.pt"):
+        checkpoint = Path(trainer.save_dir) / "weights" / name
+        if checkpoint.is_file():
+            sidecar = checkpoint.with_suffix(".ori.json")
+            staged = sidecar.with_suffix(".json.tmp")
+            staged.write_text(json.dumps({
+                "schema": "deltax_ori_checkpoint_v1", "task": "ori",
+                "runtime": "deltax-orienty-8.3.38-v1",
+                "heading": "image_x_clockwise_degrees",
+                "model_sha256": hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
+            }, indent=2), encoding="utf-8")
+            os.replace(staged, sidecar)
+
+
 def load_model(path):
     if "ultralytics" in sys.modules:
         raise RuntimeError("ORI phải chạy trong tiến trình riêng trước khi nạp Ultralytics.")
@@ -60,6 +76,7 @@ def main() -> int:
         import torch
         torch.set_num_threads(min(4, os.cpu_count() or 1))
         print("ORI DeltaX · khung xoay và hướng 360° · runtime riêng", flush=True)
+        model.add_callback("on_model_save", stamp_checkpoints)
         model.train(
             data=config["data"], epochs=int(config["epochs"]), imgsz=int(config["image_size"]),
             batch=int(config["batch"]), patience=int(config["patience"]),
@@ -67,14 +84,7 @@ def main() -> int:
             exist_ok=False, val=bool(config.get("validate", True)), workers=0, amp=False,
             plots=False, pretrained=False, perspective=0.0,
         )
-        for name in ("best.pt", "last.pt"):
-            checkpoint = Path(model.trainer.save_dir) / "weights" / name
-            if checkpoint.is_file():
-                checkpoint.with_suffix(".ori.json").write_text(json.dumps({
-                    "schema": "deltax_ori_checkpoint_v1", "task": "ori",
-                    "runtime": "deltax-orienty-8.3.38-v1",
-                    "heading": "image_x_clockwise_degrees", "model_sha256": hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
-                }, indent=2), encoding="utf-8")
+        stamp_checkpoints(model.trainer)  # Final optimizer stripping changes the bytes.
         print("TRAINING_COMPLETE", flush=True)
     elif action == "serve":
         import math

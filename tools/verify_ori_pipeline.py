@@ -62,8 +62,8 @@ def main():
     try:
         assert labeler.task == "ori" and labeler.names == {0: "part: test"}
         for _ in range(2):
-            predictions = labeler.predict(store.image_path(project, project.images[0]), .9, 96)
-            assert isinstance(predictions, list)
+            predictions = labeler.predict(store.image_path(project, project.images[0]), .00001, 96)
+            assert predictions and all(a.kind == "ori" and len(a.obb) == 4 and len(a.orientation) == 2 for a in predictions)
             assert process.poll() is None and labeler._ori.process is process
     finally:
         labeler.close()

@@ -13,7 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # so Docker does not pull the much larger CUDA runtime into the converter image.
 RUN pip install --no-cache-dir \
         torch==2.1.0+cpu torchvision==0.16.0+cpu \
-        --index-url https://download.pytorch.org/whl/cpu
+        --index-url https://download.pytorch.org/whl/cpu \
+        --extra-index-url https://pypi.org/simple
 
 COPY vendor/rknn_toolkit2-2.2.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl /tmp/rknn_toolkit2-2.2.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 RUN pip install --no-cache-dir /tmp/rknn_toolkit2-2.2.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl --no-deps \
