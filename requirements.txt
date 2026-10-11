@@ -7,3 +7,5 @@ ultralytics>=8.3,<9
 onnxruntime>=1.18,<2
 # Graph creation/validation during Hydro export (distinct from onnxruntime).
 onnx==1.19.1
+# DeltaX ORI runs the pinned fork in its own child process.
+-r tools/ori_runtime/requirements.txt
