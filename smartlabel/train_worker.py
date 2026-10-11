@@ -20,6 +20,11 @@ def main() -> int:
     from .fleet_boundaries import require_legacy_training_data, require_legacy_model
     require_legacy_training_data(config.get("data"))  # Also covers an older, already-running desktop launcher.
     require_legacy_model(config.get("model"), context=config.get("project_dir"))
+    if config.get("task") == "ori":
+        # No standard Ultralytics import has occurred in this child process.
+        from . import ori_worker
+        sys.argv = [sys.argv[0], "train", json.dumps(config, ensure_ascii=False)]
+        return ori_worker.main()
     print("Đang nạp thư viện huấn luyện Ultralytics…", flush=True)
     from ultralytics import YOLO
 

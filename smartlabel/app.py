@@ -1049,7 +1049,7 @@ class SmartLabelApp(ctk.CTk):
         self.train_model_entry.delete(0, tk.END)
         default_model = "yolo11n-cls.pt" if project.attribute_classification_enabled else {
             "detect": "yolo11n.pt", "segment": "yolo11n-seg.pt",
-            "obb": "yolo11n-obb.pt", "pose": "yolo11n-pose.pt",
+            "obb": "yolo11n-obb.pt", "ori": "deltax-yolov8n-ori", "pose": "yolo11n-pose.pt",
         }.get(self.last_localization_task, "yolo11n.pt")
         self.train_model_entry.insert(0, view.get("train_model", default_model))
         for widget in (self.train_log, self.auto_log):
@@ -2312,7 +2312,7 @@ class SmartLabelApp(ctk.CTk):
         if hasattr(self, "train_task_menu"):
             if self.show_attribute_panel.get():
                 current_task = self.train_task_menu.get()
-                if current_task in {"detect", "segment", "obb", "pose"}:
+                if current_task in {"detect", "segment", "obb", "ori", "pose"}:
                     self.last_localization_task = current_task
                 self.train_task_menu.set("classify")
             elif self.train_task_menu.get() == "classify":
@@ -2360,7 +2360,7 @@ class SmartLabelApp(ctk.CTk):
                 self.train_task_menu.configure(values=["classify"])
                 self.train_task_menu.set("classify")
             else:
-                self.train_task_menu.configure(values=["detect", "segment", "obb", "pose"])
+                self.train_task_menu.configure(values=["detect", "segment", "obb", "ori", "pose"])
                 if self.train_task_menu.get() == "classify":
                     self.train_task_menu.set(self.last_localization_task or "detect")
         if hasattr(self, "classification_mode_label"):
@@ -3525,7 +3525,8 @@ class SmartLabelApp(ctk.CTk):
         self._button(controls, "Export thủ công RECT · Detection", lambda: self._export_yolo("detect"), width=260).pack(padx=14, pady=5)
         self._button(controls, "Export thủ công SEG · Segmentation", lambda: self._export_yolo("segment"), width=260).pack(padx=14, pady=5)
         self._button(controls, "Export thủ công OBB · Rotated Box", lambda: self._export_yolo("obb"), width=260).pack(padx=14, pady=5)
-        self._button(controls, "Export thủ công ORI · Pose 2 điểm", lambda: self._export_yolo("pose"), width=260).pack(padx=14, pady=5)
+        self._button(controls, "Export thủ công ORI · DeltaX", lambda: self._export_yolo("ori"), width=260).pack(padx=14, pady=5)
+        self._button(controls, "Export thủ công Pose · 2 điểm", lambda: self._export_yolo("pose"), width=260).pack(padx=14, pady=5)
         self.dataset_classification_section = ctk.CTkFrame(
             controls,
             fg_color="#0c1823",
@@ -3888,7 +3889,7 @@ class SmartLabelApp(ctk.CTk):
         self.train_task_menu = ctk.CTkOptionMenu(
             settings,
             width=330,
-            values=["detect", "segment", "obb", "pose", "classify"],
+            values=["detect", "segment", "obb", "ori", "pose", "classify"],
             command=self._train_task_changed,
         )
         self.train_task_menu.set("detect")
@@ -4192,7 +4193,7 @@ class SmartLabelApp(ctk.CTk):
             "detect": "yolo11n.pt",
             "segment": "yolo11n-seg.pt",
             "obb": "yolo11n-obb.pt",
-            "pose": "yolo11n-pose.pt",
+            "ori": "deltax-yolov8n-ori", "pose": "yolo11n-pose.pt",
             "classify": "yolo11n-cls.pt",
         }
         value = suggestions[self.train_task_menu.get()]
@@ -4371,9 +4372,9 @@ class SmartLabelApp(ctk.CTk):
         model_path = Path(self.evaluation_model_path.get()) if self.evaluation_model_path.get().strip() else None
         if model_path and model_path.is_file():
             try:
-                from ultralytics import YOLO
+                from .ori_runtime import inspect_checkpoint
 
-                task = str(YOLO(str(model_path)).task)
+                task = inspect_checkpoint(model_path)["task"]
             except Exception:
                 task = ""
         if task == "classify":
@@ -4772,18 +4773,13 @@ class SmartLabelApp(ctk.CTk):
         self.deploy_model_path.set(str(source.resolve()))
 
         try:
-            from ultralytics import YOLO
-
-            model = YOLO(str(source))
-            if model.task not in {"detect", "segment", "classify"}:
-                messagebox.showerror(
-                    "RKNN chưa tương thích",
-                    "Bộ xuất RKNN hiện hỗ trợ Detection, Segmentation và Classification.\n"
-                    f"Model đã chọn có task: {model.task}.",
-                )
+            from .ori_runtime import inspect_checkpoint
+            info = inspect_checkpoint(source)
+            task = info["task"]
+            if task not in {"detect", "segment", "ori", "classify"}:
+                messagebox.showerror("RKNN chưa tương thích", f"Task {task} chưa có bộ giải mã RKNN phù hợp. Hỗ trợ DET, SEG, ORI DeltaX và Classification.")
                 return
-            class_count = len(model.names)
-            task = model.task
+            class_count = len(info["names"])
         except Exception as exc:
             messagebox.showerror("Không đọc được model", str(exc))
             return
@@ -4806,7 +4802,7 @@ class SmartLabelApp(ctk.CTk):
         except ValueError:
             messagebox.showerror("Sai image size", "Image size phải là số nguyên, ví dụ 640.")
             return
-        if task in {"detect", "segment"} and image_size != 640:
+        if task in {"detect", "segment", "ori"} and image_size != 640:
             messagebox.showerror(
                 "Image size không tương thích Radxa",
                 "RKNNRuntime và bộ giải mã DeltaX hiện tại cố định ở 640×640. Hãy đặt Image size = 640 rồi xuất lại.",
@@ -4823,7 +4819,7 @@ class SmartLabelApp(ctk.CTk):
                 messagebox.showerror("Chưa chọn nhóm", "Hãy chọn nhóm thuộc tính tương ứng với classifier này.")
                 return
             expected_labels = set(self.project.attribute_schema.get(classification_key, [])) if self.project else set()
-            model_labels = {str(value) for value in model.names.values()}
+            model_labels = {str(value) for value in info["names"].values()}
             if expected_labels and model_labels != expected_labels:
                 messagebox.showerror(
                     "Sai nhãn Classification",
@@ -4834,7 +4830,7 @@ class SmartLabelApp(ctk.CTk):
 
         self._set_button_enabled(self.deploy_export_button, False)
         self._set_button_enabled(self.deploy_stop_button, True)
-        task_label = "Classification" if task == "classify" else "SEG" if task == "segment" else "Detection"
+        task_label = "Classification" if task == "classify" else "SEG" if task == "segment" else "ORI DeltaX" if task == "ori" else "Detection"
         self.deploy_status_label.configure(text=f"Đang chuyển {task_label} PT → RKNN…", text_color=COLORS["warn"])
         self._append_log(
             self.train_log,
@@ -4929,8 +4925,8 @@ class SmartLabelApp(ctk.CTk):
 
     def _start_localization_training_with_auto_export(self) -> None:
         task = self.train_task_menu.get()
-        if task not in {"detect", "segment", "obb", "pose"}:
-            self._training_error("Task không hợp lệ", "Hãy chọn Detection, SEG, OBB hoặc ORI/Pose.")
+        if task not in {"detect", "segment", "obb", "ori", "pose"}:
+            self._training_error("Task không hợp lệ", "Hãy chọn Detection, SEG, OBB, ORI DeltaX hoặc Pose.")
             return
         self._begin_training_preparation(task, [])
 

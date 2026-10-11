@@ -65,6 +65,14 @@ def mask_to_geometry(mask, anchor_point: tuple[float, float] | None = None) -> d
 
 class YoloAutoLabeler:
     def __init__(self, model_path: str | Path, device: str = "auto"):
+        self._ori = None
+        if Path(model_path).with_suffix(".ori.json").is_file():
+            from .ori_runtime import OriAutoLabeler
+            self.model_path = Path(model_path).resolve()
+            self.device = best_ultralytics_device(device)
+            self._ori = OriAutoLabeler(self.model_path, self.device)
+            self.task, self.names = "ori", self._ori.names
+            return
         if importlib.util.find_spec("ultralytics") is None:
             raise RuntimeError("Chưa cài ultralytics. Chạy: pip install ultralytics")
         from ultralytics import YOLO
@@ -76,6 +84,8 @@ class YoloAutoLabeler:
         self.names = {int(k): str(v) for k, v in self.model.names.items()}
 
     def predict(self, image_path: str | Path, confidence: float = 0.25, image_size: int = 640) -> list[Annotation]:
+        if getattr(self, "_ori", None) is not None:
+            return self._ori.predict(image_path, confidence, image_size)
         results = self.model.predict(
             source=str(image_path),
             conf=confidence,
@@ -127,6 +137,10 @@ class YoloAutoLabeler:
                 annotations.append(ann)
         return annotations
 
+    def close(self):
+        if getattr(self, "_ori", None) is not None:
+            self._ori.close()
+
 
 def auto_label_project(
     store: ProjectStore,
@@ -145,37 +159,42 @@ def auto_label_project(
         raise ValueError("Bài Hydro cần luồng classifier thuộc tính toàn ảnh; không dùng detector Auto-Label.")
     started = time.perf_counter()
     labeler = YoloAutoLabeler(model_path, device=device)
-    # Synchronize class names while preserving stable IDs used by annotations.
-    known = {item.id for item in project.classes}
-    from .models import LabelClass
-    palette = ["#21c7ff", "#74e35c", "#ffb547", "#f55d76", "#ad8cff", "#42d9c8"]
-    for class_id, name in labeler.names.items():
-        if class_id not in known:
-            project.classes.append(LabelClass(class_id, name, palette[class_id % len(palette)]))
+    try:
+        # Synchronize class names while preserving stable IDs used by annotations.
+        known = {item.id for item in project.classes}
+        from .models import LabelClass
+        palette = ["#21c7ff", "#74e35c", "#ffb547", "#f55d76", "#ad8cff", "#42d9c8"]
+        for class_id, name in labeler.names.items():
+            if class_id not in known:
+                project.classes.append(LabelClass(class_id, name, palette[class_id % len(palette)]))
 
-    targets = [item for item in project.images if not unlabeled_only or not item.annotations]
-    stats = AutoLabelStats(device="CUDA" if labeler.device != "cpu" else "CPU", task=labeler.task)
-    for index, record in enumerate(targets, start=1):
-        if cancel_event and cancel_event.is_set():
-            break
-        if progress:
-            progress(index, len(targets), record.file_name)
-        try:
-            predictions = labeler.predict(store.image_path(project, record), confidence, image_size)
-            if replace_predictions:
-                record.annotations = [ann for ann in record.annotations if ann.source == "manual" or ann.approved]
-            record.annotations.extend(predictions)
-            if predictions and record.review_status == "unlabeled":
-                record.review_status = "draft"
-            stats.detections += len(predictions)
-            stats.processed += 1
-            if index % 10 == 0:
-                store.save(project)
-        except Exception:
-            stats.failed += 1
-    store.save(project)
-    stats.elapsed_seconds = time.perf_counter() - started
-    return stats
+        targets = [item for item in project.images if not unlabeled_only or not item.annotations]
+        stats = AutoLabelStats(device="CUDA" if labeler.device != "cpu" else "CPU", task=labeler.task)
+        for index, record in enumerate(targets, start=1):
+            if cancel_event and cancel_event.is_set():
+                break
+            if progress:
+                progress(index, len(targets), record.file_name)
+            try:
+                predictions = labeler.predict(store.image_path(project, record), confidence, image_size)
+                if replace_predictions:
+                    record.annotations = [ann for ann in record.annotations if ann.source == "manual" or ann.approved]
+                record.annotations.extend(predictions)
+                if predictions and record.review_status == "unlabeled":
+                    record.review_status = "draft"
+                stats.detections += len(predictions)
+                stats.processed += 1
+                if index % 10 == 0:
+                    store.save(project)
+            except Exception:
+                stats.failed += 1
+        store.save(project)
+        stats.elapsed_seconds = time.perf_counter() - started
+        return stats
+    finally:
+        close = getattr(labeler, "close", None)
+        if close:
+            close()
 
 
 class Sam2Adapter:

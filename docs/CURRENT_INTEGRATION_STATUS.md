@@ -1,3 +1,14 @@
+## ORI DeltaX train và RKNN — 11/10/2026
+
+Task `ori` dùng OBB + hướng có chiều trong fork riêng, giữ task `pose` riêng.
+Nối nút Xuất RKNN hiện có với contract 5 heads của Studio, metadata/SHA256,
+kiểm tra PT/ONNX/RKNN simulator. Auto-Label và đánh giá ORI cùng process riêng.
+Studio có patch kiểm tra contract, sửa OBB radians→degrees và bám hướng qua
+±180°; không đổi Template Matching hay góc bù Pick. Hướng dẫn, giới hạn và
+lệnh kiểm chứng trong [DELTAX_ORI_PIPELINE.md](DELTAX_ORI_PIPELINE.md).
+Source Windows có backup/checksum; chưa deploy/restart Radxa hay nghiệm thu
+độ chính xác/gắp vật thật. Local/CI ghi riêng trong báo cáo triển khai.
+
 ## Khoảng hở mũi tên ORI — 08/10/2026
 
 Đầu mũi tên hiển thị lùi8px màn hình (tối đa1/4 chiều dài nếu ngắn) để

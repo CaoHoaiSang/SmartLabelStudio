@@ -1,0 +1,106 @@
+--- a/deltax_pp_sw/AIXConnecter.py
++++ b/deltax_pp_sw/AIXConnecter.py
+@@ -576,10 +576,15 @@
+                 if conf < self._get_conf_threshold(name):
+                     continue
+ 
++                # ORI supplies directed degrees; legacy OBB JSON supplies radians.
+                 if 'deg' in item:
+-                    deg = item['deg']
++                    deg = float(item['deg'])
++                elif data.get('type') == 'obb' and 'angle' in item:
++                    deg = math.degrees(float(item['angle']))
+                 else:
+-                    deg = 0
++                    deg = 0.0
++                if not math.isfinite(deg):
++                    continue
+ 
+                 if self.model_type != "SEG" and self.is_rotated_box_touching_edge(x, y, w, h, deg, width, height):
+                     continue
+--- a/deltax_pp_sw/ultralytics_rknn-new/YOLORKNN/result/resultConverter.py
++++ b/deltax_pp_sw/ultralytics_rknn-new/YOLORKNN/result/resultConverter.py
+@@ -101,6 +101,9 @@
+                 # Remove angle key if it's None
+                 if entry["angle"] is None or pred_degs:
+                     del entry["angle"]
++                if is_obb and pred_degs is None:
++                    entry["deg"] = float(np.degrees(entry["angle"]))
++                    entry["angle_unit"] = "radians"
+                 if entry["id"] is None:
+                     del entry["id"]
+                 # Add segment points if masks available (as integer pixel coordinates)
+--- a/deltax_pp_sw/ultralytics_rknn-new/YOLORKNN/predictor/RKNNPredictor.py
++++ b/deltax_pp_sw/ultralytics_rknn-new/YOLORKNN/predictor/RKNNPredictor.py
+@@ -192,6 +192,12 @@
+ 
+ class OriRKNNPredictor(BaseRKNNYoloPredictor):
+     def _prepare_endnodes(self, infer_datas: List[np.ndarray]):
++
++        expected = [(1, 64 + len(self.names), side, side) for side in (80, 40, 20)] + [(1, 1, 8400), (1, 1, 8400)]
++        if len(infer_datas) != 5 or [tuple(t.shape) for t in infer_datas] != expected:
++            raise ValueError(f"ORI requires 5 heads at 640x640; expected {expected}, got {[tuple(t.shape) for t in infer_datas]}")
++        if any(not np.isfinite(t).all() for t in infer_datas):
++            raise ValueError("ORI outputs contain NaN or infinity")
+ 
+         defualt_branch=3
+         channels_boxes = 64
+--- a/deltax_pp_sw/ultralytics_rknn-new/YOLORKNN/model/yoloRKNN.py
++++ b/deltax_pp_sw/ultralytics_rknn-new/YOLORKNN/model/yoloRKNN.py
+@@ -1,3 +1,6 @@
++import hashlib
++import json
++from pathlib import Path
+ from typing import Type, List
+ from YOLORKNN.engine.model import BaseYoloModel, Task
+ from YOLORKNN.predictor.RKNNPredictor import BaseRKNNYoloPredictor
+@@ -13,6 +16,19 @@
+                  conf: int = 0.5, 
+                  ) -> None:
+         super().__init__()
++        metadata_path = Path(rknn_model_path).with_suffix(".json")
++        if task == Task.ORI and metadata_path.is_file():
++            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
++            if metadata.get("task") == "ori" or metadata.get("output_layout") == "deltax_orienty_5_heads_v1":
++                expected = [[1, 64 + len(names), side, side] for side in (80, 40, 20)] + [[1, 1, 8400], [1, 1, 8400]]
++                metadata_names = metadata.get("names", {})
++                if (metadata.get("output_layout") != "deltax_orienty_5_heads_v1" or metadata.get("output_shapes") != expected
++                        or metadata.get("imgsz") != [640, 640] or metadata.get("target") != "rk3588"
++                        or metadata.get("compiler") != "rknn-toolkit2==2.2.0"
++                        or metadata.get("heading") != "image_x_clockwise_degrees"
++                        or [metadata_names.get(str(i)) for i in range(len(names))] != list(names)
++                        or metadata.get("model_sha256") != hashlib.sha256(Path(rknn_model_path).read_bytes()).hexdigest()):
++                    raise ValueError("ORI metadata, labels, output contract or SHA256 does not match model/settings")
+         self._predictor = self.predict_map[task](
+             rknn_model_path=rknn_model_path,
+             names=names,
+--- a/deltax_pp_sw/ultralytics_rknn-new/YOLORKNN/utils/ops.py
++++ b/deltax_pp_sw/ultralytics_rknn-new/YOLORKNN/utils/ops.py
+@@ -181,7 +181,8 @@
+     rad_deg = (degs * (PI / 180.0)).astype(dtype).reshape(-1)
+     rad_r = r.astype(dtype).reshape(-1)
+ 
+-    delta = rad_delta_t_np(rad_deg, rad_r)
++    signed_delta = np.remainder(rad_deg - rad_r + PI, TWO_PI) - PI
++    delta = np.abs(signed_delta)
+ 
+     th1 = PI / 4.0
+     th2 = 3.0 * PI / 4.0
+@@ -189,7 +190,7 @@
+     m1 = (delta >= th1) & (delta < th2)
+     m2 = delta >= th2
+ 
+-    s = naive_is_nonneg_np(rad_r, rad_deg)  # True if (rad_r - rad_deg) >= 0
++    s = signed_delta < 0  # Choose direction using the wrapped difference, including +/-180 boundary.
+ 
+     # Case 0
+     new_rad_deg = rad_r.copy()
+@@ -201,6 +202,8 @@
+     # Case 2: +/- pi depending on sign
+     new_rad_deg_m2 = np.where(s, rad_r - PI, rad_r + PI)
+     new_rad_deg = np.where(m2, new_rad_deg_m2, new_rad_deg)
++
++    new_rad_deg = np.remainder(new_rad_deg + PI, TWO_PI) - PI
+ 
+     # swap w/h for case m1 only
+     new_w = np.where(m1, h, w)

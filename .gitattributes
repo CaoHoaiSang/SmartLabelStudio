@@ -4,3 +4,7 @@
 
 # Signed fixture manifests pin exact bytes, including original line endings.
 /tests/fixtures/fleet-model-releases/** -text
+
+# Studio patch manifests bind these exact source bytes across Windows/Linux.
+/tools/studio_integration/files/*.py -text -whitespace
+/tools/studio_integration/*.patch text eol=lf -whitespace

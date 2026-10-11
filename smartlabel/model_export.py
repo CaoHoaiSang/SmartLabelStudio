@@ -5,6 +5,8 @@ from pathlib import Path
 from threading import Event, Thread
 from typing import Callable
 import json
+import hashlib
+import tempfile
 import os
 import shutil
 import subprocess
@@ -13,6 +15,7 @@ import uuid
 
 
 CONVERTER_IMAGE = "deltax-rknn-converter:2.2.0-v3"
+ORI_CONVERTER_IMAGE = "deltax-rknn-ori:2.2.0-v1"
 
 
 def diagnose_rknn_environment(timeout: int = 8) -> tuple[bool, str]:
@@ -95,6 +98,22 @@ def inspect_deltax_rknn(path: str | Path, *, image_size: int, class_count: int, 
             "input_size": image_size,
             "classes": class_count,
         }
+    if task == "ori":
+        from tools.rknn_converter.export_ori import expected_shapes
+        expected = expected_shapes(class_count)
+        try:
+            manifest = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise RuntimeError("RKNN ORI cần file metadata .json đi kèm.") from exc
+        if (image_size != 640 or manifest.get("task") != "ori" or manifest.get("target") != "rk3588"
+                or manifest.get("output_layout") != "deltax_orienty_5_heads_v1"
+                or manifest.get("output_shapes") != expected or manifest.get("imgsz") != [640, 640]
+                or manifest.get("heading") != "image_x_clockwise_degrees"
+                or manifest.get("model_sha256") != hashlib.sha256(path.read_bytes()).hexdigest()
+                or manifest.get("verification", {}).get("rknn_simulator_vs_pt") is not True
+                or any(f"'shape': {shape}" not in text for shape in expected)):
+            raise RuntimeError("RKNN ORI sai layout, metadata, kiểm tra simulator hoặc SHA256.")
+        return {"path": str(path.resolve()), "size": path.stat().st_size, "compiler": "2.2.0", "target": "rk3588", "task": "ori", "layout": "deltax_orienty_5_heads_v1", "outputs": 5}
     if task not in {"detect", "segment"}:
         raise RuntimeError(f"Task RKNN chưa được hỗ trợ: {task}")
     expected = []
@@ -206,14 +225,23 @@ class RknnExportJob:
 
     def _ensure_image(self) -> None:
         self._raise_if_cancelled()
-        found = self._check(["docker", "image", "inspect", CONVERTER_IMAGE], timeout=20)
-        if found.returncode == 0:
-            return
-        self.on_line("Lần đầu sử dụng · đang dựng môi trường RKNN Toolkit 2.2.0…")
-        self._stream(
-            ["docker", "build", "-t", CONVERTER_IMAGE, str(self.config.converter_dir)],
-            cwd=self.config.converter_dir.parent.parent,
-        )
+        images = [CONVERTER_IMAGE, ORI_CONVERTER_IMAGE] if self.config.task == "ori" else [CONVERTER_IMAGE]
+        for image in images:
+            found = self._check(["docker", "image", "inspect", image], timeout=20)
+            if found.returncode == 0:
+                continue
+            self.on_line("Lần đầu sử dụng · đang dựng môi trường RKNN Toolkit 2.2.0…")
+            if image == ORI_CONVERTER_IMAGE:
+                with tempfile.TemporaryDirectory(prefix="deltax-ori-build-") as temp:
+                    context = Path(temp)
+                    shutil.copy2(self.config.converter_dir / "Dockerfile.ori", context / "Dockerfile")
+                    shutil.copy2(self.config.converter_dir / "export_ori.py", context / "export_ori.py")
+                    shutil.copytree(self.config.converter_dir.parent / "ori_runtime", context / "ori_runtime", ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.jpg"))
+                    code = self._stream(["docker", "build", "-t", image, str(context)])
+            else:
+                code = self._stream(["docker", "build", "-t", image, str(self.config.converter_dir)])
+            if code != 0:
+                raise RuntimeError(f"Không dựng được môi trường RKNN: {image} (code {code}).")
 
     def _stream(self, command: list[str], *, cwd: Path | None = None) -> int:
         self._raise_if_cancelled()
@@ -263,7 +291,7 @@ class RknnExportJob:
                 f"{model.parent}:/work:ro",
                 "-v",
                 f"{output.parent}:/output",
-                CONVERTER_IMAGE,
+                ORI_CONVERTER_IMAGE if self.config.task == "ori" else CONVERTER_IMAGE,
                 "--model",
                 f"/work/{model.name}",
                 "--output",

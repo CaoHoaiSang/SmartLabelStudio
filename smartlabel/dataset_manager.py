@@ -416,8 +416,23 @@ class DatasetManager:
     ) -> Path:
         task = task or ("segment" if segmentation else "detect")
         require_legacy_project(project, self.store)
-        if task not in {"detect", "segment", "obb", "pose"}:
+        if task not in {"detect", "segment", "obb", "pose", "ori"}:
             raise ValueError(f"Task YOLO không hỗ trợ: {task}")
+        if task == "ori":
+            from .ori_geometry import annotation_to_ori
+            problems = []
+            for record in project.images:
+                if reviewed_only and record.review_status != "reviewed":
+                    continue
+                for ann in record.annotations:
+                    try:
+                        if ann.class_id not in {item.id for item in project.classes}:
+                            raise ValueError("Class của nhãn ORI không có trong dự án.")
+                        annotation_to_ori(ann, record.width, record.height)
+                    except ValueError as exc:
+                        problems.append(f"{record.file_name} / {ann.id}: {exc}")
+            if problems:
+                raise ValueError(f"Có {len(problems)} nhãn ORI chưa hợp lệ; chưa xuất dataset:\n" + "\n".join(problems[:8]))
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         export_dir = self._unique_directory(
             self.store.project_dir(project) / "exports",
@@ -472,11 +487,20 @@ class DatasetManager:
             "names:",
         ]
         yaml_text.extend(f"  {item.id}: {item.name}" for item in project.classes)
+        if task == "ori":
+            yaml_text.append("deltax_ori_contract: corners_normalized_heading_v1")
         if task == "pose":
             yaml_text.extend(["kpt_shape: [2, 3]", "kpt_names:"])
             for item in project.classes:
                 yaml_text.extend([f"  {item.id}:", "    - center", "    - direction"])
-        (export_dir / "data.yaml").write_text("\n".join(yaml_text) + "\n", encoding="utf-8")
+        if task == "ori":
+            import yaml
+            dataset_yaml = yaml.safe_dump({"path": ".", "train": "images/train", "val": val_path,
+                "test": "images/test" if test_enabled else "", "names": {item.id: item.name for item in project.classes},
+                "deltax_ori_contract": "corners_normalized_heading_v1"}, allow_unicode=True, sort_keys=False)
+        else:
+            dataset_yaml = "\n".join(yaml_text) + "\n"
+        (export_dir / "data.yaml").write_text(dataset_yaml, encoding="utf-8")
         metadata = {
             "project_id": project.id,
             "reviewed_only": reviewed_only,
@@ -696,6 +720,9 @@ class DatasetManager:
 
     @classmethod
     def _to_yolo_task(cls, ann: Annotation, width: int, height: int, task: str) -> str:
+        if task == "ori":
+            from .ori_geometry import annotation_to_ori
+            return annotation_to_ori(ann, width, height)
         if task == "detect":
             return cls._to_yolo(ann, width, height, False)
         if task == "segment":

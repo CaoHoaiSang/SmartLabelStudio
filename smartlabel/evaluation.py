@@ -40,10 +40,9 @@ def evaluate_yolo_model(
     image_size: int,
     device: str,
     output_root: str | Path,
+    _model=None,
 ) -> dict[str, Any]:
     """Evaluate one Ultralytics model and return JSON-safe metrics."""
-    from ultralytics import YOLO
-
     model_path = Path(model_path).resolve()
     data_path = Path(data_path).resolve()
     if split not in {"val", "test"}:
@@ -53,7 +52,14 @@ def evaluate_yolo_model(
     if not data_path.exists():
         raise FileNotFoundError(f"Không tìm thấy dataset: {data_path}")
 
-    model = YOLO(str(model_path))
+    if _model is None:
+        from .ori_runtime import inspect_checkpoint, evaluate_ori_model
+        if inspect_checkpoint(model_path)["task"] == "ori":
+            return evaluate_ori_model(model_path, data_path=data_path, split=split, image_size=image_size, device=device, output_root=output_root)
+        from ultralytics import YOLO
+        model = YOLO(str(model_path))
+    else:
+        model = _model
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     metrics = model.val(
         data=str(data_path),
@@ -71,7 +77,7 @@ def evaluate_yolo_model(
     result: dict[str, Any] = {
         "model": str(model_path),
         "dataset": str(data_path),
-        "task": str(getattr(model, "task", "unknown")),
+        "task": "ori" if getattr(model, "task", "") == "orienty" else str(getattr(model, "task", "unknown")),
         "split": split,
         "image_size": image_size,
         "save_dir": str(getattr(metrics, "save_dir", "")),
@@ -88,6 +94,7 @@ def evaluate_yolo_model(
         "segment": (("seg", "Mask"), ("box", "Box")),
         "pose": (("pose", "Pose"), ("box", "Box")),
         "obb": (("box", "OBB"),),
+        "ori": (("deg", "ORI + OBB"),),
     }.get(task, (("box", "Box"),))
     for attr, label in metric_order:
         candidate = getattr(metrics, attr, None)
@@ -134,6 +141,9 @@ def evaluate_yolo_model(
     else:
         raise RuntimeError("Không đọc được chỉ số từ kết quả đánh giá của model này.")
 
+    if task == "ori":
+        result["box_metrics"] = {key: _float(getattr(metrics.box, attr, 0)) for key, attr in (("precision", "mp"), ("recall", "mr"), ("map50", "map50"), ("map50_95", "map"))}
+        result["orientation_contract"] = "Matched OBB IoU AND circular heading error: 10 degrees at threshold 0.5; 1 degree at 0.95."
     save_dir = Path(result["save_dir"])
     save_dir.mkdir(parents=True, exist_ok=True)
     (save_dir / "evaluation_summary.json").write_text(

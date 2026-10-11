@@ -303,6 +303,21 @@ class TrainingFeedbackTests(unittest.TestCase):
             self.app.training_preparation_job = None
             self.app.training_preparation_running = False
 
+    def test_ori_task_has_own_model_and_survives_attribute_mode_round_trip(self):
+        self.app._change_project_context(self.generic)
+        self.app._train_task_changed("ori")
+        self.app._apply_task_model()
+        self.assertEqual(self.app.train_task_menu.get(), "ori")
+        self.assertEqual(self.app.train_model_entry.get(), "deltax-yolov8n-ori")
+        self.assertIn("ori", self.app.train_task_menu.cget("values"))
+        self.assertIn("pose", self.app.train_task_menu.cget("values"))
+        self.app.show_attribute_panel.set(True)
+        self.app._toggle_attribute_panel()
+        self.assertEqual(self.app.train_task_menu.get(), "classify")
+        self.app.show_attribute_panel.set(False)
+        self.app._toggle_attribute_panel()
+        self.assertEqual(self.app.train_task_menu.get(), "ori")
+
 
 if __name__ == "__main__":
     unittest.main()

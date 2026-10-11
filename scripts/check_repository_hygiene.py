@@ -53,6 +53,9 @@ def forbidden_reason(path: str) -> str | None:
     normalized = PurePosixPath(path)
     if is_example(path):
         return None
+    # Pinned third-party Python source has packages named data/models; it is not runtime data.
+    if path.startswith("tools/ori_runtime/ultralytics/") and normalized.suffix.lower() in {".py", ".yaml", ".md"}:
+        return None
     if {part.lower() for part in normalized.parts[:-1]} & FORBIDDEN_DIRECTORIES:
         return "runtime/data directory"
     filename = normalized.name.lower()

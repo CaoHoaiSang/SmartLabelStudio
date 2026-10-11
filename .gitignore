@@ -41,3 +41,9 @@ exports/
 dist/
 build/
 
+# Pinned ORI source includes a Python package named data, not operator datasets.
+!tools/ori_runtime/ultralytics/data/
+!tools/ori_runtime/ultralytics/data/**/
+!tools/ori_runtime/ultralytics/data/**/*.py
+!tools/ori_runtime/ultralytics/data/*.py
+

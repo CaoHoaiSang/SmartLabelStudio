@@ -56,6 +56,10 @@ class PreparationProgress:
 def inspect_model(model_path, task, *, auto_classification=False):
     from .fleet_boundaries import require_legacy_model
     require_legacy_model(model_path)
+    if task == "ori":
+        from .ori_runtime import inspect_ori_model
+        inspect_ori_model(model_path)
+        return model_path
     if Path(model_path).is_file():
         from ultralytics import YOLO
         actual = YOLO(model_path).task

@@ -1,0 +1,5 @@
+FROM deltax-rknn-converter:2.2.0-v3
+COPY ori_runtime /opt/deltax/ori_runtime
+COPY export_ori.py /opt/deltax/export_ori.py
+ENV PYTHONPATH=/opt/deltax/ori_runtime YOLO_AUTOINSTALL=false
+ENTRYPOINT ["python", "/opt/deltax/export_ori.py"]

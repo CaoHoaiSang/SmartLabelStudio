@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "files": [
+    {
+      "path": "deltax_pp_sw/AIXConnecter.py",
+      "before_sha256": "cc040e3aaeb6bb6cce0b851947c47c01594f9cc0c486c012976d7918ea8f049a",
+      "after_sha256": "c97b8010c212ec6fecf6f3d6204d87d3cc1bea0e39d5ed759754fa49fd5d0a6a",
+      "payload": "files/0.py"
+    },
+    {
+      "path": "deltax_pp_sw/ultralytics_rknn-new/YOLORKNN/result/resultConverter.py",
+      "before_sha256": "3690a63b8f719707a310fff51f05d2cb4f9cb7214949290451d027af15344db6",
+      "after_sha256": "090656b6b2eb870c58da2be5c0ea004f72558945b94eb0c1bdfc69d342fa2805",
+      "payload": "files/1.py"
+    },
+    {
+      "path": "deltax_pp_sw/ultralytics_rknn-new/YOLORKNN/predictor/RKNNPredictor.py",
+      "before_sha256": "e7731b58b6d1ff7956fbf655a3e67785639b4b7afb1db35d7b661e1077a3bb73",
+      "after_sha256": "2383044ebad4662946e983be4a64119f7c2dcd9593dffba35a96e5aa2c9412cd",
+      "payload": "files/2.py"
+    },
+    {
+      "path": "deltax_pp_sw/ultralytics_rknn-new/YOLORKNN/model/yoloRKNN.py",
+      "before_sha256": "92a044be0b1f99af537a5e5ef5544b51b7d4a02901115a2601e9bf87b427b373",
+      "after_sha256": "7333319fdddacbdcc7eb97a2daad173571765c04ad0e6e23f455d4dc9443d241",
+      "payload": "files/3.py"
+    },
+    {
+      "path": "deltax_pp_sw/ultralytics_rknn-new/YOLORKNN/utils/ops.py",
+      "before_sha256": "96c67ca9c1a317a4eb17e5242fac133087113fe72f9835800b7d5ba68a0b23b1",
+      "after_sha256": "bf0660f770f6761bd961a0b116bec2816bf7d71da0fa3df9c9272d2bc71de961",
+      "payload": "files/4.py"
+    }
+  ]
+}
