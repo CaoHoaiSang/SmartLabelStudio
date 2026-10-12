@@ -122,11 +122,15 @@ def require_legacy_training_data(data):
             reject_generic_fleet_sources([root]); _metadata(root)
             for key in ("train", "val", "test"):
                 entries = value.get(key, [])
+                # An empty scalar disables this split in Ultralytics. Joining
+                # it to root would inspect the entire workspace, including
+                # unrelated Fleet/holdout projects. A nonempty list is different:
+                # every element is a real path and must still be validated.
+                if entries is None or entries == "":
+                    continue
                 entries = entries if isinstance(entries, list) else [entries]
                 for entry in entries:
-                    if entry is None:
-                        continue
-                    if not isinstance(entry, str):
+                    if not isinstance(entry, str) or not entry:
                         raise FleetIntakeError("Danh sách ảnh dataset không hợp lệ.")
                     reject_generic_fleet_sources(_dataset_paths(root / entry))
                     reject_benchmark_sources(_dataset_paths(root / entry))

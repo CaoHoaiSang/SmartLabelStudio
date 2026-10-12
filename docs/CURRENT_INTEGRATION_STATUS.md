@@ -1,3 +1,18 @@
+## ORI train toàn bộ dữ liệu không bị chặn nhầm bởi Fleet — 12/10/2026
+
+Dataset ORI dùng YAML an toàn nên TEST không dùng có dạng `test: ''`,
+thay vì null như exporter trước. Bộ kiểm nguồn nay bỏ qua split scalar
+rỗng/null đúng nghĩa không sử dụng; không ghép thành đường dẫn workspace
+và quét nhầm kho Fleet/TEST ngoài của dự án bên cạnh. Các đường dẫn thật,
+metadata Fleet, liên kết và dấu vết model vẫn được kiểm như trước. Danh
+sách split có phần tử rỗng/sai kiểu bị từ chối rõ ràng.
+
+Không sửa YAML, nhãn, phân tập hoặc cấu hình dự án hiện hữu. Hồi quy kiểm
+cả YAML và export ORI `train_all` qua TrainingJob; dữ liệu Fleet thật vẫn
+bị chặn ở luồng legacy. Kết quả train tổng hợp, kiểm read-only Mi_Goi,
+full suite, CI và nạp source ghi riêng ở audit tác vụ. Kế thừa YOLO11-ORI,
+YOLOv8-ORI, SAM +/− và sửa OBB trước đó.
+
 ## YOLO11-ORI và tương thích YOLOv8 — 12/10/2026
 
 ORI mặc định `deltax-yolo11n-ori`, có alias n/s/m/l/x; dùng backbone/neck

@@ -66,6 +66,67 @@ class FleetBoundaryTests(unittest.TestCase):
         with self.assertRaises(FleetIntakeError): require_legacy_training_data(data)
         self.assertEqual((data / "export.json").read_text(), "broken")
 
+    def test_unused_scalar_splits_do_not_scan_unrelated_workspace_sources(self):
+        import yaml
+        data = self.root / "exports" / "data.yaml"
+        data.parent.mkdir(exist_ok=True)
+        unrelated = Path(self.temp.name) / "another_project"
+        (unrelated / "fleet_inbox").mkdir(parents=True)
+        (unrelated / "holdout").mkdir()
+        (unrelated / "holdout" / "benchmark.json").write_text("{}")
+        before = {f: f.read_bytes() for f in unrelated.rglob('*') if f.is_file()}
+        for optional in ({}, {"test": ""}, {"test": None}, {"test": []}, {"val": "", "test": ""}):
+            with self.subTest(optional=optional):
+                data.write_text(yaml.safe_dump({"path": ".", "train": "images/train", "val": "images/train", **optional}))
+                with patch("os.getcwd", return_value=self.temp.name):
+                    require_legacy_training_data(data)
+        self.assertEqual(before, {f: f.read_bytes() for f in unrelated.rglob('*') if f.is_file()})
+
+    def test_empty_optional_split_never_exempts_actual_fleet_paths_or_metadata(self):
+        import yaml
+        data = self.root / "exports" / "data.yaml"
+        data.parent.mkdir(exist_ok=True)
+        for changes in ({"train": "../fleet_inbox/images"}, {"val": ["../fleet_inbox/images"]},
+                        {"path": "../fleet_inbox"}, {"fleetDependencies": []},
+                        {"train": ["", "images/train"]}, {"val": [None]}):
+            with self.subTest(changes=changes):
+                data.write_text(yaml.safe_dump({"path": ".", "train": "images/train", "val": "images/train", "test": "", **changes}))
+                with self.assertRaises(FleetIntakeError):
+                    require_legacy_training_data(data)
+
+    def test_train_all_ori_export_reaches_worker_with_unrelated_fleet_project(self):
+        from io import StringIO
+        from types import SimpleNamespace
+        from PIL import Image
+        from smartlabel.models import Annotation
+        self.project = self.store.create_project("ORI fixture", classes=["part"])
+        self.root = self.store.project_dir(self.project)
+        source = Path(self.temp.name) / "part.png"
+        Image.new("RGB", (80, 64)).save(source)
+        self.store.import_images(self.project, [source])
+        record = self.project.images[0]
+        record.review_status = "reviewed"
+        ann = Annotation.create_box(0, [20, 16, 40, 24])
+        ann.orientation = [[40, 28], [55, 28]]
+        record.annotations = [ann]
+        exported = self.manager.export_yolo(self.project, task="ori", split_strategy="train_all")
+        other = self.store.create_project("Unrelated Fleet project")
+        (self.store.project_dir(other) / "fleet_inbox").mkdir()
+        config = TrainingConfig(model="deltax-yolo11n-ori", data=str(exported / "data.yaml"),
+                                task="ori", project_dir=str(self.root / "runs"), validate=False)
+        lines, done = [], []
+        child = SimpleNamespace(stdout=StringIO("TRAINING_COMPLETE\n"), pid=123, wait=lambda: 0)
+        with patch("os.getcwd", return_value=str(self.store.workspace.parent)), \
+             patch("smartlabel.training.best_ultralytics_device", return_value="cpu"), \
+             patch("smartlabel.training.subprocess.Popen", return_value=child) as launch:
+            TrainingJob(config, lines.append, done.append)._run()
+        self.assertEqual(done, [0], lines)
+        launch.assert_called_once()
+        self.assertIn("TRAINING_COMPLETE", lines)
+        metadata = json.loads((exported / "export.json").read_text())
+        self.assertFalse(metadata["validation_enabled"])
+        self.assertFalse(metadata["independent_test"])
+
     def test_split_directory_junction_and_image_list_cannot_launder_managed_paths(self):
         import os
         import subprocess
