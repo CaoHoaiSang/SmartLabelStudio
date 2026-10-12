@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Callable, Iterable
 import hashlib
 import json
+import os
 import re
 import shutil
+from tempfile import TemporaryDirectory
 
 from PIL import Image, ImageStat
 
@@ -321,10 +323,47 @@ class ProjectStore:
 
     def register_model(self, source: str | Path) -> Path:
         source = Path(source).resolve()
-        digest = self._hash_file(source)[:12]
-        target = self.models_dir / f"{source.stem}_{digest}{source.suffix.lower()}"
-        if not target.exists():
-            shutil.copy2(source, target)
+        digest = self._hash_file(source)
+        target = self.models_dir / f"{source.stem}_{digest[:12]}{source.suffix.lower()}"
+        metadata_bytes = None
+        sidecar = source.with_suffix(".ori.json")
+        if source.suffix.lower() == ".pt" and sidecar.is_file():
+            metadata_bytes = sidecar.read_bytes()
+            try:
+                metadata = json.loads(metadata_bytes.decode("utf-8"))
+            except (ValueError, UnicodeError) as exc:
+                raise ValueError("Metadata ORI không đọc được; hãy chọn đúng cặp .pt và .ori.json.") from exc
+            if (not isinstance(metadata, dict)
+                    or metadata.get("schema") != "deltax_ori_checkpoint_v1"
+                    or metadata.get("task", "ori") != "ori"
+                    or metadata.get("heading") != "image_x_clockwise_degrees"
+                    or metadata.get("heading_encoding", "normalized_degrees_v1") not in ("normalized_degrees_v1", "cos_sin_vector_v2")
+                    or metadata.get("model_sha256") != digest):
+                raise ValueError("Metadata ORI không khớp checkpoint; hãy chọn đúng cặp .pt và .ori.json.")
+        existed = target.exists()
+        if existed and self._hash_file(target) != digest:
+            raise ValueError("Model đã đăng ký không khớp SHA256; không ghi đè file hiện có.")
+        # Preserve the sidecar even when the weight file was registered earlier.
+        # The desktop uses its presence to dispatch ORI to the isolated worker.
+        with TemporaryDirectory(prefix=".register-", dir=self.models_dir) as temporary:
+            staging = Path(temporary)
+            if not existed:
+                staged_model = staging / "model"
+                shutil.copy2(source, staged_model)
+                if self._hash_file(staged_model) != digest:
+                    raise ValueError("Checkpoint thay đổi trong lúc đăng ký; hãy thử lại.")
+                os.replace(staged_model, target)
+            if metadata_bytes is not None:
+                metadata_target = target.with_suffix(".ori.json")
+                if not metadata_target.is_file() or metadata_target.read_bytes() != metadata_bytes:
+                    try:
+                        staged_metadata = staging / "metadata"
+                        staged_metadata.write_bytes(metadata_bytes)
+                        os.replace(staged_metadata, metadata_target)
+                    except Exception:
+                        if not existed:
+                            target.unlink()
+                        raise
         return target
 
     def import_video(

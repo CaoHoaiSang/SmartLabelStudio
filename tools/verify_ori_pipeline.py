@@ -67,7 +67,9 @@ def main():
     assert metadata["architecture"] == {"family":family,"scale":scale}, metadata
     assert metadata["heading_encoding"] == "cos_sin_vector_v2", metadata
     from smartlabel.auto_label import YoloAutoLabeler
-    labeler = YoloAutoLabeler(model, device="cpu")
+    registered = store.register_model(model)
+    assert registered.with_suffix(".ori.json").read_bytes() == model.with_suffix(".ori.json").read_bytes()
+    labeler = YoloAutoLabeler(registered, device="cpu")
     process = labeler._ori.process
     try:
         assert labeler.task == "ori" and labeler.names == {0: "part: test"}

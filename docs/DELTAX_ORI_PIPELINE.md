@@ -63,6 +63,12 @@ Train ORI bật rotation180°, tắt mirror và perspective; box/vector cùng bi
 Process chính tiếp tục dùng Ultralytics tiêu chuẩn. Train, đánh giá và
 Auto-Label ORI dùng process riêng, cùng thư mục settings/cache riêng.
 
+Đăng ký model sau train hoặc qua nút Chọn model phải giữ cả `.pt` và
+`.ori.json` dưới tên đã đăng ký trong `workspace/models`. Metadata gắn bằng
+SHA256 đầy đủ; bản v1 không có `heading_encoding` vẫn hợp lệ. Đăng ký lại
+checkpoint gốc sẽ bổ sung sidecar còn thiếu cho bản đã sao chép, giữ weights.
+Không đoán quy ước hướng hoặc tự tạo metadata cho model không có nguồn xác nhận.
+
 RKNN Toolkit **2.2.0**, RK3588, RGB uint8 NHWC, letterbox 640, chia 255, không
 quantize. Đầu ra đúng thứ tự Studio:
 

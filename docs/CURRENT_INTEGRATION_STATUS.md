@@ -1,3 +1,13 @@
+## Auto-Label model ORI đã đăng ký — 12/10/2026
+
+Sửa registry chỉ sao chép PT làm mất `.ori.json`, khiến Auto-Label dùng
+Ultralytics thường và lỗi `OrientationModel`. Đăng ký nay giữ sidecar đúng
+SHA cho v1/v2, bổ sung metadata khi weights đã tồn tại, từ chối cặp sai trước
+khi ghi. Không đổi weights, nhãn hoặc task của model. Pipeline acceptance
+chạy Auto-Label từ model đã đăng ký, giống luồng giao diện sau train.
+Mi_Goi active copy khôi phục metadata từ checkpoint gốc có SHA trùng;
+Auto-Label read-only3ảnh mới passed. Local/CI/nạp source ghi riêng ở audit.
+
 ## ORI hướng cos/sin và preview Studio — 12/10/2026
 
 Model mới dùng cos/sin và SmoothL1 không hard clip, giữ góc liên tục qua±180°.
