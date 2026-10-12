@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import sys
+from .ori_runtime import ORI_MODEL_PRESETS
 
 ROOT = Path(__file__).resolve().parents[1]
 FORK = ROOT / "tools" / "ori_runtime"
@@ -18,11 +19,14 @@ def stamp_checkpoints(trainer):
         if checkpoint.is_file():
             sidecar = checkpoint.with_suffix(".ori.json")
             staged = sidecar.with_suffix(".json.tmp")
+            # Pure helper import: stamping does not load standard Ultralytics.
+            from tools.ori_runtime.deltax_ori_contract import model_architecture
             staged.write_text(json.dumps({
                 "schema": "deltax_ori_checkpoint_v1", "task": "ori",
                 "runtime": "deltax-orienty-8.3.38-v1",
                 "heading": "image_x_clockwise_degrees",
                 "model_sha256": hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
+                "architecture": model_architecture(getattr(trainer, "model", None)),
             }, indent=2), encoding="utf-8")
             os.replace(staged, sidecar)
 
@@ -38,8 +42,13 @@ def load_model(path):
     from ultralytics import YOLO
     from ultralytics.utils import SETTINGS
     SETTINGS.update({"sync": False})
-    if path == "deltax-yolov8n-ori":
-        path = str(FORK / "ultralytics" / "cfg" / "models" / "v8" / "yolov8n-ori.yaml")
+    path = str(path)
+    if path in ORI_MODEL_PRESETS:
+        family, scale, _ = ORI_MODEL_PRESETS[path]
+        folder = "11" if family == "yolo11" else "v8"
+        path = str(FORK / "ultralytics" / "cfg" / "models" / folder / f"{family}{scale}-ori.yaml")
+    elif path.startswith("deltax-"):
+        raise ValueError("Model ORI DeltaX không được hỗ trợ; chọn YOLO11 n/s/m/l/x hoặc YOLOv8n cũ.")
     if Path(path).suffix.lower() == ".pt":
         try:
             metadata = json.loads(Path(path).with_suffix(".ori.json").read_text(encoding="utf-8"))
@@ -50,6 +59,10 @@ def load_model(path):
     model = YOLO(path)
     if model.task != "orienty" or model.model.model[-1].__class__.__name__ != "Orienty":
         raise ValueError("Task ORI cần kiến trúc Orienty hoặc checkpoint ORI DeltaX tương thích.")
+    if Path(path).suffix.lower() == ".pt" and "architecture" in metadata:
+        from tools.ori_runtime.deltax_ori_contract import model_architecture
+        if metadata["architecture"] != model_architecture(model.model):
+            raise ValueError("Kiến trúc trong metadata không khớp checkpoint ORI.")
     return model
 
 
@@ -68,11 +81,12 @@ def main() -> int:
         if data.get("deltax_ori_contract") != "corners_normalized_heading_v1":
             raise ValueError("Task ORI cần dataset ORI DeltaX mới (bốn góc + hướng). Export lại với task ori.")
         model = load_model(config["model"])
-        if config["model"] == "deltax-yolov8n-ori" and config.get("pretrained_backbone", True):
+        if config["model"] in ORI_MODEL_PRESETS and config.get("pretrained_backbone", True):
+            family, scale, pretrained = ORI_MODEL_PRESETS[config["model"]]
             cache = Path(os.environ.get("LOCALAPPDATA", os.environ.get("TMPDIR", "/tmp"))) / "SmartLabel" / "ori-models"
             cache.mkdir(parents=True, exist_ok=True)
-            print("ORI · nạp backbone YOLOv8n pretrained; hai nhánh góc vẫn học từ nhãn của dự án.", flush=True)
-            model.load(str(cache / "yolov8n.pt"))
+            print(f"ORI · nạp {family}{scale} pretrained; hai nhánh góc vẫn học từ nhãn của dự án.", flush=True)
+            model.load(str(cache / pretrained))
         import torch
         torch.set_num_threads(min(4, os.cpu_count() or 1))
         print("ORI DeltaX · khung xoay và hướng 360° · runtime riêng", flush=True)

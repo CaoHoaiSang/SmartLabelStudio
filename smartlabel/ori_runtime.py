@@ -10,7 +10,11 @@ from queue import Queue, Empty
 from threading import Thread
 
 ROOT = Path(__file__).resolve().parents[1]
-ORI_MODEL = "deltax-yolov8n-ori"
+ORI_MODEL = "deltax-yolo11n-ori"
+ORI_MODEL_PRESETS = {
+    **{f"deltax-yolo11{scale}-ori": ("yolo11", scale, f"yolo11{scale}.pt") for scale in "nslmx"},
+    "deltax-yolov8n-ori": ("yolov8", "n", "yolov8n.pt"),
+}
 
 
 def inspect_ori_model(model: str | Path) -> dict:

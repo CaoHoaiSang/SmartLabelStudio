@@ -308,7 +308,7 @@ class TrainingFeedbackTests(unittest.TestCase):
         self.app._train_task_changed("ori")
         self.app._apply_task_model()
         self.assertEqual(self.app.train_task_menu.get(), "ori")
-        self.assertEqual(self.app.train_model_entry.get(), "deltax-yolov8n-ori")
+        self.assertEqual(self.app.train_model_entry.get(), "deltax-yolo11n-ori")
         self.assertIn("ori", self.app.train_task_menu.cget("values"))
         self.assertIn("pose", self.app.train_task_menu.cget("values"))
         self.app.show_attribute_panel.set(True)

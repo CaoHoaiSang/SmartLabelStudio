@@ -15,7 +15,7 @@ import uuid
 
 
 CONVERTER_IMAGE = "deltax-rknn-converter:2.2.0-v4"
-ORI_CONVERTER_IMAGE = "deltax-rknn-ori:2.2.0-v2"
+ORI_CONVERTER_IMAGE = "deltax-rknn-ori:2.2.0-v3"
 
 
 def diagnose_rknn_environment(timeout: int = 8) -> tuple[bool, str]:

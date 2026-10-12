@@ -11,7 +11,7 @@ by DeltaX Studio on Radxa:
 Build:
 
 ```powershell
-docker build -t deltax-rknn-converter:2.2.0-v3 tools/rknn_converter
+docker build -t deltax-rknn-converter:2.2.0-v4 tools/rknn_converter
 ```
 
 The SmartLabelStudio UI invokes this image automatically. The generated
@@ -22,7 +22,12 @@ The converter intentionally exports explicit DeltaX contracts instead of
 the generic Ultralytics output. DET emits 9 tensors. SEG emits 13 tensors:
 box DFL logits, class scores, objectness, mask coefficients per stride, plus
 the mask prototype tensor. Classification emits one softmax tensor `[1,N]`.
-OBB and custom ORI remain blocked.
+Standard OBB and Pose are not Studio ORI. DeltaX YOLO11-ORI and legacy
+YOLOv8-ORI use a separate `deltax-rknn-ori:2.2.0-v3` image, built automatically
+by the existing **Xuất RKNN** button. Supply the checkpoint and matching
+`.ori.json`; the result is a paired `.rknn` + `.json` export with five raw
+outputs, architecture identity, hash and PT/ONNX/RKNN simulator verification.
+See [ORI pipeline](../../docs/DELTAX_ORI_PIPELINE.md) for aliases and protocol.
 
 Manual conversion example:
 
@@ -30,7 +35,7 @@ Manual conversion example:
 docker run --rm `
   -v "D:\models:/work:ro" `
   -v "D:\deploy:/output" `
-  deltax-rknn-converter:2.2.0-v3 `
+  deltax-rknn-converter:2.2.0-v4 `
   --model /work/best.pt `
   --output /output/bottles_rk3588.rknn `
   --name rk3588 `
@@ -43,7 +48,7 @@ Classification example:
 docker run --rm `
   -v "D:\models:/work:ro" `
   -v "D:\deploy:/output" `
-  deltax-rknn-converter:2.2.0-v3 `
+  deltax-rknn-converter:2.2.0-v4 `
   --model /work/condition_best.pt `
   --output /output/condition_rk3588.rknn `
   --name rk3588 `

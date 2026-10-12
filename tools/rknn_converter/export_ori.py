@@ -39,6 +39,7 @@ def main():
     parser.add_argument("--task", default="ori", choices=["ori"])
     args = parser.parse_args()
     from ultralytics import YOLO
+    from deltax_ori_contract import model_architecture
     from rknn.api import RKNN
     import onnx
     import onnxruntime as ort
@@ -51,6 +52,9 @@ def main():
     torch.set_num_threads(4)
     model = YOLO(str(source))
     network = model.model.float().eval()
+    architecture = model_architecture(network)
+    if "architecture" in metadata and metadata["architecture"] != architecture:
+        raise ValueError("Kiến trúc trong metadata không khớp checkpoint ORI.")
     install_ori_raw_forward(network.model[-1])
     shapes = expected_shapes(len(model.names))
     # A textured input exercises all branches, rather than testing only zero activations.
@@ -93,6 +97,7 @@ def main():
         "schema": 1, "format": "rknn", "target": args.name, "compiler": "rknn-toolkit2==2.2.0",
         "task": "ori", "imgsz": [640, 640], "names": {str(k): v for k, v in model.names.items()},
         "source_model": source.name, "source_sha256": metadata["model_sha256"], "output_model": output.name,
+        "architecture": architecture,
         "model_sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
         "output_layout": "deltax_orienty_5_heads_v1", "output_shapes": shapes,
         "heading": "image_x_clockwise_degrees", "heading_scale": 180,

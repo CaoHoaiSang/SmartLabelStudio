@@ -16,6 +16,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True)
     parser.add_argument("--rknn", action="store_true")
+    from smartlabel.ori_runtime import ORI_MODEL, ORI_MODEL_PRESETS
+    parser.add_argument("--model", choices=list(ORI_MODEL_PRESETS), default=ORI_MODEL)
+    parser.add_argument("--pretrained", action="store_true")
     args = parser.parse_args()
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -50,12 +53,15 @@ def main():
             record.annotations = [annotation]
     store.save(project)
     export = DatasetManager(store).export_yolo(project, task="ori")
-    config = {"task":"ori", "model":"deltax-yolov8n-ori", "data":str(export / "data.yaml"), "epochs":1,
-              "image_size":96,"batch":2,"patience":2,"device":"cpu","project_dir":str(output / "runs"),"run_name":"smoke","validate":True,"pretrained_backbone":False}
+    config = {"task":"ori", "model":args.model, "data":str(export / "data.yaml"), "epochs":1,
+              "image_size":96,"batch":2,"patience":2,"device":"cpu","project_dir":str(output / "runs"),"run_name":"smoke","validate":True,"pretrained_backbone":args.pretrained}
     subprocess.run([sys.executable,"-u","-m","smartlabel.train_worker",json.dumps(config)],cwd=ROOT,check=True)
     model = output / "runs" / "smoke" / "weights" / "best.pt"
     info = inspect_checkpoint(model)
     assert info == {"task":"ori","names":{"0":"part: test"}}, info
+    metadata = json.loads(model.with_suffix(".ori.json").read_text())
+    family, scale, _ = ORI_MODEL_PRESETS[args.model]
+    assert metadata["architecture"] == {"family":family,"scale":scale}, metadata
     from smartlabel.auto_label import YoloAutoLabeler
     labeler = YoloAutoLabeler(model, device="cpu")
     process = labeler._ori.process
@@ -75,6 +81,8 @@ def main():
         job = RknnExportJob(RknnExportConfig(model=model,output=output / "ori.rknn",converter_dir=ROOT / "tools" / "rknn_converter",task="ori",class_count=1), print, lambda *result: results.append(result))
         job._run()
         assert results and results[0][0] == 0, results
+        manifest = json.loads((output / "ori.json").read_text())
+        assert manifest["architecture"] == metadata["architecture"], manifest
     print("ORI_PIPELINE_OK", flush=True)
 
 

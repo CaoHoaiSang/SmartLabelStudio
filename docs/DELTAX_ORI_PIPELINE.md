@@ -8,10 +8,14 @@ cũ được dùng trực tiếp; không cần đổi schema dự án hay gán l
 
 1. Gán khung OBB (hoặc RECT), bật **Bám trục**, đặt mũi tên từ tâm về đầu vật,
    rồi Duyệt ảnh. Hướng phải bám một trong bốn trục có chiều của khung.
-2. Trong Train chọn **ori**, bấm Model gợi ý để dùng `deltax-yolov8n-ori`.
-   Khởi tạo mới dùng backbone YOLOv8n pretrained; hai nhánh góc học từ nhãn
+2. Trong Train chọn **ori**, bấm Model gợi ý để dùng `deltax-yolo11n-ori`.
+   Có thể nhập các alias YOLO11 `deltax-yolo11s-ori`, `deltax-yolo11m-ori`,
+   `deltax-yolo11l-ori`, `deltax-yolo11x-ori` (cỡ lớn cần nhiều tài nguyên hơn).
+   Khởi tạo mới dùng backbone/neck YOLO11 pretrained đúng cỡ; hai nhánh góc học từ nhãn
    dự án. Lần đầu cần tải weights; các lần sau dùng cache riêng SmartLabel.
-   Có thể dùng checkpoint ORI mới cùng file `.ori.json` để train tiếp.
+   Có thể dùng checkpoint ORI cùng file `.ori.json` để train tiếp.
+   `deltax-yolov8n-ori` và checkpoint YOLOv8-ORI có metadata cũ vẫn được hỗ trợ;
+   mở checkpoint cũ giữ kiến trúc cũ, không âm thầm chuyển trọng số sang YOLO11.
 3. Train tự export dataset ORI và dùng cùng cơ chế phân tập, job ownership,
    dừng train và giữ Test của SmartLabel. Dữ liệu không hợp lệ được báo tên
    ảnh/nhãn trước khi tạo snapshot. Chỉ những ảnh được chọn theo trạng thái
@@ -46,6 +50,10 @@ hướng 0°. Loss và kiểm tra hướng dùng sai số vòng tròn. Decoder l
 
 Fork Orienty 8.3.38 được lưu trong `tools/ori_runtime`, giữ giấy phép và nguồn
 gốc/checksum trong `UPSTREAM.json`; thay đổi của bản tích hợp được mô tả ở đây.
+YOLO11 dùng C3k2/C2PSA và đầu Orienty hai nhánh góc; đây là kiến trúc tùy chỉnh,
+không phải model YOLO11-OBB tiêu chuẩn. Metadata mới ghi `architecture.family`
+và `architecture.scale`, kiểm tra khớp checkpoint khi load/export. Trường
+`runtime` 8.3.38 nhận diện phiên bản fork, không phải họ kiến trúc model.
 Process chính tiếp tục dùng Ultralytics tiêu chuẩn. Train, đánh giá và
 Auto-Label ORI dùng process riêng, cùng thư mục settings/cache riêng.
 
@@ -99,12 +107,21 @@ vận hành. Source Studio được test trực tiếp từ payload patch.
 giả lập riêng, export bằng DatasetManager, train một epoch, load checkpoint,
 Auto-Label hai lần qua cùng process, đánh giá Test và chuyển RKNN/simulator.
 Fixture có ảnh background và tên lớp chứa dấu `:` để kiểm tra hợp đồng đầy đủ.
-Smoke test tắt pretrained backbone để không tải weights không liên quan đến
+Mặc định dùng YOLO11n-ORI; `--model deltax-yolov8n-ori` kiểm tra luồng legacy.
+`--pretrained` bật kiểm tra nạp trọng số pretrained đúng cỡ. Smoke test tắt pretrained backbone để không tải weights không liên quan đến
 việc kiểm tra pipeline; model giả lập không phải model triển khai.
 
-CI có job riêng chạy toàn bộ pipeline RKNN trên Linux. Windows cần Docker
+CI có job riêng chạy pipeline YOLO11-ORI/RKNN trên Linux và train/Auto-Label/
+đánh giá YOLOv8-ORI legacy. Các cỡ n/s/m/l/x được kiểm tra khởi tạo và raw heads;
+chỉ YOLO11n được nghiệm thu train/export/simulator/NPU, chưa đo NPU cỡ lớn. Windows cần Docker
 Linux Engine hoạt động; lỗi WSL `0x800705aa` là trở ngại môi trường trước bước
 converter, không được báo thành export thành công.
+
+YOLO11n đã smoke test trên NPU Radxa/core2 và qua uploader/decoder hiện có
+ngày12/10/2026. Đây là model train một epoch trên ảnh tổng hợp: góc OBB/hướng
+PT↔NPU lệch tối đa0.09°/0.38° trên ảnh nhiễu, nhưng một số logits bbox vượt
+ngưỡng dùng cho simulator. Không gắn `hardware_validated=true` cho mọi export
+hoặc suy ra độ chính xác; NPU dùng tính toán giảm độ chính xác số.
 
 Nghiệm thu phần cứng còn cần model train trên ảnh vật thật, chạy Radxa để
 so PT/NPU, kiểm tra 0/90/180/−90 và góc chéo, ảnh không vuông, đầu/đuôi,

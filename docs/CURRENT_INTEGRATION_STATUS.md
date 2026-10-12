@@ -1,3 +1,22 @@
+## YOLO11-ORI và tương thích YOLOv8 — 12/10/2026
+
+ORI mặc định `deltax-yolo11n-ori`, có alias n/s/m/l/x; dùng backbone/neck
+YOLO11 pretrained đúng cỡ với đầu Orienty khung xoay + hướng 360°. Nhãn cũ,
+Auto-Label, đánh giá và nút Xuất RKNN giữ luồng hiện có. Checkpoint YOLOv8-ORI
+kèm `.ori.json` vẫn dùng được; metadata mới ghi/kiểm tra họ model và cỡ.
+Không thêm POSE vào Studio hoặc sửa Template Matching/Tracking/Pick.
+
+Windows: train pretrained YOLO11n, Auto-Label, đánh giá và xuất RKNN 5 heads;
+PT/ONNX/simulator passed. Radxa192.168.100.135: NPU/core2, uploader cặp file
+và decoder hiện có passed trên model tổng hợp; INI/source giữ hash, không
+restart hay chạy robot. PT/NPU hai nhánh góc sai lệch tối đa0.09°/0.38° trên
+ảnh nhiễu; raw bbox có giá trị vượt ngưỡng simulator. Không gọi đó là nghiệm
+thu độ chính xác vật thật. JSON xuất vẫn để `hardware_validated=false`;
+kiểm tra NPU từng model/holdout và gắp thật là bước nghiệm thu triển khai.
+Các cỡ lớn mới kiểm tra khởi tạo/raw heads, chưa nghiệm thu export/NPU.
+Local/CI/commit/nạp source chính ghi riêng trong báo cáo bàn giao.
+[Cách dùng và hợp đồng](DELTAX_ORI_PIPELINE.md).
+
 ## Hàng hình học và SAM +/− — 12/10/2026
 
 Gộp xoay cùng hàng Loại nhãn, có vạch ngăn; chọn bước góc → Trái → Phải.

@@ -44,6 +44,7 @@ from .hydroponic import (
 from .frame_filter_dialog import SmartFrameFilterDialog
 from .frame_filter import latest_import_records
 from .model_export import RknnExportConfig, RknnExportJob, diagnose_rknn_environment
+from .ori_runtime import ORI_MODEL
 from .models import Annotation, Project
 from .project_store import ProjectStore
 from . import fleet_intake
@@ -1050,7 +1051,7 @@ class SmartLabelApp(ctk.CTk):
         self.train_model_entry.delete(0, tk.END)
         default_model = "yolo11n-cls.pt" if project.attribute_classification_enabled else {
             "detect": "yolo11n.pt", "segment": "yolo11n-seg.pt",
-            "obb": "yolo11n-obb.pt", "ori": "deltax-yolov8n-ori", "pose": "yolo11n-pose.pt",
+            "obb": "yolo11n-obb.pt", "ori": ORI_MODEL, "pose": "yolo11n-pose.pt",
         }.get(self.last_localization_task, "yolo11n.pt")
         self.train_model_entry.insert(0, view.get("train_model", default_model))
         for widget in (self.train_log, self.auto_log):
@@ -4081,6 +4082,7 @@ class SmartLabelApp(ctk.CTk):
             ("Patience", "patience_entry", "15"),
         ]
         field_help = {
+            "train_model_entry": "ORI mặc định: deltax-yolo11n-ori. Có thể chọn deltax-yolo11s-ori, deltax-yolo11m-ori, deltax-yolo11l-ori hoặc deltax-yolo11x-ori. Checkpoint ORI cũ kèm .ori.json vẫn dùng được; deltax-yolov8n-ori dành cho YOLOv8 cũ.",
             "epochs_entry": "Số vòng model học toàn bộ tập Train. Bắt đầu 30–50; Final nên dùng gần epoch tốt nhất của lần phát triển.",
             "imgsz_entry": "Kích thước ảnh đưa vào model. Detection/SEG cho Radxa dùng 640; Classification thường dùng 224. Lớn hơn có thể rõ hơn nhưng chậm và tốn RAM/VRAM.",
             "batch_entry": "Số ảnh xử lý trước một lần cập nhật trọng số. CPU thử 4–8; RTX 4060 Ti thử 8–16. Nếu hết RAM/VRAM hãy giảm Batch.",
@@ -4300,7 +4302,7 @@ class SmartLabelApp(ctk.CTk):
             "detect": "yolo11n.pt",
             "segment": "yolo11n-seg.pt",
             "obb": "yolo11n-obb.pt",
-            "ori": "deltax-yolov8n-ori", "pose": "yolo11n-pose.pt",
+            "ori": ORI_MODEL, "pose": "yolo11n-pose.pt",
             "classify": "yolo11n-cls.pt",
         }
         value = suggestions[self.train_task_menu.get()]
