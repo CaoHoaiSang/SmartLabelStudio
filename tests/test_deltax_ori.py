@@ -138,6 +138,9 @@ class StudioContractTests(unittest.TestCase):
                     namespace["YOLORKNN"](Task.ORI,str(model),["part"])
                 self.assertEqual(opened,[])
             model.with_suffix(".json").write_text(json.dumps(manifest))
+            with self.assertRaisesRegex(ValueError, "requires the ORI task"):
+                namespace["YOLORKNN"](Task.DET,str(model),["part"])
+            self.assertEqual(opened,[])
             namespace["YOLORKNN"](Task.ORI,str(model),["part"])
             self.assertEqual(len(opened),1)
             model.with_suffix(".json").unlink()

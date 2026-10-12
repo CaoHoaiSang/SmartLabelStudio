@@ -7,34 +7,46 @@ import os
 import shutil
 
 
-def apply(root, backup):
+def apply(root, backup, layout="installer"):
     bundle = Path(__file__).resolve().parent
     manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
     root, backup = Path(root).resolve(), Path(backup).resolve()
+    package = None
+    if layout == "radxa":
+        packages = list((root / "venv/lib").glob("python*/site-packages/YOLORKNN"))
+        if len(packages) != 1:
+            raise ValueError("Expected exactly one installed YOLORKNN in the Studio venv")
+        package = packages[0]
     pending = []
     for entry in manifest["files"]:
-        target = (root / entry["path"]).resolve()
+        relative = entry["path"]
+        if package is not None:
+            if "YOLORKNN/" in relative:
+                relative = str(package.relative_to(root) / relative.split("YOLORKNN/", 1)[1])
+            else:
+                relative = relative.removeprefix("deltax_pp_sw/")
+        target = (root / relative).resolve()
         if not target.is_relative_to(root):
             raise ValueError("Patch path escapes root")
         current = hashlib.sha256(target.read_bytes()).hexdigest()
         if current == entry["after_sha256"]:
             continue
-        if current != entry["before_sha256"]:
+        if current not in [entry["before_sha256"], *entry.get("compatible_sha256", [])]:
             raise ValueError(f"Source changed: {entry['path']}. Review/rebase the patch before applying.")
         payload = bundle / entry["payload"]
         if hashlib.sha256(payload.read_bytes()).hexdigest() != entry["after_sha256"]:
             raise ValueError("Patch payload checksum mismatch")
-        pending.append((entry, target, payload))
+        pending.append((relative, current, target, payload))
     # Validate every file before modifying any. Backups are immutable and outside the payload.
-    for entry, target, _ in pending:
-        saved = backup / entry["path"]
+    for relative, current, target, _ in pending:
+        saved = backup / relative
         saved.parent.mkdir(parents=True, exist_ok=True)
-        if saved.exists() and hashlib.sha256(saved.read_bytes()).hexdigest() != entry["before_sha256"]:
+        if saved.exists() and hashlib.sha256(saved.read_bytes()).hexdigest() != current:
             raise ValueError(f"Conflicting backup: {saved}")
         if not saved.exists():
             shutil.copy2(target, saved)
-    for entry, target, payload in pending:
-        if hashlib.sha256(target.read_bytes()).hexdigest() != entry["before_sha256"]:
+    for relative, current, target, payload in pending:
+        if hashlib.sha256(target.read_bytes()).hexdigest() != current:
             raise ValueError(f"Source changed during apply: {target}")
         staged = target.with_name(target.name + ".ori-tmp")
         shutil.copyfile(payload, staged)
@@ -46,5 +58,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", required=True)
     parser.add_argument("--backup", required=True)
+    parser.add_argument("--layout", choices=("installer", "radxa"), default="installer")
     args = parser.parse_args()
-    apply(args.root, args.backup)
+    apply(args.root, args.backup, args.layout)

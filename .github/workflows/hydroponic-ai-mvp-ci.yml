@@ -12,6 +12,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  studio-upload:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install the TypeScript version audited on Radxa
+        run: npm install --prefix "$RUNNER_TEMP/studio-upload" --no-audit --no-fund typescript@5.5.3
+      - name: Check upload transport, retry, session isolation and cleanup
+        env:
+          NODE_PATH: ${{ runner.temp }}/studio-upload/node_modules
+        run: |
+          python -m tools.studio_integration.upload.verify_fixture --output "$RUNNER_TEMP/useSocket.ts"
+          node tools/studio_integration/upload/verify_transport.cjs "$RUNNER_TEMP/useSocket.ts"
   ori-rknn:
     runs-on: ubuntu-22.04
     timeout-minutes: 45

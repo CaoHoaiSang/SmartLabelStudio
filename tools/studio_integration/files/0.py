@@ -269,6 +269,9 @@ class ImageServer(QObject):
                     restart_needed = False
                     
                 os.remove(model_path)
+                metadata_path = os.path.splitext(model_path)[0] + ".json"
+                if os.path.isfile(metadata_path):
+                    os.remove(metadata_path)
                 print(f"Model file deleted: {model_path}")
                 
                 if restart_needed:

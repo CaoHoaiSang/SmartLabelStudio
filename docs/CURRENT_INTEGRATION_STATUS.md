@@ -867,6 +867,28 @@ Khách hàng có thể đóng góp ảnh qua gói xuất, nhưng đây là lựa
 có dịch vụ nhận ảnh từ xa, chữ ký nhà phát hành hay OTA; chỉ nhận model từ nguồn tin cậy.
 Checksum không chứng minh danh tính nhà cung cấp hoặc độ chính xác của model.
 
+## DeltaX Studio ORI delivery · 12/10/2026
+
+`tools/studio_integration/upload` extends Studio's existing RKNN uploader with the
+exported JSON sidecar, bound binary checksum/contract checks and explicit paired
+finalization. Successful uploads expose a button to select the verified ORI model
+and class order in the Settings draft. Saving/enabling/running remain operator
+actions. Legacy uploads remain supported; replacing a model without metadata
+removes stale JSON, and failed pair storage restores the previous files.
+
+The reviewed generator uses actual Radxa source, preserves unrelated Template
+Matching edits, and produces checksummed payloads without changing its inputs.
+The decoder/AIX patch supports the installed venv library via `--layout radxa`,
+rejects ORI metadata when DET is selected, and removes the sidecar on model deletion.
+Local verification: 13 upload/patch/storage tests, 11 ORI tests and five JavaScript
+transport scenarios passed. Baseline and patched full web TypeScript checks both
+passed in an isolated copy on Radxa, using its installed TypeScript 5.5.3.
+
+At preparation, production services were not patched or restarted. The operator
+must stop the production program before the assistant activates the prepared
+update. Binary NPU compatibility is verified separately from recognition accuracy
+and physical pick acceptance. Details: `tools/studio_integration/upload/README.md`.
+
 ## Bảo toàn và kiểm thử
 
 Local SmartLabel 102/103 pass, 1 SAM skip; target 101/103 pass, 2 layout skip qua SSH
