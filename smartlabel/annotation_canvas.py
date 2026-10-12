@@ -160,6 +160,7 @@ class AnnotationCanvas(tk.Canvas):
         self.record.review_status = "draft"
         self.on_change()
         self.on_select(ann.id)
+        self.focus_set()  # Keep Ctrl+Z/Ctrl+Y available after toolbar clicks.
         self.redraw()
         return True
 
