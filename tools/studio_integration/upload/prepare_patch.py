@@ -80,8 +80,14 @@ def console_patch(source):
                           '"file_name": model_name,\n                "metadata": metadata,\n                "upload_id": upload_id\n            })\n\n        except')
     source = replace_once(source, 'model_name = self._save_rknn_model_bytes(file_name, file_data)',
                           'model_name, metadata = self._save_rknn_model_bytes(file_name, file_data, data.get("metadata_json"))')
-    source = replace_once(source, '"message": f"File {file_name} uploaded successfully",\n                "file_name": model_name\n',
-                          '"message": f"File {file_name} uploaded successfully",\n                "file_name": model_name,\n                "metadata": metadata\n')
+    # The original installer retains a trailing space; the live Radxa file does not.
+    success = '"message": f"File {file_name} uploaded successfully",'
+    candidates = [success + whitespace + '\n                "file_name": model_name\n' for whitespace in ('', ' ')]
+    recognized = [anchor for anchor in candidates if source.count(anchor) == 1]
+    if len(recognized) != 1:
+        raise ValueError("Studio legacy upload response changed; review before patching")
+    source = replace_once(source, recognized[0], recognized[0].replace('"file_name": model_name\n',
+                          '"file_name": model_name,\n                "metadata": metadata\n'))
     ast.parse(source)
     return source
 

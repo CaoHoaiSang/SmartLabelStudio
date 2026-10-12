@@ -880,7 +880,7 @@ The reviewed generator uses actual Radxa source, preserves unrelated Template
 Matching edits, and produces checksummed payloads without changing its inputs.
 The decoder/AIX patch supports the installed venv library via `--layout radxa`,
 rejects ORI metadata when DET is selected, and removes the sidecar on model deletion.
-Local verification: 13 upload/patch/storage tests, 11 ORI tests and five JavaScript
+Local verification: 14 upload/patch/storage tests, 11 ORI tests and five JavaScript
 transport scenarios passed. Baseline and patched full web TypeScript checks both
 passed in an isolated copy on Radxa, using its installed TypeScript 5.5.3.
 

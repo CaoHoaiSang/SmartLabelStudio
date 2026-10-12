@@ -197,6 +197,12 @@ class UploadHandlerTests(unittest.TestCase):
 
 
 class PatchApplyTests(unittest.TestCase):
+    def test_original_installer_and_live_upload_response_spacing_are_supported(self):
+        source = (ROOT / 'tests/fixtures/studio_upload/console_upload.py').read_text()
+        old = '"message": f"File {file_name} uploaded successfully",\n'
+        alternate = source.replace(old, old.replace(',\n', ', \n'))
+        self.assertIn('"metadata": metadata', console_patch(alternate))
+
     def test_runtime_layout_updates_installed_library_and_accepts_reviewed_previous_patch(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp); bundle = root / 'bundle'; backend = root / 'backend'
