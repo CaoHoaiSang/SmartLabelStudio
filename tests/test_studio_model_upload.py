@@ -169,6 +169,14 @@ class UploadHandlerTests(unittest.TestCase):
         self.assertEqual(self.result()['status'], 'success')
         self.assertIsNone(self.result()['metadata'])
 
+    def test_delete_response_contains_the_model_name_required_by_socket_relay(self):
+        requested = []
+        self.owner.aix_delete_model_signal = SimpleNamespace(emit=requested.append)
+        self.owner.delete_model({'model_name': 'part'})
+        self.assertEqual(requested, ['part'])
+        self.assertEqual(self.events[-1], ('delete_model_response', {
+            'status': 'success', 'message': 'Model part deleted successfully', 'model_name': 'part'}))
+
     def test_wrong_sha_keeps_previous_pair_and_cleans_session(self):
         root = Path(self.temp.name) / 'models'; root.mkdir()
         (root / 'part.rknn').write_bytes(b'previous'); (root / 'part.json').write_bytes(b'previous json')

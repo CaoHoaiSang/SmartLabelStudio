@@ -342,3 +342,24 @@ class Console:
                 "message": str(e),
                 "file_name": model_name
             })
+
+    def delete_model(self, data):
+        """Handle model deletion request from NextJS client
+
+        Args:
+            data (dict): Dictionary containing:
+                - model_name: Name of the model to delete (without extension)
+        """
+        if self.is_system_running:
+            self.emitToServer("delete_model_response", {
+                "status": "error",
+                "message": "System is running, cannot delete model file",
+                "model_name": data.get('model_name', 'unknown')
+            })
+            return
+
+        self.aix_delete_model_signal.emit(data.get('model_name', 'unknown'))
+        self.emitToServer("delete_model_response", {
+            "status": "success",
+            "message": f"Model {data.get('model_name', 'unknown')} deleted successfully"
+        })

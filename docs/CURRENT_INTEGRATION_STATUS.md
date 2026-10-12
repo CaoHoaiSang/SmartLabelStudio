@@ -880,7 +880,7 @@ The reviewed generator uses actual Radxa source, preserves unrelated Template
 Matching edits, and produces checksummed payloads without changing its inputs.
 The decoder/AIX patch supports the installed venv library via `--layout radxa`,
 rejects ORI metadata when DET is selected, and removes the sidecar on model deletion.
-Local verification: 14 upload/patch/storage tests, 11 ORI tests and five JavaScript
+Local verification: 15 upload/patch/storage tests, 11 ORI tests and five JavaScript
 transport scenarios passed. Baseline and patched full web TypeScript checks both
 passed in an isolated copy on Radxa, using its installed TypeScript 5.5.3.
 
@@ -900,3 +900,5 @@ minh độ chính xác trên bệnh cây. Backup Protected của Hydro đã gồ
 Không bắt người dùng tạo lại project cũ, không rewrite Git history hoặc đưa ảnh/model/
 credential lên GitHub. Chỉ push từ máy đích; xác minh target và công việc chưa lưu
 trước cập nhật ứng dụng, không tự đóng SmartLabel.
+
+Live socket verification additionally found a pre-existing deletion acknowledgement missing model_name, required by SocketIOServer. The upload generator now repairs that response; a regression test verifies the relay contract.

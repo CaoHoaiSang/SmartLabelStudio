@@ -88,6 +88,10 @@ def console_patch(source):
         raise ValueError("Studio legacy upload response changed; review before patching")
     source = replace_once(source, recognized[0], recognized[0].replace('"file_name": model_name\n',
                           '"file_name": model_name,\n                "metadata": metadata\n'))
+    source = replace_once(source, '''"message": f"Model {data.get('model_name', 'unknown')} deleted successfully"
+''', '''"message": f"Model {data.get('model_name', 'unknown')} deleted successfully",
+            "model_name": data.get('model_name', 'unknown')
+''')
     ast.parse(source)
     return source
 
