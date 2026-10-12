@@ -207,7 +207,7 @@ class StudioContractTests(unittest.TestCase):
                 "heading":"image_x_clockwise_degrees","model_sha256":hashlib.sha256(path.read_bytes()).hexdigest(),"verification":{"rknn_simulator_vs_pt":True}}
             path.with_suffix(".json").write_text(json.dumps(manifest))
             self.assertEqual(inspect_deltax_rknn(path,image_size=640,class_count=1,task="ori")["outputs"],5)
-            for change in ({"model_sha256":"changed"}, {"heading":"up"}, {"verification":{}}, {"output_shapes":[[1,6,8400]]}):
+            for change in ({"model_sha256":"changed"}, {"heading":"up"}, {"verification":{}}, {"output_shapes":[[1,6,8400]]}, {"heading_refinement":"align_obb_axes_to_heading_vector"}):
                 path.with_suffix(".json").write_text(json.dumps({**manifest, **change}))
                 with self.assertRaises(RuntimeError):
                     inspect_deltax_rknn(path,image_size=640,class_count=1,task="ori")

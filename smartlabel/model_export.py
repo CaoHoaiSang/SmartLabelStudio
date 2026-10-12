@@ -113,7 +113,7 @@ def inspect_deltax_rknn(path: str | Path, *, image_size: int, class_count: int, 
                 or manifest.get("output_layout") != f"deltax_orienty_5_heads_v{components}"
                 or manifest.get("output_shapes") != expected or manifest.get("imgsz") != [640, 640]
                 or manifest.get("heading") != "image_x_clockwise_degrees"
-                  or manifest.get("heading_refinement") != ("align_obb_axes_to_heading_vector" if components == 2 else "snap_to_obb_axis_4_directions")
+                  or manifest.get("heading_refinement", "snap_to_obb_axis_4_directions") != ("align_obb_axes_to_heading_vector" if components == 2 else "snap_to_obb_axis_4_directions")
                 or manifest.get("model_sha256") != hashlib.sha256(path.read_bytes()).hexdigest()
                 or manifest.get("verification", {}).get("rknn_simulator_vs_pt") is not True
                 or any(f"'shape': {shape}" not in text for shape in expected)):
