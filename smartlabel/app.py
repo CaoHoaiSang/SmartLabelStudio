@@ -277,6 +277,7 @@ class SmartLabelApp(ctk.CTk):
         self.sam_lock = Lock()
         self.sam_request_versions: dict[str, int] = {}
         self.sam_request_serial = 0
+        self.sam_refine_session = None
         self.sam_click_enabled = tk.BooleanVar(value=False)
         self.sam_click_request_version = 0
         self.sam_click_busy = False
@@ -1492,12 +1493,12 @@ class SmartLabelApp(ctk.CTk):
             values=["RECT", "SEG", "OBB", "ORI"],
             variable=self.annotation_geometry,
             command=self._geometry_changed,
-            width=310,
+            width=190,
         )
         self.geometry_selector.pack(side="left", padx=4, pady=6)
-        self.to_obb_button = self._button(geometry_bar, "SEG/RECT → OBB", self._convert_selected_to_obb, width=145, color="#48657a", tooltip="Tạo OBB quay sát vật từ polygon SEG; nếu chưa có SEG thì dùng RECT.")
+        self.to_obb_button = self._button(geometry_bar, "SEG/RECT → OBB", self._convert_selected_to_obb, width=135, color="#48657a", tooltip="Tạo OBB quay sát vật từ polygon SEG; nếu chưa có SEG thì dùng RECT.")
         self.to_obb_button.pack(side="left", padx=5, pady=4)
-        self.orientation_button = self._button(geometry_bar, "Đặt hướng ORI", self._start_orientation, width=125, color="#8a6631", tooltip="Chọn vật rồi bấm phía đầu/nắp. Bấm chỉ chọn hướng; mũi tên tự kéo từ tâm tới mép khung, không phụ thuộc bấm gần hay xa.")
+        self.orientation_button = self._button(geometry_bar, "Đặt hướng ORI", self._start_orientation, width=105, color="#8a6631", tooltip="Chọn vật rồi bấm phía đầu/nắp. Bấm chỉ chọn hướng; mũi tên tự kéo từ tâm tới mép khung, không phụ thuộc bấm gần hay xa.")
         self.orientation_button.pack(side="left", padx=5, pady=4)
         self.orientation_snap_switch = ctk.CTkSwitch(
             geometry_bar, text="Bám trục khung", variable=self.orientation_snap,
@@ -1505,21 +1506,23 @@ class SmartLabelApp(ctk.CTk):
         self.orientation_snap_switch.pack(side="left", padx=8, pady=6)
         ToolTip(self.orientation_snap_switch, "ORI 360°: bật để hướng song song trục OBB, đầu mũi tên ở giữa cạnh. Tắt để chọn góc tự do, đầu mũi tên vẫn tới mép khung. Kéo chấm vàng trên mũi tên để sửa hướng; chấm trắng ngoài khung để xoay OBB (Shift: nấc 15°).")
 
-        rotation_bar = ctk.CTkFrame(tab, corner_radius=10, fg_color="#0d1924")
-        rotation_bar.pack(fill="x", padx=8, pady=(0, 3))
-        ctk.CTkLabel(rotation_bar, text="XOAY KHUNG", text_color=COLORS["muted"], font=("Segoe UI Semibold", 11)).pack(side="left", padx=(12, 8))
+        self.geometry_rotation_separator = ctk.CTkFrame(geometry_bar, width=1, height=26, fg_color="#48657a", corner_radius=0)
+        self.geometry_rotation_separator.pack(side="left", padx=8, pady=6)
+        rotation_bar = ctk.CTkFrame(geometry_bar, corner_radius=0, fg_color="transparent")
+        rotation_bar.pack(side="left", padx=(0, 4))
+        ctk.CTkLabel(rotation_bar, text="XOAY KHUNG", text_color=COLORS["muted"], font=("Segoe UI Semibold", 11)).pack(side="left", padx=(0, 6))
         self.obb_rotation_step = tk.StringVar(value="1°")
-        self.obb_rotate_left_button = self._button(rotation_bar, "↶ Trái", lambda: self._rotate_selected_obb(-1), width=85,
+        self.obb_rotation_step_menu = ctk.CTkOptionMenu(rotation_bar, values=["0.1°", "0.5°", "1°", "5°"],
+            variable=self.obb_rotation_step, width=68)
+        self.obb_rotation_step_menu.pack(side="left", padx=3, pady=4)
+        self.obb_rotate_left_button = self._button(rotation_bar, "↶ Trái", lambda: self._rotate_selected_obb(-1), width=60,
             tooltip="Xoay OBB ngược chiều kim đồng hồ theo bước đã chọn; ORI đi cùng khung. Ctrl+Z để hoàn tác.")
         self.obb_rotate_left_button.pack(side="left", padx=3, pady=4)
-        self.obb_rotation_step_menu = ctk.CTkOptionMenu(rotation_bar, values=["0.1°", "0.5°", "1°", "5°"],
-            variable=self.obb_rotation_step, width=85)
-        self.obb_rotation_step_menu.pack(side="left", padx=3, pady=4)
-        self.obb_rotate_right_button = self._button(rotation_bar, "Phải ↷", lambda: self._rotate_selected_obb(1), width=85,
+        self.obb_rotate_right_button = self._button(rotation_bar, "Phải ↷", lambda: self._rotate_selected_obb(1), width=65,
             tooltip="Xoay OBB theo chiều kim đồng hồ theo bước đã chọn; mỗi lần bấm là một bước.")
         self.obb_rotate_right_button.pack(side="left", padx=3, pady=4)
-        self.obb_rotation_angle_label = ctk.CTkLabel(rotation_bar, text="Góc khung: —", font=("Segoe UI", 12))
-        self.obb_rotation_angle_label.pack(side="left", padx=12)
+        self.obb_rotation_angle_label = ctk.CTkLabel(rotation_bar, text="Góc: —", font=("Segoe UI", 12))
+        self.obb_rotation_angle_label.pack(side="left", padx=(6, 0))
 
         toolbar = ctk.CTkFrame(tab, height=48, corner_radius=10, fg_color=COLORS["panel2"])
         toolbar.pack(fill="x", padx=8, pady=(3, 5))
@@ -1768,10 +1771,12 @@ class SmartLabelApp(ctk.CTk):
         else:
             self.label_save_status.pack_forget()
 
-    def _geometry_changed(self, value: str) -> None:
+    def _geometry_changed(self, value: str, preserve_sam: bool = False) -> None:
         normalized = value.lower()
         if normalized not in {"rect", "seg", "obb", "ori"}:
             return
+        if not preserve_sam and hasattr(self, "canvas") and self.canvas.mode in {"sam_positive", "sam_negative"}:
+            self._pause_sam_for_editing()
         self.annotation_geometry.set(value.upper())
         if hasattr(self, "canvas"):
             self.canvas.set_geometry_mode(normalized)
@@ -1817,9 +1822,9 @@ class SmartLabelApp(ctk.CTk):
             import math
             a, b = ann.obb[:2]
             angle = round(math.degrees(math.atan2(b[1]-a[1], b[0]-a[0])) % 360, 1) % 360
-            text = f"Góc khung: {angle:.1f}°"
+            text = f"Góc: {angle:.1f}°"
         else:
-            text = "Góc khung: —"
+            text = "Góc: —"
         self.obb_rotation_angle_label.configure(text=text)
 
     def _rotate_selected_obb(self, sign: int) -> None:
@@ -1840,6 +1845,7 @@ class SmartLabelApp(ctk.CTk):
         self.sam_click_request_version += 1
         self.sam_click_busy = False
         self.sam_request_versions.clear()
+        self.sam_refine_session = None
         self.canvas.clear_prompts()
 
     def _convert_selected_to_obb(self) -> None:
@@ -1868,14 +1874,34 @@ class SmartLabelApp(ctk.CTk):
         self._annotation_selected(ann.id)
 
     def _set_tool(self, tool: str) -> None:
+        if tool in {"sam_positive", "sam_negative"}:
+            ann = self._selected_annotation()
+            if self.canvas.read_only or self._supplement_active():
+                return
+            if ann is None or len(ann.bbox) != 4:
+                self._pause_sam_for_editing()
+                self.canvas.set_mode("select")
+                self._set_status("Chọn nhãn cần chỉnh trước khi dùng SAM + / SAM −.", COLORS["warn"])
+                return
+            # Point creation and refinement are distinct operations. Keep +/−
+            # prompts when switching signs, but invalidate point-create results.
+            self.sam_click_enabled.set(False)
+            self.sam_click_request_version += 1
+            self.sam_click_busy = False
+            self._ensure_sam_refine_session(ann)
         if tool not in {"sam_click", "sam_positive", "sam_negative"}:
             self._pause_sam_for_editing()
         self.canvas.set_mode(tool)
-        self._set_status(f"Công cụ: {tool}")
+        if tool in {"sam_positive", "sam_negative"}:
+            self._set_status("SAM +: bấm vùng cần giữ/thêm" if tool == "sam_positive" else "SAM −: bấm vùng cần loại bỏ")
+        else:
+            self._set_status(f"Công cụ: {tool}")
 
     def _toggle_sam_click(self) -> None:
         """Enable point-only SAM labeling without requiring a seed box."""
         if self.sam_click_enabled.get():
+            self.sam_refine_session = None
+            self.sam_request_versions.clear()
             checkpoint_value = self.sam_checkpoint.get().strip()
             checkpoint = Path(checkpoint_value) if checkpoint_value else None
             if checkpoint is None or not checkpoint.is_file() or checkpoint.suffix.lower() not in {".pt", ".pth"}:
@@ -2013,6 +2039,10 @@ class SmartLabelApp(ctk.CTk):
         # A point-only SAM result must never land on an image selected later.
         self.sam_click_request_version += 1
         self.sam_click_busy = False
+        self.sam_refine_session = None
+        self.sam_request_versions.clear()
+        if self.canvas.mode in {"sam_positive", "sam_negative"}:
+            self.canvas.set_mode("select")
         record = self.project.images[self.current_index]
         self.canvas.load(self.project, record, str(self.store.image_path(self.project, record)))
         self._label_feedback()
@@ -2038,6 +2068,8 @@ class SmartLabelApp(ctk.CTk):
         self._label_feedback()
         self.sam_click_request_version += 1
         self.sam_click_busy = False
+        self.sam_refine_session = None
+        self.sam_request_versions.clear()
         self.canvas.clear_image()
         self.image_position_label.configure(text="0 / 0")
         self.canvas.project = self.project
@@ -2578,6 +2610,12 @@ class SmartLabelApp(ctk.CTk):
         if self._supplement_active():
             self._sync_obb_rotation_controls()
             return self.supplement_view.sync_details()
+        if annotation_id != self.selected_annotation_id:
+            self.sam_refine_session = None
+            self.sam_request_versions.clear()
+            self.canvas.clear_prompts()
+            if self.canvas.mode in {"sam_positive", "sam_negative"}:
+                self.canvas.set_mode("select")
         self.selected_annotation_id = annotation_id
         self._sync_obb_rotation_controls()
         if annotation_id and self.project and 0 <= self.current_index < len(self.project.images):
@@ -3169,7 +3207,20 @@ class SmartLabelApp(ctk.CTk):
             self.sam_status_label.configure(text=text, text_color=color)
 
     def _sam_refine_selected(self) -> None:
+        if self.canvas.read_only or self._supplement_active():
+            return
+        self._pause_sam_for_editing()
+        self.canvas.set_mode("select")
         self._run_sam_refine(use_prompts=False)
+
+    def _ensure_sam_refine_session(self, ann):
+        record = self.project.images[self.current_index]
+        owner = (self.project.id, record.id, ann.id)
+        if self.sam_refine_session is None or self.sam_refine_session["owner"] != owner:
+            self.canvas.clear_prompts()
+            self.sam_request_versions.clear()
+            self.sam_refine_session = {"owner": owner, "bbox": list(ann.bbox)}
+        return self.sam_refine_session
 
     def _sam_prompt_added(self, _x: float, _y: float, _label: int) -> None:
         if self.canvas.mode == "sam_click":
@@ -3225,6 +3276,7 @@ class SmartLabelApp(ctk.CTk):
         class_id = int(self.canvas.active_class_id)
         geometry = self.annotation_geometry.get().strip().lower()
         default_attributes = dict(self.canvas.default_attributes)
+        config = self.sam_config.get()
         self.sam_click_request_version += 1
         request_version = self.sam_click_request_version
         self.sam_click_busy = True
@@ -3240,7 +3292,7 @@ class SmartLabelApp(ctk.CTk):
                 rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                 with self.sam_lock:
                     if self.sam_adapter is None:
-                        self.sam_adapter = Sam2Adapter(checkpoint, self.sam_config.get(), device="auto")
+                        self.sam_adapter = Sam2Adapter(checkpoint, config, device="auto")
                     self.sam_adapter.set_image(rgb, str(image_path))
                     mask, score = self.sam_adapter.mask_from_points([[x, y]], [1])
                 geometry_data = mask_to_geometry(mask, anchor_point=(x, y))
@@ -3254,6 +3306,8 @@ class SmartLabelApp(ctk.CTk):
         Thread(target=worker, daemon=True).start()
 
     def _run_sam_refine(self, use_prompts: bool) -> None:
+        if self.canvas.read_only or self._supplement_active():
+            return
         ann = self._selected_annotation()
         if not ann or len(ann.bbox) != 4 or not self.project or self.current_index < 0:
             messagebox.showwarning("Chưa chọn box", "Hãy chọn một bounding box trước.")
@@ -3269,16 +3323,19 @@ class SmartLabelApp(ctk.CTk):
         self.sam_request_serial += 1
         request_version = self.sam_request_serial
         self.sam_request_versions[ann_id] = request_version
-        bbox = list(ann.bbox)
+        bbox = list(self._ensure_sam_refine_session(ann)["bbox"])
         prompt_snapshot = list(self.canvas.prompt_points)
+        config = self.sam_config.get()
         self._set_status("SAM2 đang tạo mask…")
         def worker():
             try:
                 import cv2
                 rgb = cv2.cvtColor(cv2.imread(str(image_path)), cv2.COLOR_BGR2RGB)
                 with self.sam_lock:
+                    if self.sam_request_versions.get(ann_id) != request_version:
+                        return
                     if self.sam_adapter is None:
-                        self.sam_adapter = Sam2Adapter(checkpoint, self.sam_config.get(), device="auto")
+                        self.sam_adapter = Sam2Adapter(checkpoint, config, device="auto")
                     self.sam_adapter.set_image(rgb, str(image_path))
                     x, y, w, h = bbox
                     if use_prompts and prompt_snapshot:
@@ -3297,7 +3354,7 @@ class SmartLabelApp(ctk.CTk):
                 points = [[float(p[0][0]), float(p[0][1])] for p in contour]
                 self.event_queue.put(("sam_done", (record.id, ann_id, request_version, points, score)))
             except Exception as exc:
-                self.event_queue.put(("error", f"SAM2: {exc}"))
+                self.event_queue.put(("sam_refine_error", (ann_id, request_version, str(exc))))
         Thread(target=worker, daemon=True).start()
 
     def _confidence_changed(self, value) -> None:
@@ -5765,19 +5822,25 @@ class SmartLabelApp(ctk.CTk):
                             ann.source = "sam2"
                             ann.confidence = score
                             ann.approved = False
-                            if record.review_status == "reviewed":
-                                record.review_status = "draft"
+                            record.review_status = "draft"
                             self.save_project()
                             if is_current:
                                 self._refresh_image_list()
                                 self._sync_image_list_to_current()
                                 self._update_image_status_controls()
+                                prompt_mode = self.canvas.mode
                                 self.geometry_selector.set("SEG")
-                                self._geometry_changed("SEG")
+                                self._geometry_changed("SEG", preserve_sam=True)
+                                if prompt_mode in {"sam_positive", "sam_negative"}:
+                                    self.canvas.set_mode(prompt_mode)
                                 self.canvas.redraw()
                                 self._annotation_selected(ann.id)
                             config_name = self.sam_adapter.config if self.sam_adapter else self.sam_config.get()
                             self._set_status(f"SAM2 tạo mask · confidence {score:.2f} · {config_name}")
+                elif kind == "sam_refine_error":
+                    ann_id, request_version, error = payload
+                    if self.sam_request_versions.get(ann_id) == request_version:
+                        self._set_status(f"SAM2 chưa chỉnh được mask: {error}", COLORS["bad"])
                 elif kind == "sam_click_done":
                     image_id, request_version, class_id, geometry, default_attributes, geometry_data, score = payload
                     if request_version == self.sam_click_request_version:

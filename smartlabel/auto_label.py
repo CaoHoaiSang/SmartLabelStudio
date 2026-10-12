@@ -317,11 +317,13 @@ class Sam2Adapter:
         return masks[index], float(scores[index])
 
     def mask_from_prompts(self, box_xyxy: list[float], points: list[list[float]], labels: list[int]):
+        if not points or len(points) != len(labels) or any(label not in (0, 1) for label in labels):
+            raise ValueError("Điểm SAM +/− phải có nhãn 1/0 và số lượng khớp")
         masks, scores, _ = self.predictor.predict(
             point_coords=self.np.asarray(points, dtype=self.np.float32) if points else None,
             point_labels=self.np.asarray(labels, dtype=self.np.int32) if labels else None,
             box=self.np.asarray(box_xyxy, dtype=self.np.float32),
-            multimask_output=True,
+            multimask_output=False,
         )
         index = int(scores.argmax())
         return masks[index], float(scores[index])

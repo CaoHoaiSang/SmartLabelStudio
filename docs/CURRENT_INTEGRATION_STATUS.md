@@ -1,3 +1,12 @@
+## Hàng hình học và SAM +/− — 12/10/2026
+
+Gộp xoay cùng hàng Loại nhãn, có vạch ngăn; chọn bước góc → Trái → Phải.
+SAM +/− giữ điểm theo từng vật/ảnh, tắt tạo vật mới, giữ công cụ sau kết
+quả; đổi vật/ảnh/công cụ hủy kết quả cũ. Worker không đọc Tk, bỏ yêu cầu
+bị thay thế; sửa mask luôn về Nháp. Có test luồng giao diện, cửa sổ1180
+và SAM2 thật trên ảnh tổng hợp. [Cách dùng](OBB_ORI_EDITING.md).
+Local/CI/nạp source ghi riêng trong báo cáo bàn giao.
+
 ## OBB giữ góc vuông và xoay theo bước — 12/10/2026
 
 Chặn RECT resize làm xiên OBB; chỉnh/xoay dựng khung vuông góc và biến đổi

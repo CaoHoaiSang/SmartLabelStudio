@@ -2,6 +2,32 @@
 
 ## Giữ khung chữ nhật và xoay từng bước — 12/10/2026
 
+Cập nhật giao diện: phần **XOAY KHUNG** chung hàng với **LOẠI NHÃN**, có
+vạch ngăn; thứ tự **chọn bước góc → Trái → Phải → góc hiện tại**.
+
+## Chỉnh mask với SAM + / SAM − — 12/10/2026
+
+Chọn nhãn cần chỉnh trước. **SAM +** đặt điểm ở vùng cần giữ/thêm;
+**SAM −** đặt điểm ở vùng cần loại bỏ. Mỗi lần bấm chạy lại SAM2 với
+box ban đầu và toàn bộ điểm của đúng nhãn đó. Chuyển +/− không mất các
+điểm trước; kết quả hiện ở SEG và giữ công cụ đang dùng để chỉnh tiếp.
+Đây là điểm hướng dẫn model, không phải cọ vẽ/xóa từng pixel.
+
+SAM +/− tắt luồng SAM ON tạo vật mới. Chọn vật khác, ảnh khác, công cụ
+thao tác tay hoặc đổi loại nhãn sẽ kết thúc phiên điểm và hủy kết quả
+cũ đến trễ. Các yêu cầu bị thay thế được bỏ qua trước khi chạy model.
+Chỉnh mask chuyển nhãn/ảnh về Nháp và có undo. Các khung OBB/ORI đang
+lưu được giữ; dùng SEG/RECT → OBB nếu muốn tạo lại khung từ mask đã sửa.
+
+Đã sửa lỗi kết quả SAM trả công cụ về Chọn/SAM ON và các điểm không có
+chủ sở hữu theo vật. Worker dùng bản sao config/điểm từ UI, không đọc Tk
+từ thread. Box + điểm dùng một mask theo API chính thức của
+[Meta SAM2](https://github.com/facebookresearch/sam2/blob/main/sam2/sam2_image_predictor.py).
+Kiểm thử giao diện dùng project tạm; kiểm SAM2 thật dùng checkpoint hiện
+có và ảnh tổng hợp, không thay cho nghiệm thu mask trên vật thật.
+
+## Quy tắc khung và xoay
+
 OBB luôn giữ hai cặp cạnh song song và bốn góc vuông khi kéo góc/cạnh,
 xoay hoặc chỉnh RECT của nhãn có OBB. Lỗi cũ co giãn theo X/Y trong RECT
 làm khung xoay thành hình bình hành; chỉnh OBB sau đó dùng các trục xiên

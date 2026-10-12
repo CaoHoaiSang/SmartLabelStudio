@@ -571,7 +571,7 @@ class ObbOriAppTests(unittest.TestCase):
         self.app.obb_rotate_right_button.invoke()
         f = frame(self.ann.obb)
         self.assertAlmostEqual(math.degrees(math.atan2(f[3], f[2])), 25.5, places=6)
-        self.assertEqual(self.app.obb_rotation_angle_label.cget('text'), 'Góc khung: 25.5°')
+        self.assertEqual(self.app.obb_rotation_angle_label.cget('text'), 'Góc: 25.5°')
         self.assertFalse(self.app.sam_click_enabled.get())
         self.assertGreater(self.app.sam_click_request_version, version)
         self.app.obb_rotate_left_button.invoke()
@@ -589,7 +589,7 @@ class ObbOriAppTests(unittest.TestCase):
         self.app.canvas.selected_id = None
         self.app._annotation_selected(None)
         self.assertEqual(self.app.obb_rotate_right_button.cget('state'), 'disabled')
-        self.assertEqual(self.app.obb_rotation_angle_label.cget('text'), 'Góc khung: —')
+        self.assertEqual(self.app.obb_rotation_angle_label.cget('text'), 'Góc: —')
 
     def test_start_orientation_keeps_obb_view_and_disables_sam(self):
         before = self.ann.to_dict()
