@@ -8,7 +8,8 @@ def model_architecture(network):
     cfg = getattr(network, "yaml", {})
     if not isinstance(cfg, dict):
         cfg = {}
-    stem = Path(str(cfg.get("yaml_file", ""))).stem
+    # Checkpoints travel between Windows training and Linux conversion.
+    stem = Path(str(cfg.get("yaml_file", "")).replace("\\", "/")).stem
     family = cfg.get("deltax_architecture")
     if family not in {"yolo11", "yolov8"}:
         family = "yolo11" if stem.startswith("yolo11") else "yolov8" if stem.startswith("yolov8") else "custom"

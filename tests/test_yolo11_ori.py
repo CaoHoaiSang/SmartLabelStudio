@@ -17,6 +17,8 @@ class Yolo11OriTests(unittest.TestCase):
         self.assertEqual(ORI_MODEL, 'deltax-yolo11n-ori')
         self.assertEqual(model_architecture(SimpleNamespace(yaml={'yaml_file': '/old/yolov8n-ori.yaml', 'scale': 'n'})),
                          {'family': 'yolov8', 'scale': 'n'})
+        windows_yaml = SimpleNamespace(yaml={'yaml_file': r'D:\old\yolov8n-ori.yaml', 'scale': 'n'})
+        self.assertEqual(model_architecture(windows_yaml), {'family': 'yolov8', 'scale': 'n'})
         wrapped = SimpleNamespace(module=SimpleNamespace(yaml={'deltax_architecture': 'yolo11', 'scale': 's'}))
         self.assertEqual(model_architecture(wrapped), {'family': 'yolo11', 'scale': 's'})
         for scale in 'nslmx':
