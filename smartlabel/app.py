@@ -1505,6 +1505,22 @@ class SmartLabelApp(ctk.CTk):
         self.orientation_snap_switch.pack(side="left", padx=8, pady=6)
         ToolTip(self.orientation_snap_switch, "ORI 360°: bật để hướng song song trục OBB, đầu mũi tên ở giữa cạnh. Tắt để chọn góc tự do, đầu mũi tên vẫn tới mép khung. Kéo chấm vàng trên mũi tên để sửa hướng; chấm trắng ngoài khung để xoay OBB (Shift: nấc 15°).")
 
+        rotation_bar = ctk.CTkFrame(tab, corner_radius=10, fg_color="#0d1924")
+        rotation_bar.pack(fill="x", padx=8, pady=(0, 3))
+        ctk.CTkLabel(rotation_bar, text="XOAY KHUNG", text_color=COLORS["muted"], font=("Segoe UI Semibold", 11)).pack(side="left", padx=(12, 8))
+        self.obb_rotation_step = tk.StringVar(value="1°")
+        self.obb_rotate_left_button = self._button(rotation_bar, "↶ Trái", lambda: self._rotate_selected_obb(-1), width=85,
+            tooltip="Xoay OBB ngược chiều kim đồng hồ theo bước đã chọn; ORI đi cùng khung. Ctrl+Z để hoàn tác.")
+        self.obb_rotate_left_button.pack(side="left", padx=3, pady=4)
+        self.obb_rotation_step_menu = ctk.CTkOptionMenu(rotation_bar, values=["0.1°", "0.5°", "1°", "5°"],
+            variable=self.obb_rotation_step, width=85)
+        self.obb_rotation_step_menu.pack(side="left", padx=3, pady=4)
+        self.obb_rotate_right_button = self._button(rotation_bar, "Phải ↷", lambda: self._rotate_selected_obb(1), width=85,
+            tooltip="Xoay OBB theo chiều kim đồng hồ theo bước đã chọn; mỗi lần bấm là một bước.")
+        self.obb_rotate_right_button.pack(side="left", padx=3, pady=4)
+        self.obb_rotation_angle_label = ctk.CTkLabel(rotation_bar, text="Góc khung: —", font=("Segoe UI", 12))
+        self.obb_rotation_angle_label.pack(side="left", padx=12)
+
         toolbar = ctk.CTkFrame(tab, height=48, corner_radius=10, fg_color=COLORS["panel2"])
         toolbar.pack(fill="x", padx=8, pady=(3, 5))
         self._button(toolbar, "Chọn", lambda: self._set_tool("select"), width=75).pack(side="left", padx=(8, 3), pady=6)
@@ -1786,6 +1802,38 @@ class SmartLabelApp(ctk.CTk):
     def _orientation_snap_changed(self) -> None:
         self.canvas.orientation_snap = self.orientation_snap.get()
         self._save_app_settings()
+
+    def _sync_obb_rotation_controls(self) -> None:
+        if not hasattr(self, "obb_rotate_left_button"):
+            return
+        ann = self._selected_annotation()
+        enabled = (not self._supplement_active() and not self.canvas.read_only
+                   and self.canvas.geometry_mode in {"obb", "ori"}
+                   and ann is not None and len(ann.obb) == 4)
+        for button in (self.obb_rotate_left_button, self.obb_rotate_right_button):
+            self._set_button_enabled(button, enabled)
+        self.obb_rotation_step_menu.configure(state="normal" if enabled else "disabled")
+        if enabled:
+            import math
+            a, b = ann.obb[:2]
+            angle = round(math.degrees(math.atan2(b[1]-a[1], b[0]-a[0])) % 360, 1) % 360
+            text = f"Góc khung: {angle:.1f}°"
+        else:
+            text = "Góc khung: —"
+        self.obb_rotation_angle_label.configure(text=text)
+
+    def _rotate_selected_obb(self, sign: int) -> None:
+        if self._supplement_active() or self.canvas.read_only or self.canvas.geometry_mode not in {"obb", "ori"}:
+            return
+        ann = self._selected_annotation()
+        if ann is None or len(ann.obb) != 4:
+            return
+        degrees = sign * float(self.obb_rotation_step.get().rstrip("°"))
+        self._set_tool("select")  # Invalidate late SAM results before editing.
+        if self.canvas.rotate_selected_obb(degrees):
+            self._set_status(f"Đã xoay khung {degrees:+g}° · Ctrl+Z để hoàn tác")
+        else:
+            self._set_status("Không xoay được: khung hoặc hình học đi kèm sẽ vượt biên ảnh.")
 
     def _pause_sam_for_editing(self) -> None:
         self.sam_click_enabled.set(False)
@@ -2528,8 +2576,10 @@ class SmartLabelApp(ctk.CTk):
     def _annotation_selected(self, annotation_id: str | None) -> None:
         self._apply_label_detail_visibility()
         if self._supplement_active():
+            self._sync_obb_rotation_controls()
             return self.supplement_view.sync_details()
         self.selected_annotation_id = annotation_id
+        self._sync_obb_rotation_controls()
         if annotation_id and self.project and 0 <= self.current_index < len(self.project.images):
             self.last_selected_by_image[self.project.images[self.current_index].id] = annotation_id
         ann = self._selected_annotation()

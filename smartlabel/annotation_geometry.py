@@ -108,7 +108,65 @@ def translate(snapshot, dx, dy, image_size):
     return result
 
 
+def rectify_obb(snapshot, image_size=None):
+    """Rectify on an explicit edit only; map attached geometry in the old basis.
+
+    Older RECT anisotropic edits can leave a parallelogram in the OBB field.
+    Retain its centre, edge lengths, first-edge direction and winding, replacing
+    the second axis with its perpendicular. Never change labels while viewing.
+    """
+    if any(not math.isfinite(v) for name in ("points", "obb", "orientation")
+           for p in snapshot[name] for v in p):
+        return None
+    oriented = frame(snapshot["obb"])
+    if oriented is None:
+        return None
+    cx, cy, ux, uy, vx, vy, w, h = oriented
+    determinant = ux*vy-uy*vx
+    if abs(determinant) < 1e-6:
+        return None
+    nx, ny = (-uy, ux) if determinant > 0 else (uy, -ux)
+
+    def transform(px, py):
+        dx, dy = px-cx, py-cy
+        # Invert the actual old basis, rather than dot-projecting skew axes.
+        a = (dx*vy-dy*vx)/determinant
+        b = (ux*dy-uy*dx)/determinant
+        return [cx+a*ux+b*nx, cy+a*uy+b*ny]
+
+    result = {name: [transform(*p) for p in snapshot[name]]
+              for name in ("points", "orientation")}
+    result["obb"] = [[cx+a*ux+b*nx, cy+a*uy+b*ny]
+                     for a, b in ((-w/2, -h/2), (w/2, -h/2),
+                                  (w/2, h/2), (-w/2, h/2))]
+    if image_size is not None and not within_image(result, image_size):
+        return None
+    result["bbox"] = envelope(result["obb"])
+    return result
+
+
+def within_image(snapshot, image_size):
+    return all(math.isfinite(p[i]) and -1e-6 <= p[i] <= image_size[i]+1e-6
+               for name in ("points", "obb", "orientation")
+               for p in snapshot[name] for i in (0, 1))
+
+
+def rotate_obb(snapshot, degrees, image_size):
+    if not math.isfinite(degrees) or abs(degrees) < 1e-9:
+        return None
+    oriented = frame(snapshot["obb"])
+    if oriented is None:
+        return None
+    cx, cy = oriented[:2]
+    angle = math.radians(degrees)
+    return edit_obb(snapshot, "rotate", (cx+1, cy),
+                    (cx+math.cos(angle), cy+math.sin(angle)), image_size)
+
+
 def edit_obb(snapshot, handle, start, point, image_size, snap_rotation=False):
+    snapshot = rectify_obb(snapshot)
+    if snapshot is None:
+        return None
     oriented = frame(snapshot["obb"])
     if oriented is None:
         return None
@@ -147,8 +205,7 @@ def edit_obb(snapshot, handle, start, point, image_size, snap_rotation=False):
 
     result = {name: [transform(*p) for p in snapshot[name]]
               for name in ("points", "obb", "orientation")}
-    if any(not math.isfinite(p[i]) or not -1e-6 <= p[i] <= image_size[i]+1e-6
-           for name in result for p in result[name] for i in (0, 1)):
+    if not within_image(result, image_size):
         return None  # Never clip corners independently and destroy rectangularity.
     result["bbox"] = envelope(result["obb"])
     return result

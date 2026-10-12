@@ -7,7 +7,7 @@ from typing import Callable
 from PIL import Image, ImageTk
 
 from .models import Annotation, ImageRecord, Project
-from .annotation_geometry import FIELDS, contains, direction, edit_obb, frame, translate
+from .annotation_geometry import FIELDS, contains, direction, edit_obb, frame, rectify_obb, rotate_obb, translate
 
 
 class AnnotationCanvas(tk.Canvas):
@@ -140,6 +140,28 @@ class AnnotationCanvas(tk.Canvas):
     def set_default_attributes(self, values: dict[str, str]) -> None:
         """Apply explicit project defaults only to annotations created later."""
         self.default_attributes = dict(values)
+
+    def rotate_selected_obb(self, degrees: float) -> bool:
+        """One explicit angular step is one undoable manual edit."""
+        if self.read_only or self.geometry_mode not in {"obb", "ori"} or not self.record or not self.image:
+            return False
+        self.cancel_action()
+        ann = next((a for a in self.record.annotations if a.id == self.selected_id), None)
+        if ann is None or len(ann.obb) != 4:
+            return False
+        snapshot = {name: getattr(ann, name) for name in FIELDS}
+        value = rotate_obb(snapshot, degrees, self.image.size)
+        if value is None:
+            return False
+        self.checkpoint()
+        for name in FIELDS:
+            setattr(ann, name, value[name])
+        ann.source, ann.confidence, ann.approved = "manual", None, False
+        self.record.review_status = "draft"
+        self.on_change()
+        self.on_select(ann.id)
+        self.redraw()
+        return True
 
     def fit_image(self) -> None:
         if not self.image:
@@ -505,21 +527,25 @@ class AnnotationCanvas(tk.Canvas):
             x1, x2 = min(max(x1, 0), self.image.width), min(max(x2, 0), self.image.width)
             y1, y2 = min(max(y1, 0), self.image.height), min(max(y2, 0), self.image.height)
         new_bbox = [x1, y1, max(3, x2 - x1), max(3, y2 - y1)]
-        if new_bbox == ann.bbox:
+        if new_bbox == self.edit_state["bbox"] and not self.edit_state["moved"]:
             return
-        if not self.edit_state["moved"]:
-            self._checkpoint_edit()
-        ann.bbox = new_bbox
         old_x, old_y, old_w, old_h = self.edit_state["bbox"]
-        new_x, new_y, new_w, new_h = ann.bbox
+        new_x, new_y, new_w, new_h = new_bbox
         def transform(points):
             return [
                 [new_x + (px - old_x) * new_w / max(old_w, 1e-6), new_y + (py - old_y) * new_h / max(old_h, 1e-6)]
                 for px, py in points
             ]
-        ann.points = transform(self.edit_state["points"])
-        ann.obb = transform(self.edit_state["obb"])
-        ann.orientation = transform(self.edit_state["orientation"])
+        value = {name: transform(self.edit_state[name]) for name in ("points", "obb", "orientation")}
+        value["bbox"] = new_bbox
+        if len(value["obb"]) == 4:
+            value = rectify_obb(value, self.image.size)
+        if value is None or all(getattr(ann, name) == value[name] for name in FIELDS):
+            return
+        if not self.edit_state["moved"]:
+            self._checkpoint_edit()
+        for name in FIELDS:
+            setattr(ann, name, value[name])
         self.edit_state["moved"] = True
         self.redraw()
 

@@ -12,7 +12,7 @@ from PIL import Image
 
 from smartlabel.annotation_canvas import AnnotationCanvas
 from smartlabel.models import Annotation, ImageRecord, LabelClass, Project
-from smartlabel.annotation_geometry import direction, edit_obb, frame
+from smartlabel.annotation_geometry import direction, edit_obb, frame, rectify_obb
 
 
 def rotated_box(cx=400, cy=300, width=240, height=120, angle=25):
@@ -25,6 +25,44 @@ def rotated_box(cx=400, cy=300, width=240, height=120, angle=25):
 def envelope(points):
     xs, ys = zip(*points)
     return [min(xs), min(ys), max(xs)-min(xs), max(ys)-min(ys)]
+
+
+def assert_rectangle(test, corners):
+    for i in range(4):
+        a, b, c = corners[i], corners[(i+1) % 4], corners[(i+2) % 4]
+        u, v = [b[j]-a[j] for j in (0, 1)], [c[j]-b[j] for j in (0, 1)]
+        test.assertAlmostEqual(sum(x*y for x, y in zip(u, v)) / (math.hypot(*u)*math.hypot(*v)), 0, places=8)
+    for j in (0, 1):
+        test.assertAlmostEqual(corners[0][j]+corners[2][j], corners[1][j]+corners[3][j], places=8)
+
+
+class RectangleGeometryTests(unittest.TestCase):
+    def test_all_handles_at_many_angles_and_both_windings_remain_rectangles(self):
+        for angle in (-179, -135, -90, -45, -.1, 0, 25, 45, 89.9, 135, 179):
+            for winding in (1, -1):
+                corners = rotated_box(angle=angle)[::winding]
+                state = dict(bbox=envelope(corners), obb=corners, points=[], orientation=[])
+                for handle in ('nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'):
+                    with self.subTest(angle=angle, winding=winding, handle=handle):
+                        moved = edit_obb(state, handle, (400, 300), (430, 320), (800, 600))
+                        self.assertIsNotNone(moved)
+                        assert_rectangle(self, moved['obb'])
+
+    def test_legacy_skew_is_rectified_with_arrow_on_same_local_axis(self):
+        corners = [[400+1.3*(x-400), 300+.8*(y-300)] for x, y in rotated_box()]
+        tip = [(corners[1][j]+corners[2][j])/2 for j in (0, 1)]
+        state = dict(bbox=envelope(corners), obb=corners, points=[], orientation=[[400, 300], tip])
+        before = copy.deepcopy(state)
+        result = rectify_obb(state, (800, 600))
+        self.assertEqual(state, before)
+        assert_rectangle(self, result['obb'])
+        self.assertEqual(result['orientation'][0], [400, 300])
+        for j in (0, 1):
+            self.assertAlmostEqual(result['orientation'][1][j], (result['obb'][1][j]+result['obb'][2][j])/2)
+
+    def test_invalid_and_outside_rectification_is_rejected(self):
+        for corners in ([[0,0], [10,0], [20,0], [30,0]], rotated_box(cx=0)):
+            self.assertIsNone(rectify_obb(dict(obb=corners, points=[], orientation=[]), (800, 600)))
 
 
 class ObbOriCanvasTests(unittest.TestCase):
@@ -186,6 +224,80 @@ class ObbOriCanvasTests(unittest.TestCase):
         self.assertAlmostEqual(sum(a*b for a, b in zip(u, v)), 0, places=5)
         for actual, wanted in zip(self.ann.bbox, envelope(p)):
             self.assertAlmostEqual(actual, wanted)
+
+    def test_rect_resize_does_not_shear_stored_obb_or_arrow(self):
+        self.ann.orientation = [[400, 300], [(self.ann.obb[1][j]+self.ann.obb[2][j])/2 for j in (0, 1)]]
+        before = self.ann.to_dict()
+        self.canvas.geometry_mode = 'rect'
+        x, y, w, h = self.ann.bbox
+        self.drag((x+w, y+h/2), (x+w+55, y+h/2))
+        self.assertNotEqual(self.ann.obb, before['obb'])
+        assert_rectangle(self, self.ann.obb)
+        self.assert_points_close([self.ann.orientation[1]], [[(self.ann.obb[1][j]+self.ann.obb[2][j])/2 for j in (0, 1)]])
+        self.canvas.set_geometry_mode('obb')
+        self.drag(self.ann.obb[2], (self.ann.obb[2][0]+20, self.ann.obb[2][1]+10))
+        assert_rectangle(self, self.ann.obb)
+        self.canvas.undo()
+        self.canvas.undo()
+        self.assertEqual(self.record.annotations[0].to_dict(), before)
+
+    def test_resize_already_skewed_obb_repairs_only_edited_label_and_undo_restores(self):
+        self.ann.obb = [[400+1.3*(x-400), 300+.8*(y-300)] for x, y in self.ann.obb]
+        self.ann.bbox = envelope(self.ann.obb)
+        before = self.ann.to_dict()
+        self.canvas.redraw()
+        self.assertEqual(self.ann.to_dict(), before)
+        self.drag(self.ann.obb[2], (self.ann.obb[2][0]+20, self.ann.obb[2][1]+15))
+        assert_rectangle(self, self.ann.obb)
+        self.canvas.undo()
+        self.assertEqual(self.record.annotations[0].to_dict(), before)
+
+    def test_small_rotation_steps_are_precise_keep_dimensions_and_following_geometry(self):
+        before = self.ann.to_dict()
+        self.assertTrue(self.canvas.rotate_selected_obb(.1))
+        f = frame(self.ann.obb)
+        self.assertAlmostEqual(math.degrees(math.atan2(f[3], f[2])), 25.1, places=7)
+        self.assertAlmostEqual(f[6], 240, places=7)
+        self.assertAlmostEqual(f[7], 120, places=7)
+        self.assertNotEqual(self.ann.orientation, before['orientation'])
+        self.assertNotEqual(self.ann.points, before['points'])
+        self.assertFalse(self.ann.approved)
+        self.assertEqual(self.record.review_status, 'draft')
+        self.assertEqual(len(self.canvas.history), 1)
+        after = self.ann.to_dict()
+        self.canvas.undo()
+        self.assertEqual(self.record.annotations[0].to_dict(), before)
+        self.canvas.redo()
+        self.assertEqual(self.record.annotations[0].to_dict(), after)
+
+    def test_repeated_steps_and_reverse_do_not_shear_or_drift(self):
+        before = self.ann.to_dict()
+        for delta in [1]*100+[-1]*100:
+            self.assertTrue(self.canvas.rotate_selected_obb(delta))
+            assert_rectangle(self, self.ann.obb)
+        for name in ('obb', 'orientation', 'points'):
+            self.assert_points_close(getattr(self.ann, name), before[name])
+
+    def test_rotation_step_guards_do_not_change_labels_or_history(self):
+        before = self.ann.to_dict()
+        for mode, readonly in (('rect', False), ('obb', True)):
+            self.canvas.geometry_mode, self.canvas.read_only = mode, readonly
+            self.assertFalse(self.canvas.rotate_selected_obb(1))
+        self.canvas.geometry_mode, self.canvas.read_only = 'obb', False
+        for degrees in (0, float('nan'), float('inf')):
+            self.assertFalse(self.canvas.rotate_selected_obb(degrees))
+        self.assertEqual(self.ann.to_dict(), before)
+        self.assertFalse(self.canvas.history)
+        self.assertFalse(self.changes)
+
+    def test_rotation_step_rejects_outside_image_without_partial_edit(self):
+        self.ann.obb = [[2,2], [102,2], [102,12], [2,12]]
+        self.ann.bbox = envelope(self.ann.obb)
+        self.ann.points = self.ann.orientation = []
+        before = self.ann.to_dict()
+        self.assertFalse(self.canvas.rotate_selected_obb(45))
+        self.assertEqual(self.ann.to_dict(), before)
+        self.assertFalse(self.canvas.history)
 
     def test_rotate_obb_rotates_direction_and_is_undoable(self):
         before = copy.deepcopy(self.ann)
@@ -451,6 +563,33 @@ class ObbOriAppTests(unittest.TestCase):
         self.app.sam_click_enabled.set(False)
         self.app.geometry_selector.set("OBB")
         self.app._geometry_changed("OBB")
+
+    def test_rotation_buttons_apply_selected_step_and_update_angle_and_sam(self):
+        self.app.obb_rotation_step.set('0.5°')
+        self.app.sam_click_enabled.set(True)
+        version = self.app.sam_click_request_version
+        self.app.obb_rotate_right_button.invoke()
+        f = frame(self.ann.obb)
+        self.assertAlmostEqual(math.degrees(math.atan2(f[3], f[2])), 25.5, places=6)
+        self.assertEqual(self.app.obb_rotation_angle_label.cget('text'), 'Góc khung: 25.5°')
+        self.assertFalse(self.app.sam_click_enabled.get())
+        self.assertGreater(self.app.sam_click_request_version, version)
+        self.app.obb_rotate_left_button.invoke()
+        self.assertAlmostEqual(math.degrees(math.atan2(frame(self.ann.obb)[3], frame(self.ann.obb)[2])), 25, places=6)
+
+    def test_rotation_controls_disable_for_rect_readonly_and_no_selection(self):
+        self.app._geometry_changed('RECT')
+        self.assertEqual(self.app.obb_rotate_right_button.cget('state'), 'disabled')
+        self.app._geometry_changed('ORI')
+        self.assertEqual(self.app.obb_rotate_right_button.cget('state'), 'normal')
+        self.app.canvas.read_only = True
+        self.app._sync_obb_rotation_controls()
+        self.assertEqual(self.app.obb_rotate_right_button.cget('state'), 'disabled')
+        self.app.canvas.read_only = False
+        self.app.canvas.selected_id = None
+        self.app._annotation_selected(None)
+        self.assertEqual(self.app.obb_rotate_right_button.cget('state'), 'disabled')
+        self.assertEqual(self.app.obb_rotation_angle_label.cget('text'), 'Góc khung: —')
 
     def test_start_orientation_keeps_obb_view_and_disables_sam(self):
         before = self.ann.to_dict()

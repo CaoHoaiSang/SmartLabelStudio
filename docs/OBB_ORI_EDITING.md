@@ -1,5 +1,27 @@
 # OBB và hướng ORI — sửa luồng thao tác 08/10/2026
 
+## Giữ khung chữ nhật và xoay từng bước — 12/10/2026
+
+OBB luôn giữ hai cặp cạnh song song và bốn góc vuông khi kéo góc/cạnh,
+xoay hoặc chỉnh RECT của nhãn có OBB. Lỗi cũ co giãn theo X/Y trong RECT
+làm khung xoay thành hình bình hành; chỉnh OBB sau đó dùng các trục xiên
+lại làm lệch thêm. Khi thao tác chỉnh, dựng lại khung vuông góc theo tâm,
+chiều dài cạnh và hướng cạnh đầu; SEG/ORI đi theo phép đổi hệ trục tương ứng.
+RECT của nhãn có OBB được tính lại bao ngoài khung hợp lệ. Nhãn RECT thuần
+tiếp tục chỉnh như trước.
+
+Chọn nhãn và chế độ **OBB** hoặc **ORI**, dùng hàng **XOAY KHUNG**:
+**↶ Trái** / **Phải ↷**, chọn bước **0.1° / 0.5° / 1° / 5°** (mặc định 1°).
+Mỗi lần bấm xoay quanh tâm đúng một bước; góc khung hiện bên cạnh. ORI giữ
+chiều đầu/đuôi và xoay cùng khung, không dùng nút này để đổi hướng riêng.
+Kéo chấm tròn để xoay và Shift+bám15° vẫn có thể dùng. Mỗi lần xoay có
+Ctrl+Z/Ctrl+Y; vượt biên ảnh thì từ chối cả thao tác, giữ hình học/undo cũ.
+Sửa nhãn chuyển về nháp và hủy kết quả SAM đến trễ như thao tác tay khác.
+
+Nhãn cũ bị xiên chỉ được dựng lại khi người dùng chỉnh kích thước hoặc xoay;
+mở ảnh, đổi chế độ hay chọn nhãn không tự sửa dữ liệu. Undo phục hồi nhãn
+cũ chính xác. Không chỉnh hàng loạt project vận hành.
+
 ## Nguyên nhân
 
 Không phải chỉ do thao tác của người dùng. Trước sửa, `Đặt hướng ORI`

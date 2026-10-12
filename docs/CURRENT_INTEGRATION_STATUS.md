@@ -1,3 +1,11 @@
+## OBB giữ góc vuông và xoay theo bước — 12/10/2026
+
+Chặn RECT resize làm xiên OBB; chỉnh/xoay dựng khung vuông góc và biến đổi
+ORI/SEG tương ứng. Chỉ sửa nhãn đang thao tác, không tự đổi nhãn khi mở/xem.
+Thêm XOAY KHUNG trái/phải, bước 0.1/0.5/1/5°, góc hiện tại, undo/redo,
+giữ biên ảnh và chặn SAM đến trễ. [Cách dùng](OBB_ORI_EDITING.md).
+Kết quả local/CI và nạp source ghi riêng trong báo cáo bàn giao.
+
 ## ORI DeltaX train và RKNN — 11/10/2026
 
 Task `ori` dùng OBB + hướng có chiều trong fork riêng, giữ task `pose` riêng.
