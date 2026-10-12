@@ -504,7 +504,8 @@ class ImageServer(QObject):
                 print("Model loaded successfully!")
                 log_system(LogModule.AIX, LogAction.INITIALIZED, "AIX model initialized successfully: " + model_path)
             except Exception as e:
-                del self.model
+                if hasattr(self, 'model'):
+                    del self.model
                 error_msg = f"Error initializing AIX model: {str(e)}"
                 print(error_msg)
                 log_error(LogModule.AIX, LogLevel.ERROR, f"Error initializing AIX model: {str(e)}")

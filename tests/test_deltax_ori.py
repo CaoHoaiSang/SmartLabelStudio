@@ -109,6 +109,24 @@ class OriDatasetTests(unittest.TestCase):
 
 
 class StudioContractTests(unittest.TestCase):
+    def test_aix_metadata_rejection_reports_original_error_when_no_model_was_opened(self):
+        errors = []
+        def reject(*args, **kwargs):
+            raise ValueError('ORI metadata and labels do not match')
+        start = load_function('0.py', 'start_aix', {
+            'os': os, 'platform': SimpleNamespace(system=lambda: 'Linux'), 'USE_YOLORKNN': True,
+            'Task': SimpleNamespace(DET=0, ORI=1), 'YOLORKNN': reject,
+            'log_error': lambda *args: None, 'LogModule': SimpleNamespace(AIX=0),
+            'LogLevel': SimpleNamespace(ERROR=0)})
+        with TemporaryDirectory() as tmp:
+            (Path(tmp) / 'part.rknn').write_bytes(b'metadata-rejection fixture')
+            owner = SimpleNamespace(scan_models=lambda: None, enabled=True, models_dir=tmp,
+                aix_project_name='part', model_list=['part'], model_type='ORI', aix_list_objects=['part'],
+                conf=.5, iou=.5, aix_error_signal=SimpleNamespace(emit=errors.append))
+            start(owner)
+            self.assertFalse(hasattr(owner, 'model'))
+            self.assertEqual(errors, ['Error initializing AIX model: ORI metadata and labels do not match'])
+
     def test_metadata_rejection_happens_before_opening_npu_and_legacy_still_loads(self):
         from enum import Enum
         from typing import Type, List
