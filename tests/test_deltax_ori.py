@@ -173,7 +173,7 @@ class StudioContractTests(unittest.TestCase):
         np.testing.assert_allclose(frames[:, 2:4], [[80,32], [32,80], [80,32], [32,80]])
 
     def test_ori_decoder_rejects_wrong_output_count_shape_classes_and_nonfinite(self):
-        prepare = load_function("2.py", "_prepare_endnodes", {"np": np, "sigmoid": lambda x: 1/(1+np.exp(-x)), "List": list})
+        prepare = load_function("2.py", "_prepare_endnodes", {"np": np, "math": math, "sigmoid": lambda x: 1/(1+np.exp(-x)), "List": list})
         owner = SimpleNamespace(names=["part"])
         tensors = [np.zeros((1,65,s,s), np.float32) for s in (80,40,20)] + [np.zeros((1,1,8400), np.float32)] * 2
         self.assertEqual(len(prepare(owner, tensors)), 12)
@@ -259,7 +259,7 @@ for branch in head.cv4:
  branch[-1].weight.data.zero_();branch[-1].bias.data.zero_()
 install_ori_raw_forward(head)
 with torch.no_grad(): outputs=model.model.eval()(torch.zeros((1,3,640,640)))
-assert [list(x.shape) for x in outputs]==expected_shapes(80)
+assert [list(x.shape) for x in outputs]==expected_shapes(80, 2)
 assert torch.allclose(outputs[-1],torch.full_like(outputs[-1],.5))
 assert torch.allclose(outputs[-2],torch.full_like(outputs[-2],.5))
 print("ORI_FORK_CONTRACT_OK")

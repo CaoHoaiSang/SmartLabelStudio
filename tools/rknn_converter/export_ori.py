@@ -20,14 +20,17 @@ def install_ori_raw_forward(head):
         batch = features[0].shape[0]
         boxes_scores = [torch.cat((self.cv2[i](x), self.cv3[i](x)), 1) for i, x in enumerate(features)]
         angles = torch.cat([self.cv4[i](x).view(batch, 1, -1) for i, x in enumerate(features)], 2).sigmoid()
-        headings = torch.cat([self.cv5[i](x).view(batch, 1, -1) for i, x in enumerate(features)], 2).clamp(-1, 1)
+        components = getattr(self, "heading_components", 1)
+        headings = torch.cat([self.cv5[i](x).view(batch, components, -1) for i, x in enumerate(features)], 2)
+        if components == 1:
+            headings = headings.clamp(-1, 1)
         return tuple(boxes_scores + [angles, headings])
 
     head.forward = MethodType(forward, head)
 
 
-def expected_shapes(classes):
-    return [[1, 64 + classes, side, side] for side in (80, 40, 20)] + [[1, 1, 8400], [1, 1, 8400]]
+def expected_shapes(classes, heading_components=1):
+    return [[1, 64 + classes, side, side] for side in (80, 40, 20)] + [[1, 1, 8400], [1, heading_components, 8400]]
 
 
 def main():
@@ -39,7 +42,7 @@ def main():
     parser.add_argument("--task", default="ori", choices=["ori"])
     args = parser.parse_args()
     from ultralytics import YOLO
-    from deltax_ori_contract import model_architecture
+    from deltax_ori_contract import model_architecture, heading_encoding
     from rknn.api import RKNN
     import onnx
     import onnxruntime as ort
@@ -55,8 +58,12 @@ def main():
     architecture = model_architecture(network)
     if "architecture" in metadata and metadata["architecture"] != architecture:
         raise ValueError("Kiến trúc trong metadata không khớp checkpoint ORI.")
+    encoding = heading_encoding(network)
+    if metadata.get("heading_encoding", "normalized_degrees_v1") != encoding:
+        raise ValueError("Metadata checkpoint không khớp mã hóa hướng ORI.")
+    components = 2 if encoding == "cos_sin_vector_v2" else 1
     install_ori_raw_forward(network.model[-1])
-    shapes = expected_shapes(len(model.names))
+    shapes = expected_shapes(len(model.names), components)
     # A textured input exercises all branches, rather than testing only zero activations.
     pixels = np.random.default_rng(11).integers(0, 256, size=(1, 640, 640, 3), dtype=np.uint8)
     dummy = torch.from_numpy(pixels.transpose(0, 3, 1, 2).copy()).float() / 255
@@ -99,9 +106,10 @@ def main():
         "source_model": source.name, "source_sha256": metadata["model_sha256"], "output_model": output.name,
         "architecture": architecture,
         "model_sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
-        "output_layout": "deltax_orienty_5_heads_v1", "output_shapes": shapes,
+        "output_layout": f"deltax_orienty_5_heads_v{components}", "output_shapes": shapes,
+        "heading_encoding": encoding,
         "heading": "image_x_clockwise_degrees", "heading_scale": 180,
-        "obb_angle": "(sigmoid - 0.25) * pi", "heading_refinement": "snap_to_obb_axis_4_directions",
+        "obb_angle": "(sigmoid - 0.25) * pi", "heading_refinement": "align_obb_axes_to_heading_vector" if components == 2 else "snap_to_obb_axis_4_directions",
         "normalization": {"mean": [0, 0, 0], "std": [255, 255, 255], "rgb2bgr": False},
         "input_contract": {"runtime_layout": "NHWC", "dtype": "uint8", "color": "RGB", "resize": "letterbox"},
         "verification": {"onnx_vs_pt": True, "rknn_simulator_vs_pt": True, "hardware_validated": False},

@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import torch
+from deltax_ori_contract import heading_encoding
 
 from ultralytics.models.yolo.detect import DetectionValidator
 from ultralytics.utils import LOGGER, ops
@@ -39,6 +40,7 @@ class OrientationValidator(DetectionValidator):
     def init_metrics(self, model):
         """Initialize evaluation metrics for YOLO."""
         super().init_metrics(model)
+        self.align_to_heading = heading_encoding(model) == "cos_sin_vector_v2"
         self.stats = dict(tp_deg=[], tp=[], conf=[], pred_cls=[], target_cls=[], target_img=[])
 
     def get_desc(self):
@@ -91,7 +93,7 @@ class OrientationValidator(DetectionValidator):
         ops.scale_boxes(
             pbatch["imgsz"], predn[:, :4], pbatch["ori_shape"], ratio_pad=pbatch["ratio_pad"], xywh=True
         )  # native-space pred
-        rboxes = ops.regularize_orientyBoxes(torch.cat([predn[:, :4], predn[:, -1:]], dim=-1), predn[:, -2] * torch.pi / 180)
+        rboxes = ops.regularize_orientyBoxes(torch.cat([predn[:, :4], predn[:, -1:]], dim=-1), predn[:, -2] * torch.pi / 180, align_to_heading=self.align_to_heading)
         predn[:, :4] = rboxes[:, :4]
         predn[:, -1] = rboxes[:, 4]
         predn[:, -2] = rboxes[:, 4] * 180 / torch.pi

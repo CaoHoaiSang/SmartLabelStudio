@@ -20,13 +20,14 @@ def stamp_checkpoints(trainer):
             sidecar = checkpoint.with_suffix(".ori.json")
             staged = sidecar.with_suffix(".json.tmp")
             # Pure helper import: stamping does not load standard Ultralytics.
-            from tools.ori_runtime.deltax_ori_contract import model_architecture
+            from tools.ori_runtime.deltax_ori_contract import model_architecture, heading_encoding
             staged.write_text(json.dumps({
                 "schema": "deltax_ori_checkpoint_v1", "task": "ori",
-                "runtime": "deltax-orienty-8.3.38-v1",
+                "runtime": "deltax-orienty-8.3.38-v2",
                 "heading": "image_x_clockwise_degrees",
                 "model_sha256": hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
                 "architecture": model_architecture(getattr(trainer, "model", None)),
+                "heading_encoding": heading_encoding(getattr(trainer, "model", None)),
             }, indent=2), encoding="utf-8")
             os.replace(staged, sidecar)
 
@@ -60,9 +61,13 @@ def load_model(path):
     if model.task != "orienty" or model.model.model[-1].__class__.__name__ != "Orienty":
         raise ValueError("Task ORI cần kiến trúc Orienty hoặc checkpoint ORI DeltaX tương thích.")
     if Path(path).suffix.lower() == ".pt" and "architecture" in metadata:
-        from tools.ori_runtime.deltax_ori_contract import model_architecture
+        from tools.ori_runtime.deltax_ori_contract import model_architecture, heading_encoding
         if metadata["architecture"] != model_architecture(model.model):
             raise ValueError("Kiến trúc trong metadata không khớp checkpoint ORI.")
+    if Path(path).suffix.lower() == ".pt":
+        from tools.ori_runtime.deltax_ori_contract import heading_encoding
+        if metadata.get("heading_encoding", "normalized_degrees_v1") != heading_encoding(model.model):
+            raise ValueError("Metadata ORI không khớp cách mã hóa hướng của checkpoint.")
     return model
 
 
@@ -89,14 +94,16 @@ def main() -> int:
             model.load(str(cache / pretrained))
         import torch
         torch.set_num_threads(min(4, os.cpu_count() or 1))
-        print("ORI DeltaX · khung xoay và hướng 360° · runtime riêng", flush=True)
+        if getattr(model.model.model[-1], "heading_components", 1) == 1:
+            print("Train tiếp checkpoint cũ: tạo nhánh hướng cos/sin mới; giữ backbone/OBB và file checkpoint gốc.", flush=True)
+        print("ORI DeltaX · khung xoay và hướng cos/sin 360° · runtime riêng", flush=True)
         model.add_callback("on_model_save", stamp_checkpoints)
         model.train(
             data=config["data"], epochs=int(config["epochs"]), imgsz=int(config["image_size"]),
             batch=int(config["batch"]), patience=int(config["patience"]),
             device=config["device"], project=config["project_dir"], name=config["run_name"],
             exist_ok=False, val=bool(config.get("validate", True)), workers=0, amp=False,
-            plots=False, pretrained=False, perspective=0.0,
+            plots=False, pretrained=False, perspective=0.0, degrees=180.0, fliplr=0.0, flipud=0.0,
         )
         stamp_checkpoints(model.trainer)  # Final optimizer stripping changes the bytes.
         print("TRAINING_COMPLETE", flush=True)

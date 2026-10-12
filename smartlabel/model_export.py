@@ -15,7 +15,7 @@ import uuid
 
 
 CONVERTER_IMAGE = "deltax-rknn-converter:2.2.0-v4"
-ORI_CONVERTER_IMAGE = "deltax-rknn-ori:2.2.0-v3"
+ORI_CONVERTER_IMAGE = "deltax-rknn-ori:2.2.0-v4"
 
 
 def diagnose_rknn_environment(timeout: int = 8) -> tuple[bool, str]:
@@ -100,20 +100,25 @@ def inspect_deltax_rknn(path: str | Path, *, image_size: int, class_count: int, 
         }
     if task == "ori":
         from tools.rknn_converter.export_ori import expected_shapes
-        expected = expected_shapes(class_count)
         try:
             manifest = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             raise RuntimeError("RKNN ORI cần file metadata .json đi kèm.") from exc
+        encoding = manifest.get("heading_encoding", "normalized_degrees_v1")
+        components = {"normalized_degrees_v1": 1, "cos_sin_vector_v2": 2}.get(encoding)
+        if components is None:
+            raise RuntimeError("RKNN ORI có mã hóa hướng không hỗ trợ.")
+        expected = expected_shapes(class_count, components)
         if (image_size != 640 or manifest.get("task") != "ori" or manifest.get("target") != "rk3588"
-                or manifest.get("output_layout") != "deltax_orienty_5_heads_v1"
+                or manifest.get("output_layout") != f"deltax_orienty_5_heads_v{components}"
                 or manifest.get("output_shapes") != expected or manifest.get("imgsz") != [640, 640]
                 or manifest.get("heading") != "image_x_clockwise_degrees"
+                  or manifest.get("heading_refinement") != ("align_obb_axes_to_heading_vector" if components == 2 else "snap_to_obb_axis_4_directions")
                 or manifest.get("model_sha256") != hashlib.sha256(path.read_bytes()).hexdigest()
                 or manifest.get("verification", {}).get("rknn_simulator_vs_pt") is not True
                 or any(f"'shape': {shape}" not in text for shape in expected)):
             raise RuntimeError("RKNN ORI sai layout, metadata, kiểm tra simulator hoặc SHA256.")
-        return {"path": str(path.resolve()), "size": path.stat().st_size, "compiler": "2.2.0", "target": "rk3588", "task": "ori", "layout": "deltax_orienty_5_heads_v1", "outputs": 5}
+        return {"path": str(path.resolve()), "size": path.stat().st_size, "compiler": "2.2.0", "target": "rk3588", "task": "ori", "layout": manifest["output_layout"], "outputs": 5}
     if task not in {"detect", "segment"}:
         raise RuntimeError(f"Task RKNN chưa được hỗ trợ: {task}")
     expected = []

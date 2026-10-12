@@ -26,14 +26,18 @@ def validate_metadata(metadata_json, model_bytes):
             or any(c in n for c in ",\r\n\x00") for n in labels)
             or len(set(labels)) != len(labels)):
         raise ValueError("ORI class names must be unique, consecutive and usable in Studio")
-    expected_shapes = [[1, 64 + len(labels), side, side] for side in (80, 40, 20)] + [[1, 1, 8400]] * 2
+    encoding = meta.get("heading_encoding", "normalized_degrees_v1")
+    components = {"normalized_degrees_v1": 1, "cos_sin_vector_v2": 2}.get(encoding)
+    if components is None:
+        raise ValueError("Unsupported ORI heading encoding")
+    expected_shapes = [[1, 64 + len(labels), side, side] for side in (80, 40, 20)] + [[1, 1, 8400], [1, components, 8400]]
     required = {
         "schema": 1, "format": "rknn", "task": "ori", "target": "rk3588",
         "compiler": "rknn-toolkit2==2.2.0", "imgsz": [640, 640],
-        "output_layout": "deltax_orienty_5_heads_v1", "output_shapes": expected_shapes,
+        "output_layout": f"deltax_orienty_5_heads_v{components}", "output_shapes": expected_shapes,
         "heading": "image_x_clockwise_degrees", "heading_scale": 180,
         "obb_angle": "(sigmoid - 0.25) * pi",
-        "heading_refinement": "snap_to_obb_axis_4_directions",
+        "heading_refinement": "align_obb_axes_to_heading_vector" if components == 2 else "snap_to_obb_axis_4_directions",
         "normalization": {"mean": [0, 0, 0], "std": [255, 255, 255], "rgb2bgr": False},
         "input_contract": {"runtime_layout": "NHWC", "dtype": "uint8", "color": "RGB", "resize": "letterbox"},
         "model_sha256": hashlib.sha256(model_bytes).hexdigest(),

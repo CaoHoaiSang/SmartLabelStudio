@@ -23,10 +23,10 @@ the generic Ultralytics output. DET emits 9 tensors. SEG emits 13 tensors:
 box DFL logits, class scores, objectness, mask coefficients per stride, plus
 the mask prototype tensor. Classification emits one softmax tensor `[1,N]`.
 Standard OBB and Pose are not Studio ORI. DeltaX YOLO11-ORI and legacy
-YOLOv8-ORI use a separate `deltax-rknn-ori:2.2.0-v3` image, built automatically
+YOLOv8-ORI use a separate `deltax-rknn-ori:2.2.0-v4` image, built automatically
 by the existing **Xuất RKNN** button. Supply the checkpoint and matching
 `.ori.json`; the result is a paired `.rknn` + `.json` export with five raw
-outputs, architecture identity, hash and PT/ONNX/RKNN simulator verification.
+outputs (v1 scalar or v2 cos/sin heading), architecture identity, hash and PT/ONNX/RKNN simulator verification.
 See [ORI pipeline](../../docs/DELTAX_ORI_PIPELINE.md) for aliases and protocol.
 
 Manual conversion example:

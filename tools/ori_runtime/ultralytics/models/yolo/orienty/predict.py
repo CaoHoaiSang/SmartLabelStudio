@@ -5,6 +5,7 @@ import torch
 from ultralytics.engine.results import Results
 from ultralytics.models.yolo.detect.predict import DetectionPredictor
 from ultralytics.utils import DEFAULT_CFG, ops
+from deltax_ori_contract import heading_encoding
 
 
 class OrientationPredictor(DetectionPredictor):
@@ -48,7 +49,7 @@ class OrientationPredictor(DetectionPredictor):
             rboxes[:, :4] = ops.scale_boxes(img.shape[2:], rboxes[:, :4], orig_img.shape, xywh=True)
             degs = pred[:, -2]
             radiants = degs * torch.pi / 180
-            rboxes = ops.regularize_orientyBoxes(rboxes, radiants)
+            rboxes = ops.regularize_orientyBoxes(rboxes, radiants, align_to_heading=heading_encoding(self.model) == "cos_sin_vector_v2")
             degs = rboxes[:, 4] * 180 / torch.pi
             # xywh, r, conf, cls
             obb = torch.cat([rboxes, pred[:, 4:6]], dim=-1)

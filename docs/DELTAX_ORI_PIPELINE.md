@@ -45,8 +45,9 @@ hướng về pixel trước khi scale/flip/affine. Vì vậy ảnh không vuôn
 giữ khi mosaic. Hướng tự do lệch trục khung nên dùng Pose.
 
 Quy ước pixel: 0° sang phải, 90° xuống dưới, −90° lên trên; hướng 180° khác
-hướng 0°. Loss và kiểm tra hướng dùng sai số vòng tròn. Decoder lấy góc khung
-để tinh chỉnh về một trong bốn hướng gần nhất, kể cả khi qua mốc ±180°.
+hướng 0°. Loss và kiểm tra hướng dùng sai số vòng tròn. ORI v1 tinh chỉnh về một trong bốn trục khung. ORI v2 lấy hướng từ atan2(sin,cos)
+và căn trục khung theo vector (hoán đổi w/h theo trục gần nhất), giữ góc liên tục;
+không ép hướng thật về góc OBB nhiễu, nhất là với vật gần vuông.
 
 Fork Orienty 8.3.38 được lưu trong `tools/ori_runtime`, giữ giấy phép và nguồn
 gốc/checksum trong `UPSTREAM.json`; thay đổi của bản tích hợp được mô tả ở đây.
@@ -54,6 +55,11 @@ YOLO11 dùng C3k2/C2PSA và đầu Orienty hai nhánh góc; đây là kiến tr�
 không phải model YOLO11-OBB tiêu chuẩn. Metadata mới ghi `architecture.family`
 và `architecture.scale`, kiểm tra khớp checkpoint khi load/export. Trường
 `runtime` 8.3.38 nhận diện phiên bản fork, không phải họ kiến trúc model.
+Model mới học vector cos/sin bằng SmoothL1 trực tiếp, không chặn góc bằng
+Hardtanh. Checkpoint cũ không bị đổi khi load/inference/export; khi train tiếp,
+trainer giữ các weights tương thích và tạo đầu cos/sin mới. Metadata ghi
+`heading_encoding`; không đổi activation/ý nghĩa tensor âm thầm trên file cũ.
+Train ORI bật rotation180°, tắt mirror và perspective; box/vector cùng biến đổi.
 Process chính tiếp tục dùng Ultralytics tiêu chuẩn. Train, đánh giá và
 Auto-Label ORI dùng process riêng, cùng thư mục settings/cache riêng.
 
@@ -64,18 +70,23 @@ quantize. Đầu ra đúng thứ tự Studio:
 |---|---|---|
 | Scale 8/16/32 | `[1,64+nc,80,80]`, `[1,64+nc,40,40]`, `[1,64+nc,20,20]` | DFL bbox + class logits; Studio áp sigmoid lớp |
 | OBB angle | `[1,1,8400]` | sigmoid; Studio tính `(x−0.25)×π` |
-| Heading | `[1,1,8400]` | giá trị trong `[−1,1]`; Studio nhân 180 |
+| Heading v1 | `[1,1,8400]` | normalized degrees trong `[−1,1]`; giữ model cũ |
+| Heading v2 | `[1,2,8400]` | raw cos/sin; Studio tính atan2 trên CPU |
 
 Exporter kiểm tra PT↔ONNX và PT↔RKNN simulator trên ảnh nhiễu tái lập trước
 khi công nhận kết quả. JSON gắn SHA256 của model, tên lớp, preprocessing,
-shapes, hướng và trạng thái kiểm chứng. Kiểm tra simulator không thay cho
+shapes, hướng và trạng thái kiểm chứng. Layout v2 là `deltax_orienty_5_heads_v2`,
+`heading_encoding: cos_sin_vector_v2`, `heading_refinement: align_obb_axes_to_heading_vector`.
+Cần Studio đã nhận patch v2 trước khi dùng model mới. Kiểm tra simulator không thay cho
 đo trên NPU hoặc nghiệm thu độ chính xác ở dây chuyền.
 
 ## Các sửa tại Studio
 
-Patch có version/checksum tại `tools/studio_integration` gồm năm file:
+Patch có version/checksum tại `tools/studio_integration` gồm sáu file (thêm VisionTool preview):
 
-- ORI từ chối sai số đầu ra, sai shape/số lớp hoặc NaN/Infinity.
+- ORI nhận cả v1/v2, kiểm arity theo JSON và từ chối sai shape/lớp/NaN/Infinity.
+- Preview ORI bỏ lệch90° của mũi tên; mặc định script/SEG/Template giữ cách vẽ cũ.
+  Không đổi dấu/góc bù Tracking/Pick.
 - Metadata ORI mới phải khớp model, tên lớp, RK3588/640/compiler và SHA256
   trước khi mở runtime NPU.
 - Bám trục dùng chênh lệch góc có vòng tròn, sửa chọn nhầm đầu ở mốc ±180°.

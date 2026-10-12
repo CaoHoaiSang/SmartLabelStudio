@@ -160,6 +160,7 @@ def naive_is_nonneg_np(rad_r: np.ndarray, rad_deg: np.ndarray) -> np.ndarray:
 def regularize_orientBoxes(
     rboxes: np.ndarray,  # (N, 5) xywhr, r in radians
     degs: np.ndarray,    # (N,) degrees in [-180, 180)
+    align_to_heading: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Returns:
@@ -203,6 +204,8 @@ def regularize_orientBoxes(
     new_rad_deg_m2 = np.where(s, rad_r - PI, rad_r + PI)
     new_rad_deg = np.where(m2, new_rad_deg_m2, new_rad_deg)
 
+    if align_to_heading:
+        new_rad_deg = rad_deg  # v2 vector controls the directed frame axis; do not quantize to a noisy OBB angle.
     new_rad_deg = np.remainder(new_rad_deg + PI, TWO_PI) - PI
 
     # swap w/h for case m1 only

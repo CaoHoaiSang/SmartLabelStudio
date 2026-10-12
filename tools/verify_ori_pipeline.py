@@ -13,6 +13,9 @@ sys.path.insert(0, str(ROOT))
 
 
 def main():
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True)
     parser.add_argument("--rknn", action="store_true")
@@ -62,6 +65,7 @@ def main():
     metadata = json.loads(model.with_suffix(".ori.json").read_text())
     family, scale, _ = ORI_MODEL_PRESETS[args.model]
     assert metadata["architecture"] == {"family":family,"scale":scale}, metadata
+    assert metadata["heading_encoding"] == "cos_sin_vector_v2", metadata
     from smartlabel.auto_label import YoloAutoLabeler
     labeler = YoloAutoLabeler(model, device="cpu")
     process = labeler._ori.process

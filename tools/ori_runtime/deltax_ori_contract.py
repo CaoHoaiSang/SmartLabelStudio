@@ -18,3 +18,14 @@ def model_architecture(network):
         match = re.search(r"yolo[v]?\d+([nslmx])", stem)
         scale = match.group(1) if match else ""
     return {"family": family, "scale": scale}
+
+
+def heading_encoding(network):
+    network = getattr(network, "module", network)
+    layers = getattr(network, "model", [])
+    layers = getattr(layers, "model", layers)  # AutoBackend wraps the Torch network.
+    head = layers[-1] if len(layers) else None
+    components = getattr(head, "heading_components", 1)
+    if components not in (1, 2):
+        raise ValueError("Unsupported ORI heading components")
+    return "cos_sin_vector_v2" if components == 2 else "normalized_degrees_v1"

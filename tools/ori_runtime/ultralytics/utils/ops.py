@@ -1073,7 +1073,7 @@ def regularize_rboxes(rboxes):
     return torch.stack([x, y, w_, h_, t], dim=-1)  # regularized boxes
 
 
-def regularize_orientyBoxes(rboxes, radiants):
+def regularize_orientyBoxes(rboxes, radiants, align_to_heading=False):
     x, y, w, h, t = rboxes.unbind(dim=-1)
     signed = (radiants - t + torch.pi) % (2 * torch.pi) - torch.pi
     delta = signed.abs()
@@ -1081,7 +1081,8 @@ def regularize_orientyBoxes(rboxes, radiants):
     m2 = delta >= 3 * torch.pi / 4
     sign = torch.where(signed >= 0, 1.0, -1.0)
     snapped = (t + sign * torch.where(m2, torch.pi, torch.where(m1, torch.pi / 2, 0.0)) + torch.pi) % (2 * torch.pi) - torch.pi
-    return torch.stack([x, y, torch.where(m1, h, w), torch.where(m1, w, h), snapped], dim=-1)
+    direction = (radiants + torch.pi) % (2 * torch.pi) - torch.pi if align_to_heading else snapped
+    return torch.stack([x, y, torch.where(m1, h, w), torch.where(m1, w, h), direction], dim=-1)
 
 
 

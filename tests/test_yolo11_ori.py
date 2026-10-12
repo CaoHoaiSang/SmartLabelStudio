@@ -49,7 +49,7 @@ assert any(m.__class__.__name__=='C2PSA' for m in model.model.modules())
 install_ori_raw_forward(model.model.model[-1])
 size=640 if scale=='n' else 96
 with torch.no_grad():outputs=model.model.eval()(torch.zeros(1,3,size,size))
-expected=[[1,144,size//s,size//s] for s in (8,16,32)]+[[1,1,sum((size//s)**2 for s in (8,16,32))]]*2
+expected=[[1,144,size//s,size//s] for s in (8,16,32)]+[[1,1,sum((size//s)**2 for s in (8,16,32))],[1,2,sum((size//s)**2 for s in (8,16,32))]]
 assert [list(t.shape) for t in outputs]==expected
 assert all(torch.isfinite(t).all() for t in outputs)
 """
@@ -68,6 +68,9 @@ from pathlib import Path
 from smartlabel.ori_worker import load_model
 path=Path(sys.argv[1])
 model=load_model('deltax-yolov8n-ori')
+head=model.model.model[-1]
+del head.heading_components
+for branch in head.cv5:branch[-1]=torch.nn.Conv2d(branch[-1].in_channels,1,1)
 torch.save({'model':model.model,'train_args':{'task':'orienty'}},path)
 metadata={'schema':'deltax_ori_checkpoint_v1','heading':'image_x_clockwise_degrees','model_sha256':hashlib.sha256(path.read_bytes()).hexdigest()}
 path.with_suffix('.ori.json').write_text(json.dumps(metadata))

@@ -44,7 +44,7 @@ jobs:
           python -m pip install -r requirements.txt
       - name: Verify synthetic SmartLabel ORI export, training and RKNN simulator
         run: python -u tools/verify_ori_pipeline.py --output /tmp/ori-acceptance --rknn
-      - name: Verify legacy YOLOv8 ORI checkpoint, Auto-Label and evaluation
+      - name: Verify YOLOv8 ORI architecture, Auto-Label and evaluation
         run: python -u tools/verify_ori_pipeline.py --model deltax-yolov8n-ori --output /tmp/ori-legacy-acceptance
       - uses: actions/upload-artifact@v4
         if: always()

@@ -181,7 +181,12 @@ class Orienty(Detect):
 
         c4 = max(ch[0] // 4, self.ne)
         self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.ne, 1)) for x in ch)
-        self.cv5 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.ne, 1)) for x in ch)
+        self.heading_components = 2  # New checkpoints learn cos/sin; old pickles have no attribute.
+        self.cv5 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, 2, 1)) for x in ch)
+        for branch in self.cv5:
+            nn.init.normal_(branch[-1].weight, std=0.001)
+            with torch.no_grad():
+                branch[-1].bias.copy_(torch.tensor([1.0, 0.0]))
 
     def forward(self, x):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
@@ -190,9 +195,13 @@ class Orienty(Detect):
         # NOTE: set `angle` as an attribute so that `decode_bboxes` could use it.
         angle = (angle.sigmoid() - 0.25) * math.pi  # [-pi/4, 3pi/4]
         # orienty degree from -180 to 179.99 degree
-        degs = torch.cat([self.cv5[i](x[i]).view(bs, self.ne, -1) for i in range(self.nl)], 2)
-        hardtanh = torch.nn.Hardtanh(-1, 1)
-        degs = hardtanh(degs) * 180  # [-180, 179.99]
+        components = getattr(self, "heading_components", 1)
+        heading = torch.cat([self.cv5[i](x[i]).view(bs, components, -1) for i in range(self.nl)], 2)
+        if components == 2:
+            # Train the Cartesian vector directly, without hard clipping or atan2 gradients.
+            degs = heading if self.training else torch.atan2(heading[:, 1:2], heading[:, 0:1]) * (180 / math.pi)
+        else:
+            degs = heading.clamp(-1, 1) * 180  # Exact inference behavior for legacy checkpoints.
 
         if not self.training:
             self.angle = angle

@@ -193,11 +193,20 @@ class OBBRKNNPredictor(BaseRKNNYoloPredictor):
 class OriRKNNPredictor(BaseRKNNYoloPredictor):
     def _prepare_endnodes(self, infer_datas: List[np.ndarray]):
 
-        expected = [(1, 64 + len(self.names), side, side) for side in (80, 40, 20)] + [(1, 1, 8400), (1, 1, 8400)]
-        if len(infer_datas) != 5 or [tuple(t.shape) for t in infer_datas] != expected:
+        components = infer_datas[-1].shape[1] if len(infer_datas) == 5 and infer_datas[-1].ndim == 3 else 0
+        expected = [(1, 64 + len(self.names), side, side) for side in (80, 40, 20)] + [(1, 1, 8400), (1, components, 8400)]
+        if components not in (1, 2) or len(infer_datas) != 5 or [tuple(t.shape) for t in infer_datas] != expected:
             raise ValueError(f"ORI requires 5 heads at 640x640; expected {expected}, got {[tuple(t.shape) for t in infer_datas]}")
+        if getattr(self, "expected_heading_components", components) != components:
+            raise ValueError("ORI output heading components do not match metadata")
         if any(not np.isfinite(t).all() for t in infer_datas):
             raise ValueError("ORI outputs contain NaN or infinity")
+
+        # v2 supplies raw (cos, sin); atan2 stays in CPU decoder, not the RKNN graph.
+        self.vector_heading = components == 2
+        if components == 2:
+            headings = np.arctan2(infer_datas[-1][:, 1:2], infer_datas[-1][:, 0:1]) / math.pi
+            infer_datas = list(infer_datas[:-1]) + [headings]
 
         defualt_branch=3
         channels_boxes = 64
@@ -285,7 +294,7 @@ class OriRKNNPredictor(BaseRKNNYoloPredictor):
                         xywh=True
                         )
         degs = pred[:, -2]
-        rboxes, degs = regularize_orientBoxes(rboxes, degs)
+        rboxes, degs = regularize_orientBoxes(rboxes, degs, align_to_heading=getattr(self, "vector_heading", False))
         # xywh, r, conf, cls
         obb = np.concatenate([rboxes, pred[:, 4:6]], -1)
         return Result(self.origin_height, self.origin_width, 

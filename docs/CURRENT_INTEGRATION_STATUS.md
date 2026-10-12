@@ -1,3 +1,16 @@
+## ORI hướng cos/sin và preview Studio — 12/10/2026
+
+Model mới dùng cos/sin và SmoothL1 không hard clip, giữ góc liên tục qua±180°.
+ORI v2 vẫn5heads, heading2channels; CPU decoder atan2 và căn trục khung theo
+vector. Metadata/layout phân phiên bản; v1/YOLOv8/checkpoint cũ giữ inference.
+Train tiếp checkpoint cũ tạo đầu mới, giữ weights tương thích và file gốc.
+Train ORI có rotation180°, không mirror/perspective; box và vector cùng xoay.
+Preview Studio sửa riêng ORI lệch90°, giữ các giá trị Tracking/Pick và luồng
+SEG/script/template. Kiểm gradient, hình học và backward compatibility có test.
+Local/CI/NPU/source activation/quality Mi_Goi ghi riêng trong audit tác vụ;
+không suy độ chính xác vật thật từ kiểm tương thích hoặc tập train.
+[Cách dùng và phiên bản](DELTAX_ORI_PIPELINE.md).
+
 ## ORI train toàn bộ dữ liệu không bị chặn nhầm bởi Fleet — 12/10/2026
 
 Dataset ORI dùng YAML an toàn nên TEST không dùng có dạng `test: ''`,

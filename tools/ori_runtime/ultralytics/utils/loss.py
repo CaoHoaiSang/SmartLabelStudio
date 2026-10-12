@@ -1,5 +1,6 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -385,8 +386,13 @@ class v8OrientationLoss(v8DetectionLoss):
             deg_idx = target_gt_idx[i][fg_mask[i]]
             gt_deg = degs[batch_idx.view(-1) == i][deg_idx]
             current_pred_degs = pred_degs[i][fg_mask[i]]
-            delta = ((current_pred_degs.view(-1, 1) - gt_deg.view(-1, 1) + 180) % 360 - 180) / 180
-            loss += F.smooth_l1_loss(delta, torch.zeros_like(delta), reduction="sum")
+            if current_pred_degs.shape[-1] == 2:
+                radians = gt_deg.view(-1) * (math.pi / 180)
+                target = torch.stack((radians.cos(), radians.sin()), dim=-1)
+                loss += F.smooth_l1_loss(current_pred_degs, target, reduction="sum")
+            else:
+                delta = ((current_pred_degs.view(-1, 1) - gt_deg.view(-1, 1) + 180) % 360 - 180) / 180
+                loss += F.smooth_l1_loss(delta, torch.zeros_like(delta), reduction="sum")
         return loss / fg_mask.sum()
 
 
