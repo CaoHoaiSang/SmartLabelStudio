@@ -136,7 +136,11 @@ def main() -> int:
                         xs, ys = [p[0] for p in points], [p[1] for p in points]
                         ann = Annotation.create_box(int(cls), [min(xs), min(ys), max(xs)-min(xs), max(ys)-min(ys)], source="yolo", confidence=float(conf), model_version=Path(arg).name)
                         ann.kind, ann.obb = "ori", points
-                        cx, cy, width, height, radians = box
+                        radians = box[4]
+                        # Match the editing helper's centre: float32 corners can
+                        # differ slightly from xywhr centre after scaling.
+                        cx = sum(p[0] for p in points) / 4
+                        cy = sum(p[1] for p in points) / 4
                         image_height, image_width = result.orig_shape
                         ann.orientation = direction(
                             ann.bbox, ann.obb, [cx + math.cos(radians), cy + math.sin(radians)],

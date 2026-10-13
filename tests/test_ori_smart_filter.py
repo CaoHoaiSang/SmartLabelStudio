@@ -126,5 +126,19 @@ class OriSmartFilterTests(unittest.TestCase):
         self.assertEqual(len(annotations),1)
         self.assertEqual(annotations[0]['orientation'][0],[100.,80.])
 
+    def test_corner_roundoff_does_not_change_predicted_heading(self):
+        positive=result(32)
+        positive.obb.xyxyxyxy=Array([[[x+2e-5,y-3e-5] for x,y in positive.obb.xyxyxyxy.tolist()[0]]])
+        model=SimpleNamespace(names={0:'part'},predict=lambda **args:[positive])
+        output=io.StringIO()
+        with patch.object(ori_worker,'load_model',return_value=model), \
+             patch('sys.argv',['ori_worker','serve','best.pt']), \
+             patch('sys.stdin',io.StringIO(json.dumps({'source':'a.jpg'}))),redirect_stdout(output):
+            ori_worker.main()
+        ann=json.loads(next(line.split('=',1)[1] for line in output.getvalue().splitlines() if line.startswith('ORI_PREDICTION=')))[0]
+        start,end=ann['orientation']
+        actual=math.degrees(math.atan2(end[1]-start[1],end[0]-start[0]))
+        self.assertAlmostEqual(actual,32,places=7)
+
 
 if __name__=='__main__':unittest.main()
