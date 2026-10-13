@@ -1,3 +1,18 @@
+## Studio Blockly xếp thùng — 13/10/2026
+
+Gói vá từ source Radxa sửa nhả vacuum sau khi hạ đến vị trí đặt, cả helper
+XY/góc và tray. Executor hủy ở dòng Python; Pick kiểm giữa các lệnh, giữ
+executor bận đến khi thoát stack, báo dừng thay vì lỗi None/completed.
+Blockly có block chờ vật với timeout, sức chứa thùng và thông báo hoàn tất.
+MiGoi đếm sau đặt, dừng khi đủ thùng, chờ đầu thứ hai tối đa 2 giây rồi
+đặt một gói nếu hết giờ; ô cuối lẻ không lấy dư. Giữ bản chủ sửa đặt hai
+gói trong một lần hạ; chỉ lấy/đặt đôi khi khoảng cách hai ô khớp offset
+đã xoay theo góc đặt và cùng Z. Không khớp thì đặt một gói. Đổi thùng rồi Chạy lại;
+sau Stop giữa chừng phải dọn thùng trước khi Chạy lại vì chưa lưu tiến độ.
+Giữ cơ khí, góc ORI, Tracking/Template/model; không suy xác nhận hút thật
+từ số lệnh. [Cách áp và giới hạn](../tools/studio_integration/blockly/README.md).
+Kiểm local/CI, source hash và trạng thái nạp ghi riêng trong audit tác vụ.
+
 ## Lọc ảnh thông minh ORI và mũi tên Auto-Label — 13/10/2026
 
 Bộ lọc dùng fork ORI trong process riêng cho checkpoint có `.ori.json`, tái
