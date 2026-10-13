@@ -76,10 +76,19 @@ def main():
         for _ in range(2):
             predictions = labeler.predict(store.image_path(project, project.images[0]), .00001, 96)
             assert predictions and all(a.kind == "ori" and len(a.obb) == 4 and len(a.orientation) == 2 for a in predictions)
+            from smartlabel.annotation_geometry import direction
+            import math
+            for ann in predictions:
+                expected = direction(ann.bbox, ann.obb, ann.orientation[1], (160, 96), snap=False)
+                assert expected and all(math.dist(a, b) < 1e-5 for a, b in zip(ann.orientation, expected))
             assert process.poll() is None and labeler._ori.process is process
     finally:
         labeler.close()
     assert process.poll() is not None
+    from smartlabel.frame_filter import FrameFilterSettings, _run_yolo
+    metrics = _run_yolo([store.image_path(project, project.images[0])], registered,
+                        FrameFilterSettings(), None, None)
+    assert len(metrics) == 1 and "accepted" in next(iter(metrics.values()))
     report = evaluate_ori_model(model,data_path=export / "data.yaml",split="test",image_size=96,device="cpu",output_root=output / "evaluation")
     assert report["metric_kind"] == "ORI + OBB" and "box_metrics" in report
     if args.rknn:

@@ -69,6 +69,13 @@ SHA256 đầy đủ; bản v1 không có `heading_encoding` vẫn hợp lệ. Đ
 checkpoint gốc sẽ bổ sung sidecar còn thiếu cho bản đã sao chép, giữ weights.
 Không đoán quy ước hướng hoặc tự tạo metadata cho model không có nguồn xác nhận.
 
+Lọc ảnh thông minh với ORI cũng chạy trong fork riêng, theo batch tối đa24ảnh;
+đếm khung `obb`, confidence và diện tích OBB thật. Phân tích chỉ tạo đề xuất,
+không sửa/xóa nhãn hoặc ảnh trước bước xác nhận. Auto-Label tạo mũi tên từ tâm
+tới mép khung như khi gán tay; giữ góc model và cắt vector theo biên ảnh.
+Độ dài mũi tên chỉ biểu diễn hướng, không phải confidence hoặc độ chính xác.
+Các nhãn đã lưu, kể cả mũi tên ngắn cũ, không bị tự viết lại.
+
 RKNN Toolkit **2.2.0**, RK3588, RGB uint8 NHWC, letterbox 640, chia 255, không
 quantize. Đầu ra đúng thứ tự Studio:
 

@@ -1,3 +1,14 @@
+## Lọc ảnh thông minh ORI và mũi tên Auto-Label — 13/10/2026
+
+Bộ lọc dùng fork ORI trong process riêng cho checkpoint có `.ori.json`, tái
+sử dụng theo batch, đóng khi xong/lỗi/dừng; không nạp OrientationModel bằng
+Ultralytics thường. Metrics nhận cả RECT và OBB/ORI, dùng diện tích khung xoay
+thật, tránh coi kết quả `obb` là ảnh trống chỉ vì `boxes=None`. Guard classifier,
+ảnh đã gán/duyệt và bước xác nhận xóa giữ nguyên. Không tự xóa hay gán lại nhãn.
+Auto-Label ORI mới dùng cùng helper gán tay: từ tâm tới mép khung, cắt cả vector
+theo biên ảnh và giữ hướng dự đoán. Bỏ tỷ lệ `.3 * cạnh ngắn`; nhãn cũ không bị
+đổi khi mở/xem. Local/CI/source chính ghi riêng trong audit tác vụ.
+
 ## Auto-Label model ORI đã đăng ký — 12/10/2026
 
 Sửa registry chỉ sao chép PT làm mất `.ori.json`, khiến Auto-Label dùng

@@ -121,6 +121,9 @@ def _similarity(first: np.ndarray, second: np.ndarray) -> float:
 
 def _detection_metrics(result, width: int, height: int, threshold: float) -> dict[str, float]:
     boxes = getattr(result, "boxes", None)
+    rotated = boxes is None
+    if rotated:
+        boxes = getattr(result, "obb", None)
     if boxes is None or len(boxes) == 0:
         return {"accepted": 0.0, "weak": 0.0, "confidence": 0.0, "coverage": 0.0, "edge": 0.0}
     confidences = boxes.conf.detach().cpu().numpy()
@@ -131,7 +134,11 @@ def _detection_metrics(result, width: int, height: int, threshold: float) -> dic
     coverage = 0.0
     edge = 0.0
     if len(accepted_coords):
-        areas = np.maximum(0.0, accepted_coords[:, 2] - accepted_coords[:, 0]) * np.maximum(0.0, accepted_coords[:, 3] - accepted_coords[:, 1])
+        if rotated:
+            dimensions = boxes.xywhr.detach().cpu().numpy()[accepted, 2:4]
+            areas = np.maximum(0.0, dimensions[:, 0]) * np.maximum(0.0, dimensions[:, 1])
+        else:
+            areas = np.maximum(0.0, accepted_coords[:, 2] - accepted_coords[:, 0]) * np.maximum(0.0, accepted_coords[:, 3] - accepted_coords[:, 1])
         coverage = min(1.0, float(areas.sum()) / max(width * height, 1))
         margin_x = max(width * 0.015, 2.0)
         margin_y = max(height * 0.015, 2.0)
@@ -157,6 +164,25 @@ def _run_yolo(
     progress: Callable[[int, int, str], None] | None,
     cancel_event: Event | None,
 ) -> dict[str, dict[str, float]]:
+    if Path(model_path).with_suffix(".ori.json").is_file():
+        from .ori_runtime import OriAutoLabeler
+        model = OriAutoLabeler(model_path, "cpu")
+        metrics = {}
+        try:
+            for start in range(0, len(paths), 24):
+                if cancel_event and cancel_event.is_set():
+                    raise InterruptedError("Đã dừng phân tích frame.")
+                chunk = paths[start:start + 24]
+                results = model.filter_metrics(chunk, settings.model_confidence)
+                if len(results) != len(chunk):
+                    raise ValueError("Model không trả đủ kết quả; chưa tạo đề xuất xóa ảnh.")
+                for offset, (path, result) in enumerate(zip(chunk, results), start=1):
+                    metrics[str(path)] = result
+                    if progress:
+                        progress(start + offset, len(paths), "AI đang kiểm tra đối tượng")
+            return metrics
+        finally:
+            model.close()
     from ultralytics import YOLO
 
     model = YOLO(str(model_path))

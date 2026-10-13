@@ -110,11 +110,24 @@ def main() -> int:
     elif action == "serve":
         import math
         from .models import Annotation
+        from .annotation_geometry import direction
         model = load_model(arg)
         print("ORI_MODEL_INFO=" + json.dumps({"names": {str(k): str(v) for k, v in model.names.items()}}), flush=True)
         for line in sys.stdin:
             try:
                 request = json.loads(line)
+                operation = request.pop("_ori_operation", "predict")
+                if operation not in {"predict", "filter_metrics"}:
+                    raise ValueError("Yêu cầu ORI không hợp lệ.")
+                if operation == "filter_metrics":
+                    from .frame_filter import _detection_metrics
+                    threshold = float(request.pop("threshold"))
+                    metrics = []
+                    for result in model.predict(**request, verbose=False):
+                        height, width = result.orig_shape
+                        metrics.append(_detection_metrics(result, width, height, threshold))
+                    print("ORI_FILTER_METRICS=" + json.dumps(metrics))
+                    continue
                 annotations = []
                 for result in model.predict(**request, verbose=False):
                     if result.obb is None:
@@ -124,8 +137,13 @@ def main() -> int:
                         ann = Annotation.create_box(int(cls), [min(xs), min(ys), max(xs)-min(xs), max(ys)-min(ys)], source="yolo", confidence=float(conf), model_version=Path(arg).name)
                         ann.kind, ann.obb = "ori", points
                         cx, cy, width, height, radians = box
-                        length = .3 * min(width, height)
-                        ann.orientation = [[cx, cy], [cx + length * math.cos(radians), cy + length * math.sin(radians)]]
+                        image_height, image_width = result.orig_shape
+                        ann.orientation = direction(
+                            ann.bbox, ann.obb, [cx + math.cos(radians), cy + math.sin(radians)],
+                            (image_width, image_height), snap=False,
+                        )
+                        if ann.orientation is None:
+                            continue  # Padding/degenerate detections cannot form an editable ORI label.
                         annotations.append(ann.to_dict())
                 print("ORI_PREDICTION=" + json.dumps(annotations), flush=True)
             except Exception as exc:

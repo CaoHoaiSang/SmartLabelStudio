@@ -99,6 +99,15 @@ class OriAutoLabeler:
         self.process.stdin.flush()
         return [Annotation.from_dict(value) for value in self._response("ORI_PREDICTION=", 180)]
 
+    def filter_metrics(self, paths, threshold):
+        self.process.stdin.write(json.dumps({
+            "_ori_operation": "filter_metrics", "threshold": threshold,
+            "source": [str(path) for path in paths], "conf": 0.05,
+            "imgsz": 640, "device": self.device,
+        }) + "\n")
+        self.process.stdin.flush()
+        return self._response("ORI_FILTER_METRICS=", 180)
+
     def close(self):
         if self.process.poll() is None:
             self.process.terminate()
