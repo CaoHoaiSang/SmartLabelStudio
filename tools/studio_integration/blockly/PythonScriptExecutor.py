@@ -29,6 +29,7 @@ class PythonScriptExecutor:
         self.is_running = True
         filename = "<studio-script:{}>".format(id(self))
         previous_trace = sys.gettrace()
+        previous_stdout = sys.stdout
 
         def trace(frame, event, arg):
             if frame.f_code.co_filename != filename:
@@ -52,4 +53,5 @@ class PythonScriptExecutor:
             return False, traceback.format_exc()
         finally:
             sys.settrace(previous_trace)
+            sys.stdout = previous_stdout
             self.is_running = False

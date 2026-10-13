@@ -186,6 +186,14 @@ class CancellationTests(unittest.TestCase):
         self.assertFalse(executor.execute_script('if:')[0])
         self.assertFalse(executor.is_running)
 
+    def test_legacy_stdout_redirect_is_restored_after_success_and_error(self):
+        executor = PythonScriptExecutor()
+        previous = sys.stdout
+        self.assertEqual(executor.execute_script('import sys, io\nsys.stdout=io.StringIO()'), (True, None))
+        self.assertIs(sys.stdout, previous)
+        self.assertFalse(executor.execute_script('import sys, io\nsys.stdout=io.StringIO()\nraise ValueError("test")')[0])
+        self.assertIs(sys.stdout, previous)
+
     def test_completion_message_reaches_studio_status(self):
         pick = make_pick()
         pick.exit_loop = True
